@@ -37,7 +37,9 @@ namespace Abb2kTools
             {
                 _weight = value;
 
+                #if ODIN_INSPECTOR
                 OnWeightChanged?.Invoke(this);
+                #endif
             }
         }
 
