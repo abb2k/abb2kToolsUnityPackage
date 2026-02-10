@@ -1,0 +1,10 @@
+{
+  "name": "com.abb2k.abb2ktools",
+  "version": "1.0.0",
+  "displayName": "abb2k Tools",
+  "description": "Tools made by abb2k for abb2k",
+  "unity": "6000.0",
+  "author": {
+    "name": "Abb2k"
+  }
+}
