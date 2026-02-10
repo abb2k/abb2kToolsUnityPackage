@@ -23,6 +23,8 @@ namespace Abb2kTools
         [SerializeField]
         #if ODIN_INSPECTOR
         [HideInInspector]
+        #else
+        [Range(0, 100)]
         #endif
         private float _weight = 100;
 
