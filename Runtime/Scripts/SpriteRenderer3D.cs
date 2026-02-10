@@ -1,4 +1,6 @@
+#if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
+#endif
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -8,12 +10,20 @@ using UnityEditor;
 
 [ExecuteAlways]
 [RequireComponent(typeof(MeshRenderer))]
+[DefaultExecutionOrder(-10)]
 public class SpriteRenderer3D : MonoBehaviour
 {
-    [SerializeField, OnValueChanged("UpdateMaterialData"), LabelText("Sprite")]
+    [SerializeField]
+#if ODIN_INSPECTOR
+    [OnValueChanged("UpdateMaterialData"), LabelText("Sprite")]
+#endif
     private Sprite _sprite;
+    private Sprite _oldSpr;
 
-    [SerializeField, OnValueChanged("UpdateMaterialData"), LabelText("Tiling")]
+    [SerializeField]
+#if ODIN_INSPECTOR
+    [OnValueChanged("UpdateMaterialData"), LabelText("Tiling")]
+#endif
     private Vector2 _tiling = Vector2.one;
 
     [SerializeField, HideInInspector]
@@ -25,17 +35,26 @@ public class SpriteRenderer3D : MonoBehaviour
         Transparent
     }
 
-    [SerializeField, OnValueChanged("UpdateMaterialData"), LabelText("Surface Type")]
+    [SerializeField]
+#if ODIN_INSPECTOR
+    [OnValueChanged("UpdateMaterialData"), LabelText("Surface Type")]
+#endif
     private SurfaceType _surfaceType = SurfaceType.Opaque;
 
-    [SerializeField, Required, LabelText("Opaque Material")]
+    [SerializeField]
+#if ODIN_INSPECTOR
+    [Required, LabelText("Opaque Material")]
+#endif
     private Material opaqueMaterial;
 
-    [SerializeField, Required, LabelText("Transparent Material")]
+    [SerializeField]
+#if ODIN_INSPECTOR
+    [Required, LabelText("Transparent Material")]
+#endif
     private Material transparentMaterial;
 
     [SerializeField]
-    private bool setForY;
+    private bool setNativeSizeForY;
 
     private MeshRenderer _renderer;
 
@@ -45,16 +64,28 @@ public class SpriteRenderer3D : MonoBehaviour
         if (_mpb == null)
             _mpb = new MaterialPropertyBlock();
     }
+#if !ODIN_INSPECTOR
+    void OnValidate()
+    {
+        UpdateMaterialData();
+    }
+#endif
 
     void Start()
     {
         UpdateMaterialData();
     }
-
-    void OnEnable()
+    
+#if !ODIN_INSPECTOR
+    private void Update()
     {
-        UpdateMaterialData();
+        if (_oldSpr != _sprite)
+        {
+            _oldSpr = _sprite;
+            UpdateMaterialData();
+        }
     }
+#endif
 
     private void UpdateMaterialData()
     {
@@ -79,6 +110,9 @@ public class SpriteRenderer3D : MonoBehaviour
             return;
         }
 
+        if (_mpb == null)
+            _mpb = new MaterialPropertyBlock();
+
         _renderer.GetPropertyBlock(_mpb);
 
         Vector2 textureSize = new Vector2(_sprite.texture.width, _sprite.texture.height);
@@ -92,7 +126,11 @@ public class SpriteRenderer3D : MonoBehaviour
         _renderer.SetPropertyBlock(_mpb);
     }
 
+#if ODIN_INSPECTOR
     [Button]
+#else
+    [ContextMenu("SetNativeSize")]
+#endif
     private void SetNativeSize()
     {
         if (_sprite == null) return;
@@ -110,7 +148,7 @@ public class SpriteRenderer3D : MonoBehaviour
         Vector3 scale = transform.localScale;
         scale.x = rectSize.x / textureLargest * scaleFactor;
         scale.y = rectSize.y / textureLargest * scaleFactor;
-        scale.z = !setForY ? rectSize.x / textureLargest * scaleFactor : 1;
+        scale.z = !setNativeSizeForY ? rectSize.x / textureLargest * scaleFactor : 1;
 
         transform.localScale = scale;
 

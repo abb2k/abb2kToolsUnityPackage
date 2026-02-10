@@ -10,59 +10,59 @@ namespace Abb2kTools
         public enum MoveModes { Snap, Lerp, SLerp }
         public enum FrameMovement { Update, Fixed }
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("General")]
-        #else
+#else
         [Header("General")]
-        #endif
+#endif
         public Transform target;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("General")]
-        #endif
+#endif
         public Vector3 offset;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("General")]
-        #endif
+#endif
         public MoveModes moveMode;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("General")]
-        #endif
+#endif
         public FrameMovement frameMovement;
 
         [System.Serializable]
         public class Constrains
         {
-            #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
             [HorizontalGroup("Constrains", LabelWidth = 15)]
-            #endif
+#endif
             public bool x = false;
-            #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
             [HorizontalGroup("Constrains", LabelWidth = 15)]
-            #endif
+#endif
             public bool y = false;
-            #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
             [HorizontalGroup("Constrains", LabelWidth = 15)]
-            #endif
+#endif
             public bool z = false;
         }
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("General"), InlineProperty]
-        #endif
+#endif
         public Constrains constrains;
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Lerp Settings"), ShowIf("@moveMode != MoveModes.Snap")]
-        #else
+#else
         [Header("Lerp Settings")]
-        #endif
+#endif
         public float lerpSpeed = 2f;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Lerp Settings"), ShowIf("@moveMode != MoveModes.Snap")]
-        #endif
+#endif
         public bool useCurve;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Lerp Settings"), ShowIf("@moveMode != MoveModes.Snap"), EnableIf("useCurve")]
-        #endif
+#endif
         public AnimationCurve lerpCurve = new AnimationCurve(
             new Keyframe(0f, 0f, 0f, 2),
             new Keyframe(1f, 1f, 0, 0f)

@@ -16,22 +16,22 @@ namespace Abb2kTools
             this.element = element;
             this._weight = weight;
         }
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [HideLabel]
-        #endif
+#endif
         public T element;
         [SerializeField]
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [HideInInspector]
-        #else
+#else
         [Range(0, 100)]
-        #endif
+#endif
         private float _weight = 100;
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [ShowInInspector]
         [PropertyRange(0f, 100f)]
-        #endif
+#endif
         public float Weight
         {
             get => _weight;
@@ -45,43 +45,43 @@ namespace Abb2kTools
             }
         }
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [DisplayAsString, HideLabel, PropertyOrder(1)]
         public string percent;
-        #endif
+#endif
 
         public void OnBeforeSerialize() {}
 
         public void OnAfterDeserialize()
         {
-            #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
             int invList = 0;
             if (OnWeightChanged != null)
                 invList = OnWeightChanged.GetInvocationList().Length;
 
             if (invList == 0)
                 percent = "Not part of any WeightedList.";
-            #endif
+#endif
         }
         
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         public event UnityAction<WeightedListOption<T>> OnWeightChanged;
-        #endif
+#endif
     }
 
     [System.Serializable]
-    #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
     [InlineProperty, HideLabel]
-    #endif
+#endif
     public class WeightedList<T> : ISerializationCallbackReceiver
     {
         [SerializeField]
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [LabelText("@$property.ParentValueProperty.NiceName + \" (Weight: \" + overallWeight.ToString() + \")\"")]
         [ListDrawerSettings(CustomAddFunction = "CustomAddFunction", CustomRemoveElementFunction = "OnRemoveItem", CustomRemoveIndexFunction = "OnRemoveItemIndex", OnBeginListElementGUI = "OnListChanged")]
-        #endif
+#endif
         private List<WeightedListOption<T>> elements;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         private float overallWeight;
 
         private WeightedListOption<T> CustomAddFunction()
@@ -109,7 +109,7 @@ namespace Abb2kTools
 
             OnListChanged();
         }
-        #endif
+#endif
 
         public void Add(T element, float weight)
         {
@@ -140,7 +140,7 @@ namespace Abb2kTools
             return elements[^1].element;
         }
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         private void Subscribe(WeightedListOption<T> item)
         {
             item.OnWeightChanged -= HandleWeightChanged;
@@ -168,15 +168,15 @@ namespace Abb2kTools
                 item.percent = $"Chance in percentages: {(overallWeight == 0 ? 0 : item.Weight / overallWeight * 100)}%";
             }
         }
-        #endif
+#endif
 
         public void OnBeforeSerialize(){}
 
         public void OnAfterDeserialize()
         {
-            #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
             OnListChanged();
-            #endif
+#endif
         }
     }
 }

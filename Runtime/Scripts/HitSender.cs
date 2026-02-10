@@ -8,19 +8,19 @@ namespace Abb2kTools
 {
     public class HitSender : MonoBehaviour
     {
-        #if !ODIN_INSPECTOR
+#if !ODIN_INSPECTOR
         [SerializeField]
         [Header("Reference")]
-        #endif
+#endif
         private GameObject _hitRecieverObj;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Reference")]
         [ShowInInspector, PropertyOrder(-1), SceneObjectsOnly, ValidateInput(
             "ValidateGameObject",
             "To work the 'HitReciever' interface must be set, or the object in this field must have a 'IHitReciever' component on it.",
             InfoMessageType.Warning
         )]
-        #endif
+#endif
         public GameObject HitRecieverObj
         {
             get => _hitRecieverObj;
@@ -34,10 +34,10 @@ namespace Abb2kTools
             }
         }
         private IHitReciever _hitReciever;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Reference")]
         [ShowInInspector, SceneObjectsOnly, PropertyOrder(-1)]
-        #endif
+#endif
         public IHitReciever HitReciever
         {
             get
@@ -55,11 +55,11 @@ namespace Abb2kTools
             }
         }
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Options")]
-        #else
+#else
         [Header("Options")]
-        #endif
+#endif
         public int hitID;
 
         [Flags]
@@ -71,46 +71,46 @@ namespace Abb2kTools
             Exit = 1 << 2
         }
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Options")]
-        #else
+#else
         [Header("3D")]
-        #endif
+#endif
         public bool send3D;
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Options/3D"), ShowIf("send3D"), LabelText("Collision"), LabelWidth(52.5f)]
-        #endif
+#endif
         public HitTypes sendCollision3D;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Options/3D"), ShowIf("send3D"), LabelText("Trigger"), LabelWidth(52.5f)]
-        #endif
+#endif
         public HitTypes sendTrigger3D;
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Options")]
-        #else
+#else
         [Header("2D")]
-        #endif
+#endif
         public bool send2D;
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Options/2D"), ShowIf("send2D"), LabelText("Collision"), LabelWidth(52.5f)]
-        #endif
+#endif
         public HitTypes sendCollision2D;
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         [BoxGroup("Options/2D"), ShowIf("send2D"), LabelText("Trigger"), LabelWidth(52.5f)]
-        #endif
+#endif
         public HitTypes sendTrigger2D;
 
-        #if ODIN_INSPECTOR
+#if ODIN_INSPECTOR
         private bool ValidateGameObject(GameObject HitRecieverObj)
         {
             return HitReciever == null ? HitRecieverObj.TryGetComponent(out IHitReciever _) : true;
         }
-        #endif
+#endif
 
-        #region Collision
+#region Collision
 
         void OnCollisionEnter(Collision collision)
         {
@@ -130,8 +130,8 @@ namespace Abb2kTools
                 HitReciever?.OnCollision(collision, MakeData(IHitReciever.HitType.Exit));
         }
 
-        #endregion
-        #region Trigger
+#endregion
+#region Trigger
 
         void OnTriggerEnter(Collider other)
         {
@@ -151,8 +151,8 @@ namespace Abb2kTools
                 HitReciever?.OnTrigger(other, MakeData(IHitReciever.HitType.Exit));
         }
 
-        #endregion
-        #region Collision2D
+#endregion
+#region Collision2D
 
         void OnCollisionEnter2D(Collision2D collision)
         {
@@ -172,8 +172,8 @@ namespace Abb2kTools
                 HitReciever?.OnCollision2D(collision, MakeData(IHitReciever.HitType.Exit));
         }
 
-        #endregion
-        #region Trigger2D
+#endregion
+#region Trigger2D
 
         void OnTriggerEnter2D(Collider2D collision)
         {
@@ -193,7 +193,7 @@ namespace Abb2kTools
                 HitReciever?.OnTrigger2D(collision, MakeData(IHitReciever.HitType.Exit));
         }
 
-        #endregion
+#endregion
 
         private IHitReciever.HitData MakeData(IHitReciever.HitType type) => new IHitReciever.HitData
         {
