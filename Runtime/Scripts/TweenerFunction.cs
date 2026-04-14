@@ -43,7 +43,7 @@ namespace Abb2kTools
 
         public Tweener Call(float duration)
         {
-            if (targetComponent == null || string.IsNullOrEmpty(methodName)) return null;
+            if (targetObject == null || targetComponent == null || string.IsNullOrEmpty(methodName)) return null;
 
             var method = GetValidMethods(targetComponent.GetType())
                 .FirstOrDefault(m => GetMethodKey(m) == methodName);

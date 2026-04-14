@@ -181,6 +181,8 @@ namespace Abb2kTools
 
         protected Tween Setup(Tween t)
         {
+            if (t == null) return null;
+
             return t.SetEase(easing)
                 .SetLoops(isInfiniteLoop ? -1 : loops, loopType)
                 .SetInverted(isInverted)
