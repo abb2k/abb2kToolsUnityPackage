@@ -37,8 +37,24 @@ namespace Abb2kTools
         [System.Serializable]
         public class ParameterValue<T> : ParameterValue
         {
-            public T data; 
-            public ParameterValue(T defaultValue) => data = defaultValue;
+            public T data;
+            public bool hasValue = true;
+
+            public ParameterValue(object val)
+            {
+                if (val == null || val == System.DBNull.Value)
+                {
+                    hasValue = false;
+                    data = default;
+                }
+                else
+                {
+                    hasValue = true;
+                    data = (T)val;
+                }
+            }
+
+            public object GetValue() => hasValue ? data : null;
         }
 
         public Tweener Call(float duration)

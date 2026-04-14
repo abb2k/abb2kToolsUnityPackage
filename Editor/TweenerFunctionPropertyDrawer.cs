@@ -2,9 +2,7 @@
 using UnityEngine;
 using UnityEditor;
 using System;
-using System.Linq;
 using System.Reflection;
-
 
 namespace Abb2kTools
 {
@@ -16,29 +14,25 @@ namespace Abb2kTools
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            float height = EditorGUIUtility.singleLineHeight + (PADDING * 2); 
-            height += EditorGUIUtility.singleLineHeight + SPACING; 
+            float height = EditorGUIUtility.singleLineHeight + (PADDING * 2);
+            height += EditorGUIUtility.singleLineHeight + SPACING;
 
             SerializedProperty paramsProp = property.FindPropertyRelative("parameters");
-            
             if (paramsProp != null && paramsProp.arraySize > 0)
             {
-                height += SPACING * 2 + EditorGUIUtility.singleLineHeight;
+                height += EditorGUIUtility.singleLineHeight + SPACING; 
                 for (int i = 0; i < paramsProp.arraySize; i++)
                 {
                     var valProp = paramsProp.GetArrayElementAtIndex(i).FindPropertyRelative("value");
                     if (valProp != null && valProp.managedReferenceValue != null)
                     {
                         var dataProp = valProp.FindPropertyRelative("data");
-                        if (dataProp != null)
-                            height += EditorGUI.GetPropertyHeight(dataProp, true) + SPACING;
-                        else 
-                            height += EditorGUIUtility.singleLineHeight + SPACING;
+                        float pHeight = (dataProp != null) ? EditorGUI.GetPropertyHeight(dataProp, true) : EditorGUIUtility.singleLineHeight;
+                        height += pHeight + SPACING;
                     }
                 }
-                height += PADDING;
             }
-            return height;
+            return height + PADDING;
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
@@ -67,15 +61,7 @@ namespace Abb2kTools
                     ? methodProp.stringValue : "Select Method...";
 
                 if (EditorGUI.DropdownButton(btnRect, new GUIContent(display), FocusType.Keyboard))
-                {
                     ShowMethodMenu((GameObject)objProp.objectReferenceValue, property);
-                }
-            }
-            else
-            {
-                property.FindPropertyRelative("targetComponent").objectReferenceValue = null;
-                property.FindPropertyRelative("methodName").stringValue = "";
-                property.FindPropertyRelative("parameters").ClearArray();
             }
 
             drawRect.y += drawRect.height + SPACING;
@@ -83,33 +69,45 @@ namespace Abb2kTools
 
             if (paramsProp != null && paramsProp.arraySize > 0 && compProp.objectReferenceValue != null)
             {
-                drawRect.y += SPACING;
                 EditorGUI.LabelField(drawRect, "Parameters", EditorStyles.boldLabel);
-                drawRect.y += drawRect.height;
+                drawRect.y += drawRect.height + SPACING;
 
                 for (int i = 0; i < paramsProp.arraySize; i++)
                 {
                     SerializedProperty pElement = paramsProp.GetArrayElementAtIndex(i);
                     SerializedProperty valueWrapper = pElement.FindPropertyRelative("value");
                     string pName = pElement.FindPropertyRelative("name").stringValue;
+                    string typeName = pElement.FindPropertyRelative("typeName").stringValue;
 
                     if (valueWrapper != null && valueWrapper.managedReferenceValue != null)
                     {
                         SerializedProperty dataProp = valueWrapper.FindPropertyRelative("data");
-                        if (dataProp != null)
-                        {
-                            float pHeight = EditorGUI.GetPropertyHeight(dataProp, true);
-                            Rect pRect = new Rect(drawRect.x, drawRect.y, drawRect.width, pHeight);
+                        SerializedProperty hasValueProp = valueWrapper.FindPropertyRelative("hasValue");
 
-                            EditorGUI.BeginChangeCheck();
-                            EditorGUI.PropertyField(pRect, dataProp, new GUIContent(pName), true);
-                            if (EditorGUI.EndChangeCheck())
-                            {
-                                property.serializedObject.ApplyModifiedProperties();
-                            }
+                        bool isNullable = typeName.Contains("System.Nullable");
+                        float pHeight = (dataProp != null) ? EditorGUI.GetPropertyHeight(dataProp, true) : EditorGUIUtility.singleLineHeight;
+                        Rect pRect = new Rect(drawRect.x, drawRect.y, drawRect.width, pHeight);
+
+                        if (isNullable && hasValueProp != null)
+                        {
+                            Rect toggleRect = new Rect(pRect.x, pRect.y, 20, EditorGUIUtility.singleLineHeight);
+                            hasValueProp.boolValue = EditorGUI.Toggle(toggleRect, hasValueProp.boolValue);
                             
-                            drawRect.y += pHeight + SPACING;
+                            pRect.xMin += 25; // Indent the actual field
+                            
+                            EditorGUI.BeginDisabledGroup(!hasValueProp.boolValue);
+                            if (dataProp != null) 
+                                EditorGUI.PropertyField(pRect, dataProp, new GUIContent(pName), true);
+                            else
+                                EditorGUI.LabelField(pRect, pName, "Null");
+                            EditorGUI.EndDisabledGroup();
                         }
+                        else if (dataProp != null)
+                        {
+                            EditorGUI.PropertyField(pRect, dataProp, new GUIContent(pName), true);
+                        }
+
+                        drawRect.y += pHeight + SPACING;
                     }
                 }
             }
@@ -141,40 +139,37 @@ namespace Abb2kTools
             SerializedProperty paramsProp = property.FindPropertyRelative("parameters");
             paramsProp.ClearArray();
 
-            bool isExt = method.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false);
             var parameters = method.GetParameters();
+            bool isExt = method.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false);
 
             for (int i = isExt ? 1 : 0; i < parameters.Length; i++)
             {
-                var paramInfo = parameters[i];
-                string pName = paramInfo.Name.ToLower();
-                Type pType = paramInfo.ParameterType;
-
-                if (pName.Contains("duration") || pName == "target" || pName == "t") continue;
+                var param = parameters[i];
+                if (param.Name.ToLower().Contains("duration")) continue;
 
                 paramsProp.InsertArrayElementAtIndex(paramsProp.arraySize);
                 var element = paramsProp.GetArrayElementAtIndex(paramsProp.arraySize - 1);
-                element.FindPropertyRelative("name").stringValue = paramInfo.Name;
+                element.FindPropertyRelative("name").stringValue = param.Name;
+                
+                Type pType = param.ParameterType;
                 element.FindPropertyRelative("typeName").stringValue = pType.AssemblyQualifiedName;
 
-                Type wrapperType = typeof(TweenerFunction.ParameterValue<>).MakeGenericType(pType);
-                object valueToAssign = null;
+                Type underlying = Nullable.GetUnderlyingType(pType) ?? pType;
+                Type wrapperType = typeof(TweenerFunction.ParameterValue<>).MakeGenericType(underlying);
+                
+                object initVal = null;
+                if (param.HasDefaultValue && param.DefaultValue != DBNull.Value) initVal = param.DefaultValue;
+                else if (underlying.IsValueType) initVal = Activator.CreateInstance(underlying);
 
-                if (paramInfo.HasDefaultValue)
+                element.FindPropertyRelative("value").managedReferenceValue = Activator.CreateInstance(wrapperType, initVal);
+                
+                if (Nullable.GetUnderlyingType(pType) != null && (!param.HasDefaultValue || param.DefaultValue == DBNull.Value || param.DefaultValue == null))
                 {
-                    valueToAssign = paramInfo.DefaultValue;
+                    var valProp = element.FindPropertyRelative("value");
+                    var hasValueProp = valProp.FindPropertyRelative("hasValue");
+                    if (hasValueProp != null) hasValueProp.boolValue = false;
                 }
-                else
-                {
-                    if (pType.IsArray)
-                        valueToAssign = Array.CreateInstance(pType.GetElementType(), 0);
-                    else if (pType.IsValueType)
-                        valueToAssign = Activator.CreateInstance(pType);
-                }
-
-                element.FindPropertyRelative("value").managedReferenceValue = Activator.CreateInstance(wrapperType, valueToAssign);
             }
-
             property.serializedObject.ApplyModifiedProperties();
         }
     }
