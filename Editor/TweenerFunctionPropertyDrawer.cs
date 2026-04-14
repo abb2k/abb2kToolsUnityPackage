@@ -63,6 +63,12 @@ namespace Abb2kTools
                 if (EditorGUI.DropdownButton(btnRect, new GUIContent(display), FocusType.Keyboard))
                     ShowMethodMenu((GameObject)objProp.objectReferenceValue, property);
             }
+            else
+            {
+                property.FindPropertyRelative("targetComponent").objectReferenceValue = null;
+                property.FindPropertyRelative("methodName").stringValue = string.Empty;
+                property.FindPropertyRelative("parameters").ClearArray();
+            }
 
             drawRect.y += drawRect.height + SPACING;
             SerializedProperty paramsProp = property.FindPropertyRelative("parameters");
