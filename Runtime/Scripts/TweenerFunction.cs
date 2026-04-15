@@ -13,6 +13,7 @@ namespace Abb2kTools
         public GameObject targetObject;
         public Component targetComponent;
         public string methodName;
+        public string methodKey;
         public List<ParameterData> parameters = new List<ParameterData>();
 
         [System.Serializable]
@@ -57,12 +58,12 @@ namespace Abb2kTools
             public object GetValue() => hasValue ? data : null;
         }
 
-        public Tweener Call(float duration)
+        public Tween Call(float duration)
         {
-            if (targetObject == null || targetComponent == null || string.IsNullOrEmpty(methodName)) return null;
+            if (targetObject == null || targetComponent == null || string.IsNullOrEmpty(methodKey)) return null;
 
             var method = GetValidMethods(targetComponent.GetType())
-                .FirstOrDefault(m => GetMethodKey(m) == methodName);
+                .FirstOrDefault(m => GetMethodKey(m) == methodKey);
 
             if (method == null) return null;
 
@@ -95,22 +96,62 @@ namespace Abb2kTools
                 }
             }
 
-            return method.Invoke(isExt ? null : targetComponent, args) as Tweener;
+            return method.Invoke(isExt ? null : targetComponent, args) as Tween;
         }
 
-        public static string GetMethodKey(MethodInfo m) => $"{m.Name}";
+        public static string GetMethodKey(MethodInfo m)
+        {
+            var str = $"{m.Name}";
+
+            var parameters = m.GetParameters();
+
+            if (parameters == null || parameters.Length == 0) return str;
+
+            str += " (";
+
+            bool isExt = m.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false);
+
+            int i = 0;
+
+            const string seperator = ", ";
+            
+            foreach (var parameter in parameters)
+            {
+                if (isExt && i == 0 || parameter.Name.ToLower().Contains("duration"))
+                {
+                    i++;
+                    if (i == parameters.Length)
+                        str = str.Remove(str.Length - seperator.Length, seperator.Length);
+                    continue;
+                }
+
+                var underlayType = System.Nullable.GetUnderlyingType(parameter.ParameterType);
+                str += (underlayType ?? parameter.ParameterType).Name;
+                if (underlayType != null)
+                    str += "?";
+
+                if (i != parameters.Length - 1)
+                    str += seperator;
+
+                i++;
+            }
+
+            str += ")";
+
+            return str;
+        }
 
         public static IEnumerable<MethodInfo> GetValidMethods(System.Type type)
         {
             var instance = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .Where(m => typeof(Tweener).IsAssignableFrom(m.ReturnType));
+                .Where(m => typeof(Tween).IsAssignableFrom(m.ReturnType));
 
             var extensions = typeof(ShortcutExtensions).Assembly.GetTypes()
                 .Where(t => t.IsSealed && !t.IsGenericType && !t.IsNested)
                 .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
                 .Where(m => m.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false))
                 .Where(m => m.GetParameters().Length > 0 && m.GetParameters()[0].ParameterType.IsAssignableFrom(type))
-                .Where(m => typeof(Tweener).IsAssignableFrom(m.ReturnType));
+                .Where(m => typeof(Tween).IsAssignableFrom(m.ReturnType));
 
             return instance.Concat(extensions);
         }

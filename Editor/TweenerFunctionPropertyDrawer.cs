@@ -51,22 +51,21 @@ namespace Abb2kTools
 
             SerializedProperty objProp = property.FindPropertyRelative("targetObject");
             SerializedProperty compProp = property.FindPropertyRelative("targetComponent");
-            SerializedProperty methodProp = property.FindPropertyRelative("methodName");
+            SerializedProperty methodProp = property.FindPropertyRelative("methodKey");
 
             EditorGUI.PropertyField(objRect, objProp, GUIContent.none);
 
             if (objProp.objectReferenceValue != null)
             {
                 string display = (compProp.objectReferenceValue != null && !string.IsNullOrEmpty(methodProp.stringValue))
-                    ? methodProp.stringValue : "Select Method...";
+                    ? property.FindPropertyRelative("methodName").stringValue : "Select Method...";
 
                 if (EditorGUI.DropdownButton(btnRect, new GUIContent(display), FocusType.Keyboard))
                     ShowMethodMenu((GameObject)objProp.objectReferenceValue, property);
             }
             else
             {
-                property.FindPropertyRelative("targetComponent").objectReferenceValue = null;
-                property.FindPropertyRelative("methodName").stringValue = string.Empty;
+                property.FindPropertyRelative("methodKey").stringValue = string.Empty;
                 property.FindPropertyRelative("parameters").ClearArray();
             }
 
@@ -140,7 +139,8 @@ namespace Abb2kTools
         {
             property.serializedObject.Update();
             property.FindPropertyRelative("targetComponent").objectReferenceValue = comp;
-            property.FindPropertyRelative("methodName").stringValue = TweenerFunction.GetMethodKey(method);
+            property.FindPropertyRelative("methodKey").stringValue = TweenerFunction.GetMethodKey(method);
+            property.FindPropertyRelative("methodName").stringValue = method.Name;
 
             SerializedProperty paramsProp = property.FindPropertyRelative("parameters");
             paramsProp.ClearArray();
