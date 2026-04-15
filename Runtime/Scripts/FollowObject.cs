@@ -48,7 +48,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [BoxGroup("General"), InlineProperty]
 #endif
-        public Constrains constrains;
+        public Constrains constrains = new();
 
 #if ODIN_INSPECTOR
         [BoxGroup("Lerp Settings"), ShowIf("@moveMode != MoveModes.Snap")]

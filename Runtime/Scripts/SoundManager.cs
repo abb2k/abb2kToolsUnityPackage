@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Sirenix.Utilities;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace Abb2kTools
 {
@@ -24,12 +25,52 @@ namespace Abb2kTools
     }
 
     [System.Serializable]
-    public struct SourceSettings
-    {
-        
+    public class SourceSettings
+    {   
+        [Header("Options")]
+        public AudioClip clip;
+        public AudioMixerGroup output;
+        [Min(0)]
+        public float volume = 1;
+        public float pitch = 1;
+        public bool loop;
+        [Range(-1, 1)]
+        public float panStereo = 0;
+        [Range(0, 1)]
+        public float spatialBlend = 0;
+        [Range(0, 1.1f)]
+        public float reverbZoneMix = 0;
+        [Range(0, 256)]
+        public int prio = 0;
+        [Header("3D")]
+        [Range(0, 5)]
+        public float dopplerLevel = 0;
+        [Range(0, 360)]
+        public float spread = 0;
+        public AudioRolloffMode rolloff = AudioRolloffMode.Logarithmic;
+        [Min(0)]
+        public float minDist = 1;
+        [Min(0)]
+        public float maxDist = 500;
 
         public AudioSource ApplySettings(AudioSource source)
         {
+            source.clip = clip;
+            source.volume = volume;
+            source.pitch = pitch;
+            source.loop = loop;
+            source.panStereo = panStereo;
+            source.playOnAwake = false;
+            source.spatialBlend = spatialBlend;
+            source.reverbZoneMix = reverbZoneMix;
+            source.priority = prio;
+            source.dopplerLevel = dopplerLevel;
+            source.rolloffMode = rolloff;
+            source.minDistance = minDist;
+            source.maxDistance = maxDist;
+            source.spread = spread;
+            source.outputAudioMixerGroup = output;
+
             return source;
         }
     }
@@ -68,7 +109,7 @@ namespace Abb2kTools
 
             if (attachType == AudioAttachmentType.Direct)
             {
-                if (attached.gameObject.TryGetComponent(out obj))
+                if (!attached.gameObject.TryGetComponent(out obj))
                     obj = attached.gameObject.AddComponent<ExternalAudioSource>();
                 source = obj.AddAudioSource();
             }
@@ -79,7 +120,8 @@ namespace Abb2kTools
                 {
                     obj = new GameObject("Audio Source").AddComponent<ExternalAudioSource>();
                     obj.transform.SetParent(transform);
-                    obj.SetFollow(attached);
+                    obj.SetAttached(attached);
+                    obj.DestroyEntireObjectOnDeplete = true;
                     objectForTranform.Add(attached, obj);
                 }
                 else
@@ -117,11 +159,11 @@ namespace Abb2kTools
 
             longLivingSound[ID].Holder.DeleteSource(longLivingSound[ID].Source);
 
-            if (objectForTranform.ContainsKey(longLivingSound[ID].Holder.transform))
+            if (objectForTranform.ContainsKey(longLivingSound[ID].Holder.attached))
             {                
                 if (longLivingSound[ID].Holder.AddedSources.Count == 0)
                 {
-                    objectForTranform.Remove(longLivingSound[ID].Source.gameObject.transform);
+                    objectForTranform.Remove(longLivingSound[ID].Holder.attached);
 
                     Destroy(longLivingSound[ID].Holder.gameObject);
                 }
@@ -132,21 +174,20 @@ namespace Abb2kTools
 
         public AudioSource CreateSFX(Transform attached, AudioAttachmentType attachType, SourceSettings settings)
         {
-            var source = CreateSource(attached, attachType, settings);
-            //
-            //
-            return source;
-        }
+            if (settings.clip == null) return null;
 
-        void CheckForDeletion()
-        {
-            
+            var source = CreateSource(attached, attachType, settings);
+            source.Item2.SetKillTimerForSource(source.Item1, source.Item1.clip.length);
+            source.Item1.Play();
+            return settings.ApplySettings(source.Item1);
         }
 
         void OnSourceKilled(ExternalAudioSource externalSource)
         {
             if (objectForTranform.ContainsKey(externalSource.transform))
                 objectForTranform.Remove(externalSource.transform);
+            if (objectForTranform.ContainsKey(externalSource.attached))
+                objectForTranform.Remove(externalSource.attached);
 
             HashSet<string> IDSToRemove = new();
 
