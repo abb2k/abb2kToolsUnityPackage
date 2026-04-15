@@ -27,7 +27,12 @@ namespace Abb2kTools
     {
         public TweenSequanceElementAddType type;
 #if ODIN_INSPECTOR
-        [ShowIf("@type == TweenSequanceElementAddType.AppendInterval || type == TweenSequanceElementAddType.PrependInterval")]
+        [
+            ShowIf("@type == TweenSequanceElementAddType.AppendInterval || type == TweenSequanceElementAddType.PrependInterval"),
+            MinValue(0)
+        ]
+#else
+    [Min(0)]
 #endif
         public float interval;
 #if ODIN_INSPECTOR
@@ -52,7 +57,7 @@ namespace Abb2kTools
         [Header("Sequance")]
         public TweenSequanceElement[] sequance;
 
-        protected override string ExtraStr => $"Sequance--{(sequance.Length == 0 ? "No elements" : $"{sequance.Length} elements")}";
+        protected override string ExtraStr => $"Sequance--{(sequance == null ? "No elements" : (sequance.Length == 0 ? "No elements" : $"{sequance.Length} elements"))}";
 
         public override Tween Run()
         {
