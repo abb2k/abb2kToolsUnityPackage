@@ -10,12 +10,14 @@ namespace Abb2kTools
     {
         public AudioSource Source {get; private set;}
         public string ID {get; private set;}
+        public ExternalAudioSource Holder {get; private set;}
 
         private Audio(){}
-        public Audio(AudioSource source, string ID)
+        public Audio(AudioSource source, string ID, ExternalAudioSource holder)
         {
             this.Source = source;
             this.ID = ID;
+            this.Holder = holder;
         }
 
         public bool CompareID(string otherID) => ID.Equals(otherID);
@@ -58,7 +60,7 @@ namespace Abb2kTools
             return _mainListener;
         }
 
-        private AudioSource CreateSource(Transform attached, AudioAttachmentType attachType, SourceSettings settings)
+        private (AudioSource, ExternalAudioSource) CreateSource(Transform attached, AudioAttachmentType attachType, SourceSettings settings)
         {
             AudioSource source = null;
 
@@ -66,9 +68,9 @@ namespace Abb2kTools
 
             if (attachType == AudioAttachmentType.Direct)
             {
-                source = attached.gameObject.AddComponent<AudioSource>();
                 if (attached.gameObject.TryGetComponent(out obj))
                     obj = attached.gameObject.AddComponent<ExternalAudioSource>();
+                source = obj.AddAudioSource();
             }
             else if (attachType == AudioAttachmentType.External)
             {
@@ -77,7 +79,7 @@ namespace Abb2kTools
                 {
                     obj = new GameObject("Audio Source").AddComponent<ExternalAudioSource>();
                     obj.transform.SetParent(transform);
-                    obj.Setup(attached);
+                    obj.SetFollow(attached);
                     objectForTranform.Add(attached, obj);
                 }
                 else
@@ -85,21 +87,21 @@ namespace Abb2kTools
                     obj = objectForTranform[attached];
                 }
 
-                source = obj.gameObject.AddComponent<AudioSource>();
+                source = obj.AddAudioSource();
             }
 
-            if (!source) return source;
+            if (!source) return (source, obj);
 
             obj.OnDestroyed -= OnSourceKilled;
             obj.OnDestroyed += OnSourceKilled;
 
-            return settings.ApplySettings(source);
+            return (settings.ApplySettings(source), obj);
         }
 
         public Audio CreateNewSource(string ID, Transform attached, AudioAttachmentType attachType, SourceSettings settings)
         {
             var source = CreateSource(attached, attachType, settings);
-            longLivingSound.Add(ID, new Audio(source, ID));
+            longLivingSound.Add(ID, new Audio(source.Item1, ID, source.Item2));
 
             return longLivingSound[ID];
         }
@@ -113,17 +115,15 @@ namespace Abb2kTools
         {
             if (!longLivingSound.ContainsKey(ID)) return;
 
-            Destroy(longLivingSound[ID].Source);
+            longLivingSound[ID].Holder.DeleteSource(longLivingSound[ID].Source);
 
-            if (objectForTranform.ContainsKey(longLivingSound[ID].Source.gameObject.transform))
-            {
-                var audioHolder = objectForTranform[longLivingSound[ID].Source.gameObject.transform];
-                
-                if (!audioHolder.TryGetComponent(out AudioSource _))
+            if (objectForTranform.ContainsKey(longLivingSound[ID].Holder.transform))
+            {                
+                if (longLivingSound[ID].Holder.AddedSources.Count == 0)
                 {
                     objectForTranform.Remove(longLivingSound[ID].Source.gameObject.transform);
 
-                    Destroy(audioHolder);
+                    Destroy(longLivingSound[ID].Holder.gameObject);
                 }
             }
 
@@ -138,6 +138,11 @@ namespace Abb2kTools
             return source;
         }
 
+        void CheckForDeletion()
+        {
+            
+        }
+
         void OnSourceKilled(ExternalAudioSource externalSource)
         {
             if (objectForTranform.ContainsKey(externalSource.transform))
@@ -145,7 +150,7 @@ namespace Abb2kTools
 
             HashSet<string> IDSToRemove = new();
 
-            var sources = externalSource.GetComponents<AudioSource>();
+            var sources = externalSource.AddedSources;
             
             foreach (var (ID, Audio) in longLivingSound)
             {
