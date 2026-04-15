@@ -80,7 +80,7 @@ namespace Abb2kTools
         ]
 #endif
         [Space]
-        public SpecialStartupMode SetSpecialStartupMode = SpecialStartupMode.None;
+        public SpecialStartupMode specialStartupMode = SpecialStartupMode.None;
 
 #if ODIN_INSPECTOR
         [
@@ -196,7 +196,7 @@ namespace Abb2kTools
                 .OnPlay(() => OnPlay.Invoke())
                 .OnPause(() => OnPause.Invoke())
                 .OnWaypointChange(num => OnWaypointChange.Invoke(num))
-                .SetSpecialStartupMode(SetSpecialStartupMode);
+                .SetSpecialStartupMode(specialStartupMode);
         }
     }
 }
