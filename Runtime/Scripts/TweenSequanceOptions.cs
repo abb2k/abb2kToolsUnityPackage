@@ -4,6 +4,8 @@ using DG.Tweening.Core;
 using DG.Tweening.Core.Enums;
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
+using Sirenix.Serialization;
+
 #endif
 using UnityEngine;
 using UnityEngine.Events;
@@ -20,6 +22,12 @@ namespace Abb2kTools
         Prepend,
         PrependCallback,
         PrependInterval
+    }
+
+    public enum TweenSequanceElementTweenType
+    {
+        Tweener,
+        Sequance
     }
 
     [System.Serializable]
@@ -39,10 +47,35 @@ namespace Abb2kTools
         [ShowIf("@type == TweenSequanceElementAddType.AppendCallback || type == TweenSequanceElementAddType.PrependCallback || type == TweenSequanceElementAddType.JoinCallback")]
 #endif
         public UnityEvent callback;
+
 #if ODIN_INSPECTOR
         [ShowIf("@type == TweenSequanceElementAddType.Append || type == TweenSequanceElementAddType.Prepend || type == TweenSequanceElementAddType.Join")]
 #endif
+        public TweenSequanceElementTweenType tweenType;
+
+#if ODIN_INSPECTOR
+        [ShowIf("@tweenType == TweenSequanceElementTweenType.Tweener && (type == TweenSequanceElementAddType.Append || type == TweenSequanceElementAddType.Prepend || type == TweenSequanceElementAddType.Join)")]
+#endif
         public TweenFunctionOptions tween;
+
+#if ODIN_INSPECTOR
+        [
+            ShowIf("@tweenType == TweenSequanceElementTweenType.Sequance && (type == TweenSequanceElementAddType.Append || type == TweenSequanceElementAddType.Prepend || type == TweenSequanceElementAddType.Join)")        ]
+#endif
+        public TweenSequanceOptions sequance;
+
+        public TweenOptions OptionForSettings()
+        {
+            switch (tweenType)
+            {
+                default:
+                case TweenSequanceElementTweenType.Tweener:
+                
+                return tween;
+                case TweenSequanceElementTweenType.Sequance:
+                return sequance;
+            }
+        }
     }
 
     [System.Serializable]
@@ -69,7 +102,7 @@ namespace Abb2kTools
                 switch (element.type)
                 {
                     case TweenSequanceElementAddType.Append:
-                        seq.Append(element.tween.Run());
+                        seq.Append(element.OptionForSettings().Run());
                         break;
                     case TweenSequanceElementAddType.AppendCallback:
                         seq.AppendCallback(() => element.callback.Invoke());
@@ -78,13 +111,13 @@ namespace Abb2kTools
                         seq.AppendInterval(element.interval);
                         break;
                     case TweenSequanceElementAddType.Join:
-                        seq.Join(element.tween.Run());
+                        seq.Join(element.OptionForSettings().Run());
                         break;
                     case TweenSequanceElementAddType.JoinCallback:
                         seq.JoinCallback(() => element.callback.Invoke());
                         break;
                     case TweenSequanceElementAddType.Prepend:
-                        seq.Prepend(element.tween.Run());
+                        seq.Prepend(element.OptionForSettings().Run());
                         break;
                     case TweenSequanceElementAddType.PrependCallback:
                         seq.PrependCallback(() => element.callback.Invoke());

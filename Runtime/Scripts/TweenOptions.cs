@@ -49,7 +49,23 @@ namespace Abb2kTools
             FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
+        public bool useCurve = false;
+#if ODIN_INSPECTOR
+        [
+            FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME),
+            DisableIf("useCurve")
+        ]
+#endif
         public Ease easing = Ease.Linear;
+#if ODIN_INSPECTOR
+        [
+            FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME),
+            EnableIf("useCurve")
+        ]
+#endif
+        public AnimationCurve easingCurve = AnimationCurve.Constant(0, 1, .5f);
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
@@ -183,8 +199,7 @@ namespace Abb2kTools
         {
             if (t == null) return null;
 
-            return t.SetEase(easing)
-                .SetLoops(isInfiniteLoop ? -1 : loops, loopType)
+            t.SetLoops(isInfiniteLoop ? -1 : loops, loopType)
                 .SetInverted(isInverted)
                 .SetUpdate(isIgnoringTimescale)
                 .SetRelative(isRelative)
@@ -197,6 +212,13 @@ namespace Abb2kTools
                 .OnPause(() => OnPause.Invoke())
                 .OnWaypointChange(num => OnWaypointChange.Invoke(num))
                 .SetSpecialStartupMode(specialStartupMode);
+
+            if (useCurve)
+                t.SetEase(easingCurve);
+            else
+                t.SetEase(easing);
+
+            return t;
         }
     }
 }
