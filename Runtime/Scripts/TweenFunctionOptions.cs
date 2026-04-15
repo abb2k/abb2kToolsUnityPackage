@@ -37,7 +37,7 @@ namespace Abb2kTools
             }
         }
 
-        public override Tween Run()
+        public override Tween Invoke()
         {
             if (function == null) return null;
             return Setup(function.Call(duration));

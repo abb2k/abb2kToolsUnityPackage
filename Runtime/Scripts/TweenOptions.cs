@@ -193,7 +193,7 @@ namespace Abb2kTools
 #endif
         public UnityEvent<int> OnWaypointChange;
 
-        public abstract Tween Run();
+        public abstract Tween Invoke();
 
         protected Tween Setup(Tween t)
         {

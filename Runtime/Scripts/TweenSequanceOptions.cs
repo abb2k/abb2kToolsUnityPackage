@@ -93,7 +93,7 @@ namespace Abb2kTools
 
         protected override string ExtraStr => $"Sequance--{(sequance == null ? "No elements" : (sequance.Length == 0 ? "No elements" : $"{sequance.Length} elements"))}";
 
-        public override Tween Run()
+        public override Tween Invoke()
         {
             var seq = DOTween.Sequence();
 
@@ -102,7 +102,7 @@ namespace Abb2kTools
                 switch (element.type)
                 {
                     case TweenSequanceElementAddType.Append:
-                        seq.Append(element.OptionForSettings().Run());
+                        seq.Append(element.OptionForSettings().Invoke());
                         break;
                     case TweenSequanceElementAddType.AppendCallback:
                         seq.AppendCallback(() => element.callback.Invoke());
@@ -111,13 +111,13 @@ namespace Abb2kTools
                         seq.AppendInterval(element.interval);
                         break;
                     case TweenSequanceElementAddType.Join:
-                        seq.Join(element.OptionForSettings().Run());
+                        seq.Join(element.OptionForSettings().Invoke());
                         break;
                     case TweenSequanceElementAddType.JoinCallback:
                         seq.JoinCallback(() => element.callback.Invoke());
                         break;
                     case TweenSequanceElementAddType.Prepend:
-                        seq.Prepend(element.OptionForSettings().Run());
+                        seq.Prepend(element.OptionForSettings().Invoke());
                         break;
                     case TweenSequanceElementAddType.PrependCallback:
                         seq.PrependCallback(() => element.callback.Invoke());
