@@ -106,10 +106,10 @@ namespace Abb2kTools
             var parameters = m.GetParameters();
 
             if (parameters == null || parameters.Length == 0) return str;
+            bool isExt = m.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false);
+            if (isExt && parameters.Length == 1) return str;
 
             str += " (";
-
-            bool isExt = m.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false);
 
             int i = 0;
 
