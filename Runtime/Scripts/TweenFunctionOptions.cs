@@ -13,7 +13,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME),
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME),
             PropertyOrder(-1)
         ]
 #endif
