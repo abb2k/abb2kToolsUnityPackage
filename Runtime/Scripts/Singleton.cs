@@ -5,6 +5,7 @@ namespace Abb2kTools {
     public class Singleton<T> : MonoBehaviour where T : MonoBehaviour
     {
         protected internal static T instance;
+        public static T Instance => Get();
         private static readonly object objLock = new();
 
         protected new virtual bool DontDestroyOnLoad => true;
