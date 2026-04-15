@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using Sirenix.Utilities;
 using UnityEngine;
 
 namespace Abb2kTools
@@ -39,7 +41,7 @@ namespace Abb2kTools
     public class SoundManager : Singleton<SoundManager>
     {
         private Dictionary<string, Audio> longLivingSound = new();
-        private Dictionary<Transform, GameObject> objectForTranform = new();
+        private Dictionary<Transform, ExternalAudioSource> objectForTranform = new();
 
         private AudioListener _mainListener;
         private AudioListener MainListener
@@ -60,18 +62,22 @@ namespace Abb2kTools
         {
             AudioSource source = null;
 
+            ExternalAudioSource obj = null;
+
             if (attachType == AudioAttachmentType.Direct)
             {
                 source = attached.gameObject.AddComponent<AudioSource>();
+                if (attached.gameObject.TryGetComponent(out obj))
+                    obj = attached.gameObject.AddComponent<ExternalAudioSource>();
             }
             else if (attachType == AudioAttachmentType.External)
             {
-                GameObject obj = null;
-
+                
                 if (!objectForTranform.ContainsKey(attached))
                 {
-                    obj = new GameObject("Audio Source");
+                    obj = new GameObject("Audio Source").AddComponent<ExternalAudioSource>();
                     obj.transform.SetParent(transform);
+                    obj.Setup(attached);
                     objectForTranform.Add(attached, obj);
                 }
                 else
@@ -79,10 +85,13 @@ namespace Abb2kTools
                     obj = objectForTranform[attached];
                 }
 
-                source = obj.AddComponent<AudioSource>();
+                source = obj.gameObject.AddComponent<AudioSource>();
             }
 
             if (!source) return source;
+
+            obj.OnDestroyed -= OnSourceKilled;
+            obj.OnDestroyed += OnSourceKilled;
 
             return settings.ApplySettings(source);
         }
@@ -104,15 +113,21 @@ namespace Abb2kTools
         {
             if (!longLivingSound.ContainsKey(ID)) return;
 
+            Destroy(longLivingSound[ID].Source);
+
             if (objectForTranform.ContainsKey(longLivingSound[ID].Source.gameObject.transform))
             {
                 var audioHolder = objectForTranform[longLivingSound[ID].Source.gameObject.transform];
+                
+                if (!audioHolder.TryGetComponent(out AudioSource _))
+                {
+                    objectForTranform.Remove(longLivingSound[ID].Source.gameObject.transform);
 
+                    Destroy(audioHolder);
+                }
             }
-            else
-            {
-                Destroy(longLivingSound[ID].Source);
-            }
+
+            longLivingSound.Remove(ID);
         }
 
         public AudioSource CreateSFX(Transform attached, AudioAttachmentType attachType, SourceSettings settings)
@@ -121,6 +136,24 @@ namespace Abb2kTools
             //
             //
             return source;
+        }
+
+        void OnSourceKilled(ExternalAudioSource externalSource)
+        {
+            if (objectForTranform.ContainsKey(externalSource.transform))
+                objectForTranform.Remove(externalSource.transform);
+
+            HashSet<string> IDSToRemove = new();
+
+            var sources = externalSource.GetComponents<AudioSource>();
+            
+            foreach (var (ID, Audio) in longLivingSound)
+            {
+                if (sources.Contains(Audio.Source))
+                    IDSToRemove.Add(ID);
+            }
+
+            IDSToRemove.ForEach(x => longLivingSound.Remove(x));
         }
     }
 }

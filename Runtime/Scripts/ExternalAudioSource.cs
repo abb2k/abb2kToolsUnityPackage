@@ -1,16 +1,16 @@
 using UnityEngine;
+using UnityEngine.Events;
 
 public class ExternalAudioSource : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    public event UnityAction<ExternalAudioSource> OnDestroyed;
+    public void Setup(Transform followTarget)
     {
         
     }
 
-    // Update is called once per frame
-    void Update()
+    void OnDestroy()
     {
-        
+        OnDestroyed?.Invoke(this);
     }
 }
