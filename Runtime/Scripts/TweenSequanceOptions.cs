@@ -51,10 +51,11 @@ namespace Abb2kTools
         #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            PropertyOrder(-1)
         ]
+#else
+    [Header("Sequance")]
 #endif
-        [Header("Sequance")]
         public TweenSequanceElement[] sequance;
 
         protected override string ExtraStr => $"Sequance--{(sequance == null ? "No elements" : (sequance.Length == 0 ? "No elements" : $"{sequance.Length} elements"))}";

@@ -38,7 +38,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         [Header("General")]
@@ -46,21 +46,21 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         public Ease easing = Ease.Linear;
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         public bool isRelative = false;
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         [Space]
@@ -68,7 +68,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         [Space]
@@ -76,7 +76,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         [Space]
@@ -85,7 +85,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         [Header("Loop")]
@@ -93,7 +93,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME),
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME),
             DisableIf("isInfiniteLoop"),
             MinValue(1)
         ]
@@ -104,7 +104,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            BoxGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
+            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME)
         ]
 #endif
         public LoopType loopType = LoopType.Restart;
