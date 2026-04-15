@@ -17,7 +17,7 @@ namespace Abb2kTools
             float height = EditorGUIUtility.singleLineHeight + (PADDING * 2);
             height += EditorGUIUtility.singleLineHeight + SPACING;
 
-            SerializedProperty paramsProp = property.FindPropertyRelative("parameters");
+            var paramsProp = property.FindPropertyRelative("parameters");
             if (paramsProp != null && paramsProp.arraySize > 0)
             {
                 height += EditorGUIUtility.singleLineHeight + SPACING; 
@@ -49,9 +49,9 @@ namespace Abb2kTools
             Rect objRect = new Rect(drawRect.x, drawRect.y, half, drawRect.height);
             Rect btnRect = new Rect(drawRect.x + half + 4f, drawRect.y, half, drawRect.height);
 
-            SerializedProperty objProp = property.FindPropertyRelative("targetObject");
-            SerializedProperty compProp = property.FindPropertyRelative("targetComponent");
-            SerializedProperty methodProp = property.FindPropertyRelative("methodKey");
+            var objProp = property.FindPropertyRelative("targetObject");
+            var compProp = property.FindPropertyRelative("targetComponent");
+            var methodProp = property.FindPropertyRelative("methodKey");
 
             EditorGUI.PropertyField(objRect, objProp, GUIContent.none);
 
@@ -65,12 +65,14 @@ namespace Abb2kTools
             }
             else
             {
+                property.FindPropertyRelative("targetComponent").objectReferenceValue = null;
                 property.FindPropertyRelative("methodKey").stringValue = string.Empty;
+                property.FindPropertyRelative("methodName").stringValue = string.Empty;
                 property.FindPropertyRelative("parameters").ClearArray();
             }
 
             drawRect.y += drawRect.height + SPACING;
-            SerializedProperty paramsProp = property.FindPropertyRelative("parameters");
+            var paramsProp = property.FindPropertyRelative("parameters");
 
             if (paramsProp != null && paramsProp.arraySize > 0 && compProp.objectReferenceValue != null)
             {
@@ -79,26 +81,26 @@ namespace Abb2kTools
 
                 for (int i = 0; i < paramsProp.arraySize; i++)
                 {
-                    SerializedProperty pElement = paramsProp.GetArrayElementAtIndex(i);
-                    SerializedProperty valueWrapper = pElement.FindPropertyRelative("value");
-                    string pName = pElement.FindPropertyRelative("name").stringValue;
-                    string typeName = pElement.FindPropertyRelative("typeName").stringValue;
+                    var pElement = paramsProp.GetArrayElementAtIndex(i);
+                    var valueWrapper = pElement.FindPropertyRelative("value");
+                    var pName = pElement.FindPropertyRelative("name").stringValue;
+                    var typeName = pElement.FindPropertyRelative("typeName").stringValue;
 
                     if (valueWrapper != null && valueWrapper.managedReferenceValue != null)
                     {
-                        SerializedProperty dataProp = valueWrapper.FindPropertyRelative("data");
-                        SerializedProperty hasValueProp = valueWrapper.FindPropertyRelative("hasValue");
+                        var dataProp = valueWrapper.FindPropertyRelative("data");
+                        var hasValueProp = valueWrapper.FindPropertyRelative("hasValue");
 
-                        bool isNullable = typeName.Contains("System.Nullable");
-                        float pHeight = (dataProp != null) ? EditorGUI.GetPropertyHeight(dataProp, true) : EditorGUIUtility.singleLineHeight;
-                        Rect pRect = new Rect(drawRect.x, drawRect.y, drawRect.width, pHeight);
+                        var isNullable = typeName.Contains("System.Nullable");
+                        var pHeight = (dataProp != null) ? EditorGUI.GetPropertyHeight(dataProp, true) : EditorGUIUtility.singleLineHeight;
+                        var pRect = new Rect(drawRect.x, drawRect.y, drawRect.width, pHeight);
 
                         if (isNullable && hasValueProp != null)
                         {
-                            Rect toggleRect = new Rect(pRect.x, pRect.y, 20, EditorGUIUtility.singleLineHeight);
+                            var toggleRect = new Rect(pRect.x, pRect.y, 20, EditorGUIUtility.singleLineHeight);
                             hasValueProp.boolValue = EditorGUI.Toggle(toggleRect, hasValueProp.boolValue);
                             
-                            pRect.xMin += 25; // Indent the actual field
+                            pRect.xMin += 25;
                             
                             EditorGUI.BeginDisabledGroup(!hasValueProp.boolValue);
                             if (dataProp != null) 
@@ -121,15 +123,14 @@ namespace Abb2kTools
 
         private void ShowMethodMenu(GameObject target, SerializedProperty property)
         {
-            GenericMenu menu = new GenericMenu();
+            var menu = new GenericMenu();
             foreach (var comp in target.GetComponents<Component>())
             {
                 if (comp == null) continue;
                 foreach (var m in TweenerFunction.GetValidMethods(comp.GetType()))
                 {
-                    Component c = comp; MethodInfo mi = m;
-                    menu.AddItem(new GUIContent($"{c.GetType().Name}/{TweenerFunction.GetMethodKey(mi)}"), false, 
-                        () => ApplySelection(property, c, mi));
+                    menu.AddItem(new GUIContent($"{comp.GetType().Name}/{TweenerFunction.GetMethodKey(m)}"), false, 
+                        () => ApplySelection(property, comp, m));
                 }
             }
             menu.ShowAsContext();
@@ -142,7 +143,7 @@ namespace Abb2kTools
             property.FindPropertyRelative("methodKey").stringValue = TweenerFunction.GetMethodKey(method);
             property.FindPropertyRelative("methodName").stringValue = method.Name;
 
-            SerializedProperty paramsProp = property.FindPropertyRelative("parameters");
+            var paramsProp = property.FindPropertyRelative("parameters");
             paramsProp.ClearArray();
 
             var parameters = method.GetParameters();
@@ -157,11 +158,11 @@ namespace Abb2kTools
                 var element = paramsProp.GetArrayElementAtIndex(paramsProp.arraySize - 1);
                 element.FindPropertyRelative("name").stringValue = param.Name;
                 
-                Type pType = param.ParameterType;
+                var pType = param.ParameterType;
                 element.FindPropertyRelative("typeName").stringValue = pType.AssemblyQualifiedName;
 
-                Type underlying = Nullable.GetUnderlyingType(pType) ?? pType;
-                Type wrapperType = typeof(TweenerFunction.ParameterValue<>).MakeGenericType(underlying);
+                var underlying = Nullable.GetUnderlyingType(pType) ?? pType;
+                var wrapperType = typeof(TweenerFunction.ParameterValue<>).MakeGenericType(underlying);
                 
                 object initVal = null;
                 if (param.HasDefaultValue && param.DefaultValue != DBNull.Value) initVal = param.DefaultValue;
