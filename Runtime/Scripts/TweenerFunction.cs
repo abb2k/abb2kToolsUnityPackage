@@ -140,13 +140,41 @@ namespace Abb2kTools
 
             return str;
         }
+        
+        private static IEnumerable<System.Type> GetTypesSafe(Assembly assembly)
+        {
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                return ex.Types.Where(t => t != null);
+            }
+            catch
+            {
+                return Enumerable.Empty<System.Type>();
+            }
+        }
+
+        private static IEnumerable<MethodInfo> GetMethodsSafe(System.Type type, BindingFlags flags)
+        {
+            try
+            {
+                return type.GetMethods(flags);
+            }
+            catch
+            {
+                return Enumerable.Empty<MethodInfo>();
+            }
+        }
 
         public static IEnumerable<MethodInfo> GetValidMethods(System.Type type)
         {
             var instance = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
                 .Where(m => typeof(Tween).IsAssignableFrom(m.ReturnType));
 
-            var extensions = AppDomain.CurrentDomain.GetAssemblies()
+            var extensions = System.AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !a.IsDynamic)
                 .SelectMany(GetTypesSafe)
                 .Where(t => t.IsSealed && !t.IsGenericType && !t.IsNested)
