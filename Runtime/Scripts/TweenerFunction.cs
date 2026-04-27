@@ -146,9 +146,11 @@ namespace Abb2kTools
             var instance = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
                 .Where(m => typeof(Tween).IsAssignableFrom(m.ReturnType));
 
-            var extensions = typeof(ShortcutExtensions).Assembly.GetTypes()
+            var extensions = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .SelectMany(GetTypesSafe)
                 .Where(t => t.IsSealed && !t.IsGenericType && !t.IsNested)
-                .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                .SelectMany(t => GetMethodsSafe(t, BindingFlags.Public | BindingFlags.Static))
                 .Where(m => m.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false))
                 .Where(m => m.GetParameters().Length > 0 && m.GetParameters()[0].ParameterType.IsAssignableFrom(type))
                 .Where(m => typeof(Tween).IsAssignableFrom(m.ReturnType));
