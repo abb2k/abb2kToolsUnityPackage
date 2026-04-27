@@ -4,7 +4,9 @@ using DG.Tweening.Core;
 using DG.Tweening.Core.Enums;
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
+#if UNITY_EDITOR
 using Sirenix.OdinInspector.Editor;
+#endif
 #endif
 using UnityEngine;
 using UnityEngine.Events;
@@ -21,6 +23,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
 
         protected const string GENERAL_DISPLAY_GROUP_NAME = "@GetDisplayName($property.ParentValueProperty)";
+#if UNITY_EDITOR
         string GetDisplayName(InspectorProperty property)
         {
             string extra = "";
@@ -31,6 +34,7 @@ namespace Abb2kTools
 
             return property.NiceName + extra;
         }
+#endif
         protected const string GENERAL_GROUP_NAME = "general";
         protected const string OPTIONS_GROUP_NAME = "Options";
         protected const string EVENTS_GROUP_NAME = "Events";
