@@ -101,11 +101,14 @@ namespace Abb2kTools
             return _mainListener;
         }
 
-        private (AudioSource, ExternalAudioSource) CreateSource(Transform attached, AudioAttachmentType attachType, SourceSettings settings)
+        private (AudioSource, ExternalAudioSource) CreateSource(SourceSettings settings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
             AudioSource source = null;
 
             ExternalAudioSource obj = null;
+
+            if (attached == null)
+                attached = transform;
 
             if (attachType == AudioAttachmentType.Direct)
             {
@@ -140,9 +143,9 @@ namespace Abb2kTools
             return (settings.ApplySettings(source), obj);
         }
 
-        public Audio CreateNewSource(string ID, Transform attached, AudioAttachmentType attachType, SourceSettings settings)
+        public Audio CreateNewSource(string ID, SourceSettings settings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
-            var source = CreateSource(attached, attachType, settings);
+            var source = CreateSource(settings, attached, attachType);
             longLivingSound.Add(ID, new Audio(source.Item1, ID, source.Item2));
 
             return longLivingSound[ID];
@@ -172,11 +175,11 @@ namespace Abb2kTools
             longLivingSound.Remove(ID);
         }
 
-        public AudioSource CreateSFX(Transform attached, AudioAttachmentType attachType, SourceSettings settings)
+        public AudioSource CreateSFX(SourceSettings settings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
             if (settings.clip == null) return null;
 
-            var source = CreateSource(attached, attachType, settings);
+            var source = CreateSource(settings, attached, attachType);
             source.Item2.SetKillTimerForSource(source.Item1, source.Item1.clip.length);
             source.Item1.Play();
             return settings.ApplySettings(source.Item1);
