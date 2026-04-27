@@ -11,6 +11,8 @@ namespace Abb2kTools
 #if !ODIN_INSPECTOR
         [SerializeField]
         [Header("Reference")]
+#else
+        [SerializeField, HideInInspector]
 #endif
         private GameObject _hitRecieverObj;
 #if ODIN_INSPECTOR
@@ -33,6 +35,7 @@ namespace Abb2kTools
                     _hitReciever = null;
             }
         }
+        [SerializeField, HideInInspector]
         private IHitReciever _hitReciever;
 #if ODIN_INSPECTOR
         [BoxGroup("Reference")]
