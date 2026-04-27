@@ -189,7 +189,7 @@ namespace Abb2kTools
         {
             if (objectForTranform.ContainsKey(externalSource.transform))
                 objectForTranform.Remove(externalSource.transform);
-            if (objectForTranform.ContainsKey(externalSource.attached))
+            if (externalSource.attached != null && objectForTranform.ContainsKey(externalSource.attached))
                 objectForTranform.Remove(externalSource.attached);
 
             HashSet<string> IDSToRemove = new();
