@@ -142,6 +142,7 @@ namespace Abb2kTools
             property.FindPropertyRelative("targetComponent").objectReferenceValue = comp;
             property.FindPropertyRelative("methodKey").stringValue = TweenerFunction.GetMethodKey(method);
             property.FindPropertyRelative("methodName").stringValue = method.Name;
+            TweenerFunction.WarmupMethod(method);
 
             var paramsProp = property.FindPropertyRelative("parameters");
             paramsProp.ClearArray();
