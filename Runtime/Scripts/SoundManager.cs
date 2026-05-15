@@ -204,7 +204,8 @@ namespace Abb2kTools
                     IDSToRemove.Add(ID);
             }
 
-            IDSToRemove.ForEach(x => longLivingSound.Remove(x));
+            foreach (var x in IDSToRemove)
+                longLivingSound.Remove(x);
         }
     }
 }
