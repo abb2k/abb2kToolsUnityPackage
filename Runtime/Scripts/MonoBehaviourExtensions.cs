@@ -2,10 +2,10 @@
 
 using UnityEngine;
 
-public static class MonoBehaviourExtensions
+namespace Abb2kTools
 {
-    public static ListenerHandle BindEvent(this MonoBehaviour owner, ListenerHandle e)
+    public static class MonoBehaviourExtensions
     {
-        return e.BindTo(owner);
+        public static ListenerHandle BindListener(this MonoBehaviour owner, ListenerHandle e) => e.BindTo(owner);
     }
 }
