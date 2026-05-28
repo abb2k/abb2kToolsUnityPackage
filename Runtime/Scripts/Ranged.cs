@@ -57,6 +57,15 @@ namespace Abb2kTools {
         public static Ranged operator -(Ranged a, int b) => new(a.min - b, a.max - b);
         public static Ranged operator -(int a, Ranged b) => new(a - b.min, a - b.max);
 
+        public float Map01(float value01)
+        {
+            return Mathf.Lerp(min, max, value01);
+        }
+
+        public float Unmap01(float value)
+        {
+            return Mathf.InverseLerp(min, max, value);
+        }
 
         public float GetRandomInRange()
         {
