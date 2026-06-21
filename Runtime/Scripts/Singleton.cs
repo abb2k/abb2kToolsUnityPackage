@@ -1,14 +1,19 @@
 using UnityEngine;
 
-
-namespace Abb2kTools {
-    public class Singleton<T> : MonoBehaviour where T : MonoBehaviour
+namespace Abb2kTools 
+{
+    public abstract class SingletonBase : MonoBehaviour
     {
+        public abstract bool IsPersistent { get; }
+    }
+
+    public abstract class Singleton<T> : SingletonBase where T : MonoBehaviour
+    {
+        public override bool IsPersistent => this is PersistentSingleton<T>;
+
         protected internal static T instance;
         public static T Instance => Get();
         private static readonly object objLock = new();
-
-        protected new virtual bool DontDestroyOnLoad => true;
 
         private bool createdByGet;
 
@@ -19,8 +24,7 @@ namespace Abb2kTools {
             else if (instance != this)
                 Destroy(gameObject);
 
-            if (DontDestroyOnLoad)
-                DontDestroyOnLoad(gameObject);
+            if (this is PersistentSingleton<T>) DontDestroyOnLoad(gameObject);
 
             if (!createdByGet)
                 OnCreation();
@@ -34,20 +38,19 @@ namespace Abb2kTools {
             {
                 if (!instance)
                 {
+                    // is not persistent
+                    if (!typeof(PersistentSingleton<T>).IsAssignableFrom(typeof(T)))
+                    {
+                        return null;
+                    }
+
                     instance = new GameObject(typeof(T).Name).AddComponent<T>();
 
+                    // is persistent
                     if (instance is Singleton<T> singleton)
                     {
-                        if (!singleton.DontDestroyOnLoad)
-                        {
-                            Destroy(singleton.gameObject);
-                            return null;
-                        }
-                        else
-                        {
-                            singleton.createdByGet = true;
-                            singleton.OnCreation();
-                        }
+                        singleton.createdByGet = true;
+                        singleton.OnCreation();
                     }
                 }
 
@@ -68,4 +71,6 @@ namespace Abb2kTools {
             instance = null;
         }
     }
+
+    public abstract class PersistentSingleton<T> : Singleton<T> where T : MonoBehaviour {}
 }
