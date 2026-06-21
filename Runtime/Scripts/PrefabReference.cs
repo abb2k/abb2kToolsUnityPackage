@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 [System.Serializable]
-public abstract class PrefabReferenceBase<T> where T : MonoBehaviour
+public abstract class PrefabReferenceBase<T> where T : Component
 {
     [SerializeField]
     private T _component;
@@ -46,7 +46,7 @@ public abstract class PrefabReferenceBase<T> where T : MonoBehaviour
 }
 
 [System.Serializable]
-public class PrefabReference<T> : PrefabReferenceBase<T> where T : MonoBehaviour
+public class PrefabReference<T> : PrefabReferenceBase<T> where T : Component
 {
     private T Initialize(T instance)
     {
@@ -72,33 +72,7 @@ public class PrefabReference<T> : PrefabReferenceBase<T> where T : MonoBehaviour
 }
 
 [System.Serializable]
-public class PrefabReferenceInit<T> : PrefabReferenceBase<T> where T : MonoBehaviour, IInitializable
-{
-    private T Initialize(T instance)
-    {
-        if (instance != null)
-            instance.Init();
-            
-        return instance;
-    }
-
-    public T Instantiate() => Initialize(InstantiateInternal());
-    public T Instantiate(Vector3 position, Quaternion rotation) => Initialize(InstantiateInternal(position, rotation));
-    public T Instantiate(Vector3 position, Quaternion rotation, Transform parent) => Initialize(InstantiateInternal(position, rotation, parent));
-    public T Instantiate(Transform parent) => Initialize(InstantiateInternal(parent));
-    public T Instantiate(Transform parent, bool worldPositionStays) => Initialize(InstantiateInternal(parent, worldPositionStays));
-    public T Instantiate(InstantiateParameters parameters) => Initialize(InstantiateInternal(parameters));
-    public T Instantiate(Vector3 position, Quaternion rotation, InstantiateParameters parameters) => Initialize(InstantiateInternal(position, rotation, parameters));
-
-#if UNITY_EDITOR
-    public T InstantiatePrefab() => Initialize(InstantiatePrefabInternal());
-    public T InstantiatePrefab(Scene destinationScene) => Initialize(InstantiatePrefabInternal(destinationScene));
-    public T InstantiatePrefab(Transform parent) => Initialize(InstantiatePrefabInternal(parent));
-#endif
-}
-
-[System.Serializable]
-public class PrefabReferenceInit<T, D> : PrefabReferenceBase<T> where T : MonoBehaviour, IInitializable<D>
+public class PrefabReferenceInit<T, D> : PrefabReferenceBase<T> where T : Component, IInitializable<D>
 {
     private T Initialize(T instance, D data)
     {
