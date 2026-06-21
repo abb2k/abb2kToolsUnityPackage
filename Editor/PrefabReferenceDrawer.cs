@@ -51,10 +51,12 @@ public class PrefabReferenceDrawer : PropertyDrawer
                 else if (comp == null)
                 {
                     Debug.LogWarning($"[PrefabReference] The selected prefab does not have the '{componentType.Name}' component!");
+                    componentProp.objectReferenceValue = null;
                 }
                 else
                 {
                     Debug.LogWarning($"[PrefabReference] The '{componentType.Name}' component must be on the ROOT object of the prefab.");
+                    componentProp.objectReferenceValue = null;
                 }
             }
         }
