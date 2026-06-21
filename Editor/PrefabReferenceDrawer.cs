@@ -3,7 +3,7 @@ using System;
 using UnityEditor;
 using UnityEngine;
 
-[CustomPropertyDrawer(typeof(PrefabReference<>))]
+[CustomPropertyDrawer(typeof(PrefabReferenceBase<>))]
 public class PrefabReferenceDrawer : PropertyDrawer
 {
     public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
