@@ -83,7 +83,7 @@ namespace Abb2kTools
         External
     }
 
-    public class SoundManager : Singleton<SoundManager>
+    public class SoundManager : PersistentSingleton<SoundManager>
     {
         private Dictionary<string, Audio> longLivingSound = new();
         private Dictionary<Transform, ExternalAudioSource> objectForTranform = new();

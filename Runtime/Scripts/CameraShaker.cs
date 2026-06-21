@@ -22,7 +22,7 @@ namespace Abb2kTools
         public CamShake rotationShake;
     }
 
-    public class CameraShaker : Singleton<CameraShaker>
+    public class CameraShaker : PersistentSingleton<CameraShaker>
     {
         private Camera _camera;
         private Camera Cam
