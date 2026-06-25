@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEditor;
-using UnityEngine.UIElements;
 
-namespace Abb2kTools {
+namespace Abb2kTools 
+{
     [CustomPropertyDrawer(typeof(Ranged))]
     public class RangedDrawer : PropertyDrawer
     {
@@ -15,22 +15,23 @@ namespace Abb2kTools {
 
             var contentRect = EditorGUI.PrefixLabel(position, label);
 
+            var originalIndent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+
             float marginBetweenFields = 4f;
+            float halfWidth = (contentRect.width - marginBetweenFields) / 2f;
 
-            float labelWidth = 30f;
-            float fieldWidth = (contentRect.width - 2 * labelWidth) / 2 - marginBetweenFields;
+            var minRect = new Rect(contentRect.x, contentRect.y, halfWidth, contentRect.height);
+            var maxRect = new Rect(minRect.xMax + marginBetweenFields, contentRect.y, halfWidth, contentRect.height);
 
-            var minLabelRect = new Rect(contentRect.x, contentRect.y, labelWidth, contentRect.height);
-            EditorGUI.LabelField(minLabelRect, "Min");
+            float originalLabelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = 30f; 
 
-            var minFieldRect = new Rect(minLabelRect.xMax, contentRect.y, fieldWidth, contentRect.height);
-            EditorGUI.PropertyField(minFieldRect, minProp, GUIContent.none);
+            EditorGUI.PropertyField(minRect, minProp, new GUIContent("Min"));
+            EditorGUI.PropertyField(maxRect, maxProp, new GUIContent("Max"));
 
-            var maxLabelRect = new Rect(minFieldRect.xMax + marginBetweenFields, contentRect.y, labelWidth, contentRect.height);
-            EditorGUI.LabelField(maxLabelRect, "Max");
-
-            var maxFieldRect = new Rect(maxLabelRect.xMax + marginBetweenFields, contentRect.y, fieldWidth, contentRect.height);
-            EditorGUI.PropertyField(maxFieldRect, maxProp, GUIContent.none);
+            EditorGUIUtility.labelWidth = originalLabelWidth;
+            EditorGUI.indentLevel = originalIndent;
 
             EditorGUI.EndProperty();
         }
