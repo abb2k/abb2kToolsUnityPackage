@@ -42,14 +42,6 @@ public abstract class PrefabReferenceBase<T> where T : Component
     protected T InstantiatePrefabInternal() => (PrefabUtility.InstantiatePrefab(GameObject) as GameObject)?.GetComponent<T>();
     protected T InstantiatePrefabInternal(Scene destinationScene) => (PrefabUtility.InstantiatePrefab(GameObject, destinationScene) as GameObject)?.GetComponent<T>();
     protected T InstantiatePrefabInternal(Transform parent) => (PrefabUtility.InstantiatePrefab(GameObject, parent) as GameObject)?.GetComponent<T>();
-
-    /// <summary>
-    /// EDITOR ONLY! Used by custom property drawers and Odin matrices to set the reference safely.
-    /// </summary>
-    public void EditorSetComponent(T component)
-    {
-        _component = component;
-    }
 #endif
 }
 
@@ -104,53 +96,3 @@ public class PrefabReferenceInit<T, D> : PrefabReferenceBase<T> where T : Compon
     public T InstantiatePrefab(Transform parent, D data) => Initialize(InstantiatePrefabInternal(parent), data);
 #endif
 }
-
-#if UNITY_EDITOR && ODIN_INSPECTOR
-
-public static class PrefabReferenceOdinMatrixUtility
-{
-    public static TRef DrawMatrixElement<TRef, TComponent>(Rect rect, TRef value) 
-        where TRef : PrefabReferenceBase<TComponent>, new()
-        where TComponent : Component
-    {
-        // Auto-initialize null cells in the matrix
-        if (value == null) value = new TRef();
-
-        GameObject currentPrefab = value.GameObject;
-
-        EditorGUI.BeginChangeCheck();
-
-        // GUIContent.none + a square Rect forces Unity to draw this as a thumbnail picker!
-        GameObject newPrefab = (GameObject)EditorGUI.ObjectField(rect, GUIContent.none, currentPrefab, typeof(GameObject), false);
-
-        if (EditorGUI.EndChangeCheck())
-        {
-            if (newPrefab == null)
-            {
-                value.EditorSetComponent(null);
-            }
-            else
-            {
-                TComponent comp = newPrefab.GetComponent<TComponent>();
-                
-                if (comp != null && comp.transform.parent == null)
-                {
-                    value.EditorSetComponent(comp);
-                }
-                else if (comp == null)
-                {
-                    Debug.LogWarning($"[PrefabReference] The selected prefab does not have the '{typeof(TComponent).Name}' component!");
-                    value.EditorSetComponent(null);
-                }
-                else
-                {
-                    Debug.LogWarning($"[PrefabReference] The '{typeof(TComponent).Name}' component must be on the ROOT object of the prefab.");
-                    value.EditorSetComponent(null);
-                }
-            }
-        }
-
-        return value;
-    }
-}
-#endif
