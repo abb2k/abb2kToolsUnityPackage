@@ -15,6 +15,62 @@ namespace Abb2kTools
         public string methodName;
         public string methodKey;
         public List<ParameterData> parameters = new List<ParameterData>();
+        public TweenerFunction() { }
+        public TweenerFunction(Component target, MethodInfo method, params object[] manualParameters)
+        {
+            Initialize(target, method, manualParameters);
+        }
+
+        public TweenerFunction(Component target, string methodKey, params object[] manualParameters)
+        {
+            if (target == null) return;
+            var method = GetValidMethodsInternal(target.GetType()).FirstOrDefault(m => GetMethodKey(m) == methodKey);
+            Initialize(target, method, manualParameters);
+        }
+
+        private void Initialize(Component target, MethodInfo method, object[] manualParameters)
+        {
+            if (target == null || method == null) return;
+
+            this.targetComponent = target;
+            this.targetObject = target.gameObject;
+            this.methodName = method.Name;
+            this.methodKey = GetMethodKey(method);
+            this.parameters = new List<ParameterData>();
+
+            bool isExt = method.IsDefined(typeof(System.Runtime.CompilerServices.ExtensionAttribute), false);
+            var pInfos = method.GetParameters();
+
+            int dataIndex = 0;
+            for (int i = 0; i < pInfos.Length; i++)
+            {
+                // Skip the explicit extension target parameter
+                if (isExt && i == 0) continue;
+
+                string pName = pInfos[i].Name.ToLower();
+
+                // Skip parameters automatically handled during Call()
+                if (pName.Contains("duration") || pName == "target" || pName == "t") continue;
+
+                if (manualParameters != null && dataIndex < manualParameters.Length)
+                {
+                    var paramInfo = pInfos[i];
+                    var paramData = new ParameterData
+                    {
+                        name = paramInfo.Name,
+                        typeName = paramInfo.ParameterType.AssemblyQualifiedName
+                    };
+
+                    // Construct the generic ParameterValue<T> dynamically based on the parameter type
+                    var genericType = typeof(ParameterValue<>).MakeGenericType(paramInfo.ParameterType);
+                    paramData.value = (ParameterValue)System.Activator.CreateInstance(genericType, manualParameters[dataIndex]);
+
+                    this.parameters.Add(paramData);
+                    dataIndex++;
+                }
+            }
+        }
+        // --- END OF NEW CONSTRUCTORS ---
 
         [System.Serializable]
         public class ParameterData

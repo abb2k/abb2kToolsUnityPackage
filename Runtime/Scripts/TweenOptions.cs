@@ -17,6 +17,7 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
     [InlineProperty, HideLabel]
 #endif
+    [System.Serializable]
     public abstract class TweenOptions
     {
         protected virtual string ExtraStr => null;
