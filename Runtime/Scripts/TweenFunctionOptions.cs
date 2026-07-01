@@ -11,18 +11,6 @@ namespace Abb2kTools
     [System.Serializable]
     public class TweenFunctionOptions : TweenOptions
     {
-        #if ODIN_INSPECTOR
-        [
-            FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
-            FoldoutGroup(GENERAL_GROUP_NAME + "/" + OPTIONS_GROUP_NAME),
-            MinValue(0),
-            PropertyOrder(-1)
-        ]
-#else
-        [Min(0)]
-#endif
-        [Header("General")]
-        public float duration = 0;
 #if ODIN_INSPECTOR
         [
             FoldoutGroup(groupName: GENERAL_GROUP_NAME, GroupName = GENERAL_DISPLAY_GROUP_NAME),
