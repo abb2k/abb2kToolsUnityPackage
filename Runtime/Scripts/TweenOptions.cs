@@ -18,7 +18,7 @@ namespace Abb2kTools
     [InlineProperty, HideLabel]
 #endif
     [System.Serializable]
-    public abstract class TweenOptions
+    public class TweenOptions
     {
         protected virtual string ExtraStr => null;
 #if ODIN_INSPECTOR
@@ -201,7 +201,7 @@ namespace Abb2kTools
 #endif
         public UnityEvent<int> OnWaypointChange;
 
-        public abstract Tween Invoke();
+        public virtual Tween Invoke();
 
         public Tween Setup(Tween t)
         {
