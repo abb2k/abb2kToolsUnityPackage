@@ -203,7 +203,7 @@ namespace Abb2kTools
 
         public abstract Tween Invoke();
 
-        protected Tween Setup(Tween t)
+        public Tween Setup(Tween t)
         {
             if (t == null) return null;
 
