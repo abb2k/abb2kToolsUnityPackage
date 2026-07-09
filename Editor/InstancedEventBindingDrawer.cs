@@ -12,8 +12,7 @@ namespace Abb2kTools
     {
         private const string TooltipPriority = "Higher numbers evaluate first. Determines listener execution order.";
         private const string TooltipAutoBind = "Automatically unregisters this listener when the holding MonoBehaviour is destroyed.";
-        private const string TooltipActiveInEditor = "If true, this listener will trigger even when outside of Play Mode."; // <--- NEW Tooltip
-        private const string TooltipResponse = "Determines how the listener responds to events.";
+        private const string TooltipActiveInEditor = "If true, this listener will trigger even when outside of Play Mode.";
 
         private static Type[] availableEventTypes = null;
         private static string[] availableEventNames = null;
@@ -326,7 +325,7 @@ namespace Abb2kTools
             float spacing = 2f;
             float padding = 4f;
           
-            int lines = 5; // <--- Changed from 4 to 5 to make room for the new setting row
+            int lines = 5;
             return (lines * lineHeight) + ((lines - 1) * spacing) + (padding * 2) + 4f;
         }
 

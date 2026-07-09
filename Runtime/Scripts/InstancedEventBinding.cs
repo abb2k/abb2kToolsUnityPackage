@@ -9,12 +9,16 @@ namespace Abb2kTools
     [Serializable]
     public class InstancedEventBinding
     {
-        // Data saved by the Unity Inspector
+        [SerializeField]
         public string eventTypeAssemblyQualifiedName;
+        [SerializeField]
         public UnityEngine.Object targetObject;
         public string methodName;
+        [SerializeField]
         public int priority = 0;
+        [SerializeField]
         public bool autoBindToHolder = true;
+        [SerializeField]
         public bool activeInEditor = false;
 
         [SerializeField] 
@@ -35,7 +39,6 @@ namespace Abb2kTools
 
         public ListenerHandle Initialize(MonoBehaviour holder)
         {
-            // NEW: Ensure we clear any old listener before creating a new one
             Uninitialize();
 
             if (string.IsNullOrEmpty(eventTypeAssemblyQualifiedName) || targetObject == null || string.IsNullOrEmpty(methodName))
@@ -51,9 +54,6 @@ namespace Abb2kTools
                 return null;
             }
 
-            // 1. Find the Listen method.
-            // FlattenHierarchy is REQUIRED here. Because Listen is a static method on the 
-            // base generic class (InstancedEventBase), reflecting on the child class won't see it otherwise.
             MethodInfo listenMethod = eventType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
                 .FirstOrDefault(m => m.Name == "Listen");
 
@@ -63,12 +63,8 @@ namespace Abb2kTools
                 return null;
             }
 
-            // Extract the required delegate type (e.g., Func<ListenerResult> or Func<T1, ListenerResult>)
             Type delegateType = listenMethod.GetParameters()[0].ParameterType;
             
-            // 2. Safely find the target method.
-            // We extract the exact parameter types the delegate requires (T1, T2, etc.) so we can 
-            // find the exact matching method on the target object, avoiding AmbiguousMatchExceptions.
             MethodInfo delegateSignature = delegateType.GetMethod("Invoke");
             ParameterInfo[] delegateParams = delegateSignature.GetParameters();
             Type[] requiredParamTypes = delegateParams.Select(p => p.ParameterType).ToArray();
@@ -87,16 +83,13 @@ namespace Abb2kTools
                 return null;
             }
 
-            // Create the delegate linked to the target object and method
             Delegate callback = Delegate.CreateDelegate(delegateType, targetObject, targetMethod);
 
-            // Invoke the Listen method via reflection
             activeHandle = (ListenerHandle)listenMethod.Invoke(null, new object[] { callback, priority });
             
-            // <--- NEW: Pass the editor state down to the handle
             if (activeHandle != null)
             {
-                activeHandle.activeInEditor = this.activeInEditor; 
+                activeHandle.activeInEditor = this.activeInEditor;
             }
 
             if (autoBindToHolder && holder != null)
@@ -118,6 +111,11 @@ namespace Abb2kTools
         void InitRestore()
         {
             Initialize(holder);
+        }
+
+        ~InstancedEventBinding()
+        {
+            Uninitialize();
         }
     }
 }
