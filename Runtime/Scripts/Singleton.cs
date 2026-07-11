@@ -16,6 +16,7 @@ namespace Abb2kTools
         private static readonly object objLock = new();
 
         private bool createdByGet;
+        private static bool isCreatingByGet;
 
         protected virtual void Awake()
         {
@@ -26,7 +27,7 @@ namespace Abb2kTools
 
             if (this is PersistentSingleton<T>) DontDestroyOnLoad(gameObject);
 
-            if (!createdByGet)
+            if (!createdByGet && !isCreatingByGet)
                 OnCreation();
         }
 
@@ -38,15 +39,27 @@ namespace Abb2kTools
             {
                 if (!instance)
                 {
-                    // is not persistent
                     if (!typeof(PersistentSingleton<T>).IsAssignableFrom(typeof(T)))
                     {
                         return null;
                     }
 
-                    instance = new GameObject(typeof(T).Name).AddComponent<T>();
+                    isCreatingByGet = true;
 
-                    // is persistent
+                    GameObject prefab = SingletonPrefabRegistry.GetPrefab(typeof(T).FullName);
+
+                    if (prefab != null)
+                    {
+                        GameObject go = Instantiate(prefab);
+                        go.name = typeof(T).Name;
+                    }
+                    else
+                    {
+                        new GameObject(typeof(T).Name).AddComponent<T>();
+                    }
+
+                    isCreatingByGet = false;
+
                     if (instance is Singleton<T> singleton)
                     {
                         singleton.createdByGet = true;
@@ -61,7 +74,6 @@ namespace Abb2kTools
         void OnDestroy()
         {
             if (instance != this as T) return;
-
             instance = null;
         }
 
@@ -72,5 +84,8 @@ namespace Abb2kTools
         }
     }
 
-    public abstract class PersistentSingleton<T> : Singleton<T> where T : MonoBehaviour {}
+    public abstract class PersistentSingleton<T> : Singleton<T>, IReadOnlyHierarchy where T : MonoBehaviour
+    {
+       
+    }
 }
