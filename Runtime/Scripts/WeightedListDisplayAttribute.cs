@@ -11,15 +11,11 @@ using Sirenix.Utilities.Editor;
 
 namespace Abb2kTools
 {
-    // =======================================================================
-    // 1. THE ATTRIBUTE
-    // =======================================================================
-    
     /// <summary>
-    /// Apply this to any List or Array to display chances and weights via a getter method.
-    /// Usage: [WeightedListDisplay(nameof(WeightGetter))]
+    /// Apply this to any List/Array field, OR directly to a custom List Class definition.
+    /// Usage: [WeightedListDisplay(nameof(WeightFunction))]
     /// </summary>
-    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Class | AttributeTargets.Struct)]
     public class WeightedListDisplayAttribute : PropertyAttribute
     {
         public string MethodName { get; private set; }
@@ -32,14 +28,10 @@ namespace Abb2kTools
 
 #if UNITY_EDITOR
 
-    // =======================================================================
-    // 2. ODIN INSPECTOR IMPLEMENTATION
-    // =======================================================================
 #if ODIN_INSPECTOR
 
     namespace Editor
     {
-        // A. Drawer for the List itself (Changes the header to show Overall Weight)
         [DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
         public class WeightedListAttributeOdinDrawer : OdinAttributeDrawer<WeightedListDisplayAttribute>
         {
@@ -68,42 +60,31 @@ namespace Abb2kTools
             {
                 if (elementValue == null || string.IsNullOrEmpty(methodName)) return 0f;
 
-                // Grab the object that holds the list (usually your MonoBehaviour)
+                object listObject = listProperty.ValueEntry?.WeakSmartValue;
                 object parentObject = listProperty.ParentValues.Count > 0 ? listProperty.ParentValues[0] : null;
                 object rootObject = listProperty.SerializationRoot?.ValueEntry?.WeakSmartValue;
 
-                MethodInfo method = null;
-                object targetInvokeObj = null;
+                object[] targetsToTry = new object[] { listObject, parentObject, rootObject };
 
-                // Search the direct parent class first
-                if (parentObject != null)
+                foreach (var target in targetsToTry)
                 {
-                    method = parentObject.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    targetInvokeObj = parentObject;
-                }
-                
-                // If not found, fallback to searching the root MonoBehaviour 
-                if (method == null && rootObject != null && rootObject != parentObject)
-                {
-                    method = rootObject.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    targetInvokeObj = rootObject;
-                }
+                    if (target == null) continue;
 
-                if (method != null)
-                {
-                    try
+                    var method = target.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                    if (method != null)
                     {
-                        // Invoke the method, passing the list element as the parameter!
-                        return Convert.ToSingle(method.Invoke(targetInvokeObj, new object[] { elementValue }));
+                        try
+                        {
+                            return Convert.ToSingle(method.Invoke(target, new object[] { elementValue }));
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
 
                 return 0f;
             }
         }
 
-        // B. Drawer for the Elements inside the List (Adds the Chance/Weight Footer)
         [DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
         public class WeightedListElementOdinDrawer : OdinDrawer
         {
@@ -129,7 +110,7 @@ namespace Abb2kTools
                 float chance = totalWeight > 0 ? (myWeight / totalWeight) * 100f : 0f;
 
                 GUIStyle boxStyle = SirenixGUIStyles.CustomizableMessageBox;
-                boxStyle.alignment = TextAnchor.LowerLeft;
+                boxStyle.alignment = TextAnchor.MiddleCenter;
                 
                 GUILayout.Label($"Chance: {chance:F1}% | Weight: {myWeight}", boxStyle);
                 GUILayout.Space(6);
@@ -138,9 +119,6 @@ namespace Abb2kTools
     }
 
 #else
-    // =======================================================================
-    // 3. VANILLA UNITY FALLBACK
-    // =======================================================================
     
     [CustomPropertyDrawer(typeof(WeightedListDisplayAttribute))]
     public class WeightedListDisplayVanillaDrawer : PropertyDrawer
@@ -187,43 +165,108 @@ namespace Abb2kTools
             GUI.Label(footerRect, $"Chance: {chance:F1}% | Weight: {myWeight} | (Total: {totalWeight})", centeredStyle);
         }
 
-        private float GetWeightFromMethod(SerializedProperty elementProp, string methodName)
+        private float GetWeightFromMethod(
+            SerializedProperty elementProp,
+            string methodName)
         {
-            object targetObject = elementProp.serializedObject.targetObject;
             object elementValue = GetValueFromProperty(elementProp);
 
-            if (targetObject == null || elementValue == null) return 0f;
+            if (elementValue == null)
+                return 0f;
 
-            var method = targetObject.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            if (method != null)
+            // Walk up the property hierarchy until we find a method
+            string path = elementProp.propertyPath;
+
+            while (!string.IsNullOrEmpty(path))
+            {
+                SerializedProperty currentProp =
+                    elementProp.serializedObject.FindProperty(path);
+
+                if (currentProp != null)
+                {
+                    object currentObj = GetValueFromProperty(currentProp);
+
+                    if (currentObj != null)
+                    {
+                        var method = currentObj.GetType().GetMethod(
+                            methodName,
+                            BindingFlags.Public |
+                            BindingFlags.NonPublic |
+                            BindingFlags.Instance |
+                            BindingFlags.Static);
+
+                        if (method != null)
+                        {
+                            try
+                            {
+                                return Convert.ToSingle(
+                                    method.Invoke(
+                                        currentObj,
+                                        new object[] { elementValue }));
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.LogException(ex);
+                            }
+                        }
+                    }
+                }
+
+                int lastDot = path.LastIndexOf('.');
+                if (lastDot < 0)
+                    break;
+
+                path = path.Substring(0, lastDot);
+            }
+
+            // Fallback to MonoBehaviour
+            object target = elementProp.serializedObject.targetObject;
+
+            var fallbackMethod = target.GetType().GetMethod(
+                methodName,
+                BindingFlags.Public |
+                BindingFlags.NonPublic |
+                BindingFlags.Instance |
+                BindingFlags.Static);
+
+            if (fallbackMethod != null)
             {
                 try
                 {
-                    return Convert.ToSingle(method.Invoke(targetObject, new object[] { elementValue }));
+                    return Convert.ToSingle(
+                        fallbackMethod.Invoke(
+                            target,
+                            new object[] { elementValue }));
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex);
+                }
             }
+
             return 0f;
         }
 
-        // Helper to extract the actual object (like your struct) from the SerializedProperty
         private static object GetValueFromProperty(SerializedProperty property)
         {
-#if UNITY_2022_1_OR_NEWER
-            return property.boxedValue; // Native fast path for modern Unity
-#else
-            // Fallback parsing for older Unity versions
             object obj = property.serializedObject.targetObject;
             string path = property.propertyPath.Replace(".Array.data[", "[");
             string[] fieldStructure = path.Split('.');
+            
             foreach (string field in fieldStructure)
             {
+                if (obj == null) return null;
+
                 if (field.Contains("["))
                 {
                     string elementName = field.Substring(0, field.IndexOf("["));
                     int index = Convert.ToInt32(field.Substring(field.IndexOf("[")).Replace("[", "").Replace("]", ""));
                     obj = GetFieldValue(obj, elementName);
-                    if (obj is System.Collections.IList list && index < list.Count) obj = list[index];
+                    
+                    if (obj is System.Collections.IList list && index < list.Count)
+                    {
+                        obj = list[index];
+                    }
                 }
                 else
                 {
@@ -231,7 +274,6 @@ namespace Abb2kTools
                 }
             }
             return obj;
-#endif
         }
 
         private static object GetFieldValue(object source, string name)
@@ -239,11 +281,9 @@ namespace Abb2kTools
             if (source == null) return null;
             var type = source.GetType();
             
-            // Try to get it as a field first
             var f = type.GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
             if (f != null) return f.GetValue(source);
             
-            // If it's not a field, try to get it as a property
             var p = type.GetProperty(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
             if (p != null && p.CanRead) return p.GetValue(source);
 
