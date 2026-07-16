@@ -104,7 +104,6 @@ public static class IEnumerableExtensions
             (minIndex, maxIndex) = (maxIndex, minIndex);
         }
 
-        // Extract the sub-range using LINQ and pass it to the standard weighted GetRandom
         int rangeCount = maxIndex - minIndex + 1;
         IEnumerable<T> subRange = enumerable.Skip(minIndex).Take(rangeCount);
 
