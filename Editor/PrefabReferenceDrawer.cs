@@ -3,6 +3,8 @@ using System;
 using UnityEditor;
 using UnityEngine;
 
+namespace Abb2kTools
+{
 [CustomPropertyDrawer(typeof(PrefabReferenceBase<>))]
 public class PrefabReferenceDrawer : PropertyDrawer
 {
@@ -65,3 +67,4 @@ public class PrefabReferenceDrawer : PropertyDrawer
     }
 }
 #endif
+}

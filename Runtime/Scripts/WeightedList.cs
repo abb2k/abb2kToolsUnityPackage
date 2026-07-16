@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 #if ODIN_INSPECTOR
@@ -73,16 +74,22 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
     [InlineProperty, HideLabel]
 #endif
-    public class WeightedList<T> : ISerializationCallbackReceiver
+    public class WeightedList<T> : IEnumerable<WeightedListOption<T>>, IEnumerable, ISerializationCallbackReceiver
     {
         [SerializeField]
 #if ODIN_INSPECTOR
         [LabelText("@$property.ParentValueProperty.NiceName + \" (Weight: \" + overallWeight.ToString() + \")\"")]
         [ListDrawerSettings(CustomAddFunction = "CustomAddFunction", CustomRemoveElementFunction = "OnRemoveItem", CustomRemoveIndexFunction = "OnRemoveItemIndex", OnBeginListElementGUI = "OnListChanged")]
 #endif
-        private List<WeightedListOption<T>> elements;
+        private List<WeightedListOption<T>> elements = new();
 #if ODIN_INSPECTOR
         private float overallWeight;
+
+        public int Count => elements.Count;
+
+        public bool IsReadOnly => false;
+
+        public WeightedListOption<T> this[int index] { get => elements[index]; set => elements[index] = value; }
 
         private WeightedListOption<T> CustomAddFunction()
         {
@@ -113,7 +120,7 @@ namespace Abb2kTools
 
         public void Add(T element, float weight)
         {
-            elements.Add(new WeightedListOption<T>(element, weight));
+            this.Add(new WeightedListOption<T>(element, weight));
         }
 
         public void RemoveAll(T element)
@@ -177,6 +184,61 @@ namespace Abb2kTools
 #if ODIN_INSPECTOR
             OnListChanged();
 #endif
+        }
+
+        public IEnumerator<WeightedListOption<T>> GetEnumerator()
+        {
+            return elements.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        public void Add(WeightedListOption<T> item)
+        {
+            elements.Add(item);
+        }
+
+        public void Clear()
+        {
+            elements.Clear();
+        }
+
+        public bool Contains(WeightedListOption<T> item)
+        {
+            return elements.Contains(item);
+        }
+
+        public bool Contains(T item)
+        {
+            return elements.Any(x => x.element.Equals(item) || ReferenceEquals(x.element, item));
+        }
+
+        public void CopyTo(WeightedListOption<T>[] array, int arrayIndex)
+        {
+            elements.CopyTo(array, arrayIndex);
+        }
+
+        public bool Remove(WeightedListOption<T> item)
+        {
+            return elements.Contains(item);
+        }
+
+        public int IndexOf(WeightedListOption<T> item)
+        {
+            return elements.IndexOf(item);
+        }
+
+        public void Insert(int index, WeightedListOption<T> item)
+        {
+            elements.Insert(index, item);
+        }
+
+        public void RemoveAt(int index)
+        {
+            elements.RemoveAt(index);
         }
     }
 }

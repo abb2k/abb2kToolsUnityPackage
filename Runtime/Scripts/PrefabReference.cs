@@ -4,6 +4,8 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+namespace Abb2kTools
+{
 [System.Serializable]
 public abstract class PrefabReferenceBase<T> where T : Component
 {
@@ -12,6 +14,16 @@ public abstract class PrefabReferenceBase<T> where T : Component
 
     public T Component => _component;
     public GameObject GameObject => _component != null ? _component.gameObject : null;
+
+    public bool IsValid()
+    {
+        return Component && GameObject;
+    }
+
+    public static implicit operator bool(PrefabReferenceBase<T> prefab)
+    {
+        return prefab.IsValid();
+    }
 
     public Object InstantiateObject(Vector3 position, Quaternion rotation) => Object.Instantiate(GameObject, position, rotation);
     public Object InstantiateObject(Vector3 position, Quaternion rotation, Transform parent) => Object.Instantiate(GameObject, position, rotation, parent);
@@ -95,4 +107,5 @@ public class PrefabReferenceInit<T, D> : PrefabReferenceBase<T> where T : Compon
     public T InstantiatePrefab(Scene destinationScene, D data) => Initialize(InstantiatePrefabInternal(destinationScene), data);
     public T InstantiatePrefab(Transform parent, D data) => Initialize(InstantiatePrefabInternal(parent), data);
 #endif
+}
 }

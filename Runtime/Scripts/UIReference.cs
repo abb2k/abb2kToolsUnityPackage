@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using System.Linq;
 
+namespace Abb2kTools
+{
 [System.Serializable]
 public class UIReference<E> where E : VisualElement
 {
@@ -66,4 +68,5 @@ public class UIReference<E> where E : VisualElement
     }
 
     public static implicit operator E(UIReference<E> reference) => reference.Element;
+}
 }

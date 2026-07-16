@@ -4,6 +4,8 @@ using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 
+namespace Abb2kTools
+{
 [InitializeOnLoad]
 public static class ReadOnlyHierarchyManager
 {
@@ -125,4 +127,5 @@ public static class ReadOnlyHierarchyManager
             obj.hideFlags = targetFlags;
         }
     }
+}
 }
