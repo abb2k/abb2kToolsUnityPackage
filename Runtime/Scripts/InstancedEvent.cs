@@ -549,7 +549,7 @@ namespace Abb2kTools
     [System.Serializable]
     public abstract class InstancedEventBaseOpaque
     {
-        public class ListenerPriorityComparer : IComparer<ListenerHandle>
+        internal class ListenerPriorityComparer : IComparer<ListenerHandle>
         {
             public int Compare(ListenerHandle x, ListenerHandle y)
             {
@@ -885,10 +885,10 @@ namespace Abb2kTools
     {
         public InstancedEventBase()
         {
-            if (!InstancedEventHandler.IsSpawning)
-            {
-                throw new System.InvalidOperationException($"Cannot use 'new' to create instanced events. Attempted to create new instance of {typeof(TSelf).Name}");
-            }
+            // if (!InstancedEventHandler.IsSpawning)
+            // {
+            //     throw new System.InvalidOperationException($"Cannot use 'new' to create instanced events. Attempted to create new instance of {typeof(TSelf).Name}");
+            // }
         }
 
         internal static TSelf Get()
@@ -900,6 +900,8 @@ namespace Abb2kTools
     [System.Serializable]
     public abstract class InstancedEvent<TSelf> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf>
     {
+        public InstancedEvent() : base() {}
+
         public static void Send() => Get().MSend();
 
         protected virtual void MSend()
@@ -926,6 +928,8 @@ namespace Abb2kTools
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1>
     {
+        public InstancedEvent() : base() {}
+
         public static void Send(T1 param1) => Get().MSend(param1);
 
         protected virtual void MSend(T1 param1)
@@ -952,6 +956,8 @@ namespace Abb2kTools
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1, T2> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1, T2>
     {
+        public InstancedEvent() : base() {}
+
         public static void Send(T1 param1, T2 param2) => Get().MSend(param1, param2);
 
         protected virtual void MSend(T1 param1, T2 param2)
@@ -978,6 +984,8 @@ namespace Abb2kTools
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1, T2, T3> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1, T2, T3>
     {
+        public InstancedEvent() : base() {}
+
         public static void Send(T1 param1, T2 param2, T3 param3) => Get().MSend(param1, param2, param3);
 
         protected virtual void MSend(T1 param1, T2 param2, T3 param3)
@@ -1004,6 +1012,8 @@ namespace Abb2kTools
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1, T2, T3, T4> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1, T2, T3, T4>
     {
+        public InstancedEvent() : base() {}
+
         public static void Send(T1 param1, T2 param2, T3 param3, T4 param4) => Get().MSend(param1, param2, param3, param4);
 
         protected virtual void MSend(T1 param1, T2 param2, T3 param3, T4 param4)
