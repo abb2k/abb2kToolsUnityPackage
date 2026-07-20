@@ -4,9 +4,11 @@ using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+#if UNITY_EDITOR
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector.Editor;
 using Sirenix.Utilities.Editor;
+#endif
 #endif
 
 namespace Abb2kTools
@@ -30,91 +32,88 @@ namespace Abb2kTools
 
 #if ODIN_INSPECTOR
 
-    namespace Editor
+    [DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
+    public class WeightedListAttributeOdinDrawer : OdinAttributeDrawer<WeightedListDisplayAttribute>
     {
-        [DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
-        public class WeightedListAttributeOdinDrawer : OdinAttributeDrawer<WeightedListDisplayAttribute>
+        protected override void DrawPropertyLayout(GUIContent label)
         {
-            protected override void DrawPropertyLayout(GUIContent label)
+            if (this.Property.ChildResolver is ICollectionResolver)
             {
-                if (this.Property.ChildResolver is ICollectionResolver)
+                float totalWeight = 0f;
+                foreach (var child in this.Property.Children)
                 {
-                    float totalWeight = 0f;
-                    foreach (var child in this.Property.Children)
-                    {
-                        totalWeight += GetWeightFromMethod(this.Property, child.ValueEntry.WeakSmartValue, this.Attribute.MethodName);
-                    }
-
-                    string baseName = label != null && !string.IsNullOrEmpty(label.text) ? label.text : this.Property.NiceName;
-                    GUIContent newLabel = new GUIContent($"{baseName} (Overall Weight: {totalWeight})");
-
-                    this.CallNextDrawer(newLabel);
-                }
-                else
-                {
-                    this.CallNextDrawer(label);
-                }
-            }
-            
-            internal static float GetWeightFromMethod(InspectorProperty listProperty, object elementValue, string methodName)
-            {
-                if (elementValue == null || string.IsNullOrEmpty(methodName)) return 0f;
-
-                object listObject = listProperty.ValueEntry?.WeakSmartValue;
-                object parentObject = listProperty.ParentValues.Count > 0 ? listProperty.ParentValues[0] : null;
-                object rootObject = listProperty.SerializationRoot?.ValueEntry?.WeakSmartValue;
-
-                object[] targetsToTry = new object[] { listObject, parentObject, rootObject };
-
-                foreach (var target in targetsToTry)
-                {
-                    if (target == null) continue;
-
-                    var method = target.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    if (method != null)
-                    {
-                        try
-                        {
-                            return Convert.ToSingle(method.Invoke(target, new object[] { elementValue }));
-                        }
-                        catch { }
-                    }
+                    totalWeight += GetWeightFromMethod(this.Property, child.ValueEntry.WeakSmartValue, this.Attribute.MethodName);
                 }
 
-                return 0f;
-            }
-        }
+                string baseName = label != null && !string.IsNullOrEmpty(label.text) ? label.text : this.Property.NiceName;
+                GUIContent newLabel = new GUIContent($"{baseName} (Overall Weight: {totalWeight})");
 
-        [DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
-        public class WeightedListElementOdinDrawer : OdinDrawer
-        {
-            public override bool CanDrawProperty(InspectorProperty property)
-            {
-                return property.Parent != null && 
-                       property.Parent.GetAttribute<WeightedListDisplayAttribute>() != null &&
-                       property.Parent.ChildResolver is ICollectionResolver;
+                this.CallNextDrawer(newLabel);
             }
-
-            protected override void DrawPropertyLayout(GUIContent label)
+            else
             {
                 this.CallNextDrawer(label);
-
-                var attr = this.Property.Parent.GetAttribute<WeightedListDisplayAttribute>();
-                float totalWeight = 0f;
-                foreach (var child in this.Property.Parent.Children)
-                {
-                    totalWeight += WeightedListAttributeOdinDrawer.GetWeightFromMethod(this.Property.Parent, child.ValueEntry.WeakSmartValue, attr.MethodName);
-                }
-
-                float myWeight = WeightedListAttributeOdinDrawer.GetWeightFromMethod(this.Property.Parent, this.Property.ValueEntry.WeakSmartValue, attr.MethodName);
-                float chance = totalWeight > 0 ? (myWeight / totalWeight) * 100f : 0f;
-
-                GUIStyle boxStyle = SirenixGUIStyles.CustomizableMessageBox;
-                boxStyle.alignment = TextAnchor.MiddleCenter;
-                
-                GUILayout.Label($"Chance: {chance:F1}% | Weight: {myWeight}", boxStyle);
-                GUILayout.Space(6);
             }
+        }
+        
+        internal static float GetWeightFromMethod(InspectorProperty listProperty, object elementValue, string methodName)
+        {
+            if (elementValue == null || string.IsNullOrEmpty(methodName)) return 0f;
+
+            object listObject = listProperty.ValueEntry?.WeakSmartValue;
+            object parentObject = listProperty.ParentValues.Count > 0 ? listProperty.ParentValues[0] : null;
+            object rootObject = listProperty.SerializationRoot?.ValueEntry?.WeakSmartValue;
+
+            object[] targetsToTry = new object[] { listObject, parentObject, rootObject };
+
+            foreach (var target in targetsToTry)
+            {
+                if (target == null) continue;
+
+                var method = target.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (method != null)
+                {
+                    try
+                    {
+                        return Convert.ToSingle(method.Invoke(target, new object[] { elementValue }));
+                    }
+                    catch { }
+                }
+            }
+
+            return 0f;
+        }
+    }
+
+    [DrawerPriority(DrawerPriorityLevel.WrapperPriority)]
+    public class WeightedListElementOdinDrawer : OdinDrawer
+    {
+        public override bool CanDrawProperty(InspectorProperty property)
+        {
+            return property.Parent != null && 
+                    property.Parent.GetAttribute<WeightedListDisplayAttribute>() != null &&
+                    property.Parent.ChildResolver is ICollectionResolver;
+        }
+
+        protected override void DrawPropertyLayout(GUIContent label)
+        {
+            this.CallNextDrawer(label);
+
+            var attr = this.Property.Parent.GetAttribute<WeightedListDisplayAttribute>();
+            float totalWeight = 0f;
+            foreach (var child in this.Property.Parent.Children)
+            {
+                totalWeight += WeightedListAttributeOdinDrawer.GetWeightFromMethod(this.Property.Parent, child.ValueEntry.WeakSmartValue, attr.MethodName);
+            }
+
+            float myWeight = WeightedListAttributeOdinDrawer.GetWeightFromMethod(this.Property.Parent, this.Property.ValueEntry.WeakSmartValue, attr.MethodName);
+            float chance = totalWeight > 0 ? (myWeight / totalWeight) * 100f : 0f;
+
+            GUIStyle boxStyle = SirenixGUIStyles.CustomizableMessageBox;
+            boxStyle.alignment = TextAnchor.MiddleCenter;
+            
+            GUILayout.Label($"Chance: {chance:F1}% | Weight: {myWeight}", boxStyle);
+            GUILayout.Space(6);
         }
     }
 
