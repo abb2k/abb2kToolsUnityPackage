@@ -28,7 +28,6 @@ namespace Abb2kTools
 #endif
         private Vector2 _tiling = Vector2.one;
 
-        [SerializeField, HideInInspector]
         private MaterialPropertyBlock _mpb;
 
         public enum SurfaceType

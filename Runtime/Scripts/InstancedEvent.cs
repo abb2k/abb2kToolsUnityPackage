@@ -10,6 +10,38 @@ using UnityEditor;
 
 namespace Abb2kTools
 {
+    // HELPER ADDED: Safely fetches the Object ID across all Unity versions
+    internal static class ObjectIdHelper
+    {
+        private static readonly Func<UnityEngine.Object, int> _getIdFunc;
+
+        static ObjectIdHelper()
+        {
+            var type = typeof(UnityEngine.Object);
+            
+            // Try GetEntityId first (Newer Unity versions)
+            var method = type.GetMethod("GetEntityId", BindingFlags.Public | BindingFlags.Instance);
+            
+            // Fallback to GetInstanceID (Older Unity versions)
+            if (method == null)
+            {
+                method = type.GetMethod("GetInstanceID", BindingFlags.Public | BindingFlags.Instance);
+            }
+
+            if (method != null)
+            {
+                // Create an open delegate for high-performance (zero-allocation) execution
+                _getIdFunc = (Func<UnityEngine.Object, int>)Delegate.CreateDelegate(typeof(Func<UnityEngine.Object, int>), method);
+            }
+        }
+
+        public static int GetId(UnityEngine.Object obj)
+        {
+            if (obj == null) return 0;
+            return _getIdFunc != null ? _getIdFunc(obj) : obj.GetHashCode();
+        }
+    }
+
     [Serializable]
     internal sealed class InstancedEventPersistenceEntry
     {
@@ -26,6 +58,7 @@ namespace Abb2kTools
         [SerializeField] public string MethodName;
         [SerializeField] public string TargetTypeName;
         [SerializeField] public int TargetInstanceId;
+        [SerializeField] public string TargetGlobalId;
         [SerializeField] public int Priority;
         [SerializeField] public bool IsEnabled;
     }
@@ -421,7 +454,7 @@ namespace Abb2kTools
     {
         [SerializeField]
         public int Priority;
-        [SerializeField]
+        [System.NonSerialized]
         public System.Delegate Callback;
         
         [SerializeField]
@@ -436,6 +469,7 @@ namespace Abb2kTools
         [SerializeField] private string persistedMethodName;
         [SerializeField] private string persistedTargetTypeName;
         [SerializeField] private int persistedTargetInstanceId;
+        [SerializeField] private string persistedTargetGlobalId;
         
         [SerializeField]
         internal UnityEvent onRestored = new();
@@ -475,14 +509,23 @@ namespace Abb2kTools
             var target = Callback.Target;
             var targetObject = target as UnityEngine.Object;
 
+            string globalId = null;
+#if UNITY_EDITOR && UNITY_2019_3_OR_NEWER
+            if (targetObject != null)
+            {
+                globalId = GlobalObjectId.GetGlobalObjectIdSlow(targetObject).ToString();
+            }
+#endif
+
             return new InstancedEventListenerPersistedState
             {
-                UniqueId = this.uniqueId, // <-- Save the ID
+                UniqueId = this.uniqueId,
                 DelegateTypeName = Callback.GetType().AssemblyQualifiedName,
                 DeclaringTypeName = method?.DeclaringType?.AssemblyQualifiedName ?? method?.ReflectedType?.AssemblyQualifiedName,
                 MethodName = method?.Name,
                 TargetTypeName = target?.GetType().AssemblyQualifiedName,
-                TargetInstanceId = targetObject != null ? targetObject.GetInstanceID() : 0,
+                TargetInstanceId = ObjectIdHelper.GetId(targetObject), // Replaced GetInstanceID
+                TargetGlobalId = globalId,
                 Priority = Priority,
                 IsEnabled = isEnabled
             };
@@ -511,12 +554,21 @@ namespace Abb2kTools
             persistedDeclaringTypeName = method?.DeclaringType?.AssemblyQualifiedName ?? method?.ReflectedType?.AssemblyQualifiedName;
             persistedMethodName = method?.Name;
             persistedTargetTypeName = target?.GetType().AssemblyQualifiedName;
-            persistedTargetInstanceId = targetObject != null ? targetObject.GetInstanceID() : 0;
+            persistedTargetInstanceId = ObjectIdHelper.GetId(targetObject); // Replaced GetInstanceID
+            
+#if UNITY_EDITOR && UNITY_2019_3_OR_NEWER
+            persistedTargetGlobalId = targetObject != null ? GlobalObjectId.GetGlobalObjectIdSlow(targetObject).ToString() : null;
+#else
+            persistedTargetGlobalId = null;
+#endif
         }
 
         internal bool HasPersistedIdentity()
         {
-            return !string.IsNullOrEmpty(persistedMethodName) || !string.IsNullOrEmpty(persistedTargetTypeName) || persistedTargetInstanceId != 0;
+            return !string.IsNullOrEmpty(persistedMethodName) || 
+                   !string.IsNullOrEmpty(persistedTargetTypeName) || 
+                   persistedTargetInstanceId != 0 || 
+                   !string.IsNullOrEmpty(persistedTargetGlobalId);
         }
 
         internal bool MatchesPersistedIdentity(ListenerHandle other)
@@ -531,6 +583,14 @@ namespace Abb2kTools
             if (!string.Equals(persistedMethodName, other.persistedMethodName, StringComparison.Ordinal)) return false;
             if (!string.Equals(persistedDeclaringTypeName, other.persistedDeclaringTypeName, StringComparison.Ordinal)) return false;
             if (!string.Equals(persistedTargetTypeName, other.persistedTargetTypeName, StringComparison.Ordinal)) return false;
+            
+#if UNITY_EDITOR && UNITY_2019_3_OR_NEWER
+            if (!string.IsNullOrEmpty(persistedTargetGlobalId) && !string.IsNullOrEmpty(other.persistedTargetGlobalId))
+            {
+                return string.Equals(persistedTargetGlobalId, other.persistedTargetGlobalId, StringComparison.Ordinal);
+            }
+#endif
+
             if (persistedTargetInstanceId != 0 && other.persistedTargetInstanceId != 0)
             {
                 return persistedTargetInstanceId == other.persistedTargetInstanceId;
@@ -648,13 +708,11 @@ namespace Abb2kTools
 
         internal void SendBase(System.Func<System.Delegate, ListenerResult> onCallback)
         {
-            // Iterate over a snapshot so listeners can safely remove themselves during invocation
             var snapshot = new List<ListenerHandle>(instancesByPriority);
             foreach (var handle in snapshot)
             {
                 if (handle == null || !handle.isEnabled || (!Application.isPlaying && !handle.activeInEditor)) continue;
 
-                // Safety check: Prevent play mode listeners from executing in edit mode
                 if (handle.IsPlayModeListener && !Application.isPlaying) continue;
 
                 if (onCallback(handle.Callback) == ListenerResult.Block) break;
@@ -666,7 +724,6 @@ namespace Abb2kTools
             var listener = new ListenerHandle(callback, this)
             {
                 Priority = priority,
-                // Automatically flag as Play Mode if created while playing
                 IsPlayModeListener = Application.isPlaying 
             };
 
@@ -781,7 +838,20 @@ namespace Abb2kTools
 
         private UnityEngine.Object ResolveTargetObject(InstancedEventListenerPersistedState state)
         {
-            if (state == null || string.IsNullOrEmpty(state.TargetTypeName) || state.TargetInstanceId == 0)
+            if (state == null) return null;
+
+#if UNITY_EDITOR && UNITY_2019_3_OR_NEWER
+            if (!string.IsNullOrEmpty(state.TargetGlobalId) && GlobalObjectId.TryParse(state.TargetGlobalId, out var globalId))
+            {
+                var resolvedObject = GlobalObjectId.GlobalObjectIdentifierToObjectSlow(globalId);
+                if (resolvedObject != null)
+                {
+                    return resolvedObject;
+                }
+            }
+#endif
+
+            if (string.IsNullOrEmpty(state.TargetTypeName) || state.TargetInstanceId == 0)
             {
                 return null;
             }
@@ -796,7 +866,8 @@ namespace Abb2kTools
             for (int i = 0; i < allTargets.Length; i++)
             {
                 var candidate = allTargets[i] as UnityEngine.Object;
-                if (candidate != null && candidate.GetInstanceID() == state.TargetInstanceId)
+                // Replaced GetInstanceID
+                if (candidate != null && ObjectIdHelper.GetId(candidate) == state.TargetInstanceId)
                 {
                     return candidate;
                 }
@@ -885,10 +956,6 @@ namespace Abb2kTools
     {
         public InstancedEventBase()
         {
-            // if (!InstancedEventHandler.IsSpawning)
-            // {
-            //     throw new System.InvalidOperationException($"Cannot use 'new' to create instanced events. Attempted to create new instance of {typeof(TSelf).Name}");
-            // }
         }
 
         internal static TSelf Get()

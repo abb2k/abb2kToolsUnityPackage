@@ -7,6 +7,7 @@ namespace Abb2kTools {
         public float min;
         public float max;
 
+        [System.NonSerialized]
         public float? _lastChosenValue;
         public float LastChosenValue {
             get {
