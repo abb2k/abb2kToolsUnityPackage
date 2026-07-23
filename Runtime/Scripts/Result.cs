@@ -2,10 +2,11 @@ using UnityEngine;
 
 public class Result<E>
 {
-    private bool isError = false;
+    protected bool isError = false;
     public bool IsError => isError;
     public bool IsOk => !isError;
-    private E error;
+    
+    protected E error;
     public E Error => error;
 
     protected Result() {}
@@ -20,7 +21,6 @@ public class Result<E>
         var toReturn = new Result<E>();
         toReturn.isError = true;
         toReturn.error = errorValue;
-
         return toReturn;
     }
 
@@ -30,7 +30,20 @@ public class Result<E>
     }
 
     public static implicit operator bool(Result<E> res) => res.IsOk;
-    public static implicit operator Result(Result<E> res) => res;
 }
 
-public class Result : Result<string> {}
+public class Result : Result<string> 
+{
+    public static new Result Ok()
+    {
+        return new Result();
+    }
+
+    public static new Result Err(string errorValue)
+    {
+        var toReturn = new Result();
+        toReturn.isError = true;
+        toReturn.error = errorValue;
+        return toReturn;
+    }
+}
