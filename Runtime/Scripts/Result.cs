@@ -30,6 +30,7 @@ public class Result<E>
     }
 
     public static implicit operator bool(Result<E> res) => res.IsOk;
+    public static implicit operator Result(Result<E> res) => res;
 }
 
 public class Result : Result<string> {}
