@@ -22,13 +22,20 @@ namespace Abb2kTools
             // Try GetEntityId first (Newer Unity versions)
             var method = type.GetMethod("GetEntityId", BindingFlags.Public | BindingFlags.Instance);
             
+            // FIX: Ensure the method actually returns an int before we try to use it
+            if (method != null && method.ReturnType != typeof(int))
+            {
+                method = null;
+            }
+            
             // Fallback to GetInstanceID (Older Unity versions)
             if (method == null)
             {
                 method = type.GetMethod("GetInstanceID", BindingFlags.Public | BindingFlags.Instance);
             }
 
-            if (method != null)
+            // Double check return type safety
+            if (method != null && method.ReturnType == typeof(int))
             {
                 // Create an open delegate for high-performance (zero-allocation) execution
                 _getIdFunc = (Func<UnityEngine.Object, int>)Delegate.CreateDelegate(typeof(Func<UnityEngine.Object, int>), method);
