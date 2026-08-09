@@ -1,5 +1,7 @@
 using UnityEngine;
 
+namespace Abb2kTools
+{
 public struct OkPayload<T> { public T Value; public OkPayload(T v) => Value = v; }
 public struct ErrPayload<E> { public E Error; public ErrPayload(E e) => Error = e; }
 
@@ -87,4 +89,5 @@ public class Result<R, E> : ResultBase<E>
 
     public static implicit operator Result<R, E>(OkPayload<R> payload) => Ok(payload.Value);
     public static implicit operator Result<R, E>(ErrPayload<E> payload) => Err(payload.Error);
+}
 }

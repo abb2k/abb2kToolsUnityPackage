@@ -1,4 +1,7 @@
-public interface IReadOnlyHierarchy
+namespace Abb2kTools
 {
-    // Empty tag interface
+    public interface IReadOnlyHierarchy
+    {
+        // Empty tag interface
+    }
 }
