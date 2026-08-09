@@ -612,14 +612,12 @@ namespace Abb2kTools.Events
             return this;
         }
 
-        public void Ping()
+        public bool Ping()
         {
-            if (owner == null) return;
-            if (!isEnabled) return;
-            if (!Application.isPlaying && !activeInEditor) return;
-            if (IsPlayModeListener && !Application.isPlaying) return;
+            if (owner == null || !isEnabled || (!Application.isPlaying && !activeInEditor) || (IsPlayModeListener && !Application.isPlaying))
+                return false;
 
-            owner.PingListener(this);
+            return owner.PingListener(this);
         }
     }
 
@@ -966,7 +964,7 @@ namespace Abb2kTools.Events
             return null;
         }
 
-        internal virtual void PingListener(ListenerHandle handle) { }
+        internal virtual bool PingListener(ListenerHandle handle) => false;
     }
 
     [System.Serializable]
@@ -987,7 +985,6 @@ namespace Abb2kTools.Events
         {
             if (!hasPonged)
             {
-                Debug.LogWarning($"Ping() called on {GetType().Name}, but no Pong values were saved.");
                 return false;
             }
             return true;
@@ -1014,18 +1011,22 @@ namespace Abb2kTools.Events
             hasPonged = true;
         }
 
-        public static void Ping() => Get().MPing();
+        public static bool Ping() => Get().MPing();
 
-        protected virtual void MPing()
+        protected virtual bool MPing()
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             MSend();
+
+            return true;
         }
 
-        internal override void PingListener(ListenerHandle handle)
+        internal override bool PingListener(ListenerHandle handle)
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             OnDelegate(handle.Callback);
+
+            return true;
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele)
@@ -1067,18 +1068,22 @@ namespace Abb2kTools.Events
             hasPonged = true;
         }
 
-        public static void Ping() => Get().MPing();
+        public static bool Ping() => Get().MPing();
 
-        protected virtual void MPing()
+        protected virtual bool MPing()
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             MSend(pongValue1);
+
+            return true;
         }
 
-        internal override void PingListener(ListenerHandle handle)
+        internal override bool PingListener(ListenerHandle handle)
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             OnDelegate(handle.Callback, pongValue1);
+
+            return true;
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1)
@@ -1122,18 +1127,22 @@ namespace Abb2kTools.Events
             hasPonged = true;
         }
 
-        public static void Ping() => Get().MPing();
+        public static bool Ping() => Get().MPing();
 
-        protected virtual void MPing()
+        protected virtual bool MPing()
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             MSend(pongValue1, pongValue2);
+
+            return true;
         }
 
-        internal override void PingListener(ListenerHandle handle)
+        internal override bool PingListener(ListenerHandle handle)
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             OnDelegate(handle.Callback, pongValue1, pongValue2);
+
+            return true;
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1, T2 param2)
@@ -1179,18 +1188,22 @@ namespace Abb2kTools.Events
             hasPonged = true;
         }
 
-        public static void Ping() => Get().MPing();
+        public static bool Ping() => Get().MPing();
 
-        protected virtual void MPing()
+        protected virtual bool MPing()
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             MSend(pongValue1, pongValue2, pongValue3);
+
+            return true;
         }
 
-        internal override void PingListener(ListenerHandle handle)
+        internal override bool PingListener(ListenerHandle handle)
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             OnDelegate(handle.Callback, pongValue1, pongValue2, pongValue3);
+
+            return true;
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1, T2 param2, T3 param3)
@@ -1238,18 +1251,22 @@ namespace Abb2kTools.Events
             hasPonged = true;
         }
 
-        public static void Ping() => Get().MPing();
+        public static bool Ping() => Get().MPing();
 
-        protected virtual void MPing()
+        protected virtual bool MPing()
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             MSend(pongValue1, pongValue2, pongValue3, pongValue4);
+
+            return true;
         }
 
-        internal override void PingListener(ListenerHandle handle)
+        internal override bool PingListener(ListenerHandle handle)
         {
-            if (!ValidatePingState()) return;
+            if (!ValidatePingState()) return false;
             OnDelegate(handle.Callback, pongValue1, pongValue2, pongValue3, pongValue4);
+
+            return true;
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1, T2 param2, T3 param3, T4 param4)
