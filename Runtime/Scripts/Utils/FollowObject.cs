@@ -7,7 +7,7 @@ namespace Abb2kTools.Utils
 {
     public class FollowObject : MonoBehaviour
     {
-        public enum MoveModes { Snap, Lerp, SLerp }
+        public enum MoveModes { Snap, Lerp, SLerp, ConstantSpeed }
         public enum FrameMovement { Update, LateUpdate, Fixed, Manual }
 
 #if ODIN_INSPECTOR
@@ -59,22 +59,29 @@ namespace Abb2kTools.Utils
         public Constrains constrains = new();
 
 #if ODIN_INSPECTOR
-        [BoxGroup("Lerp Settings"), ShowIf("@moveMode != MoveModes.Snap")]
+        [BoxGroup("Lerp Settings"), ShowIf("@moveMode == MoveModes.Lerp || moveMode == MoveModes.SLerp")]
 #else
         [Header("Lerp Settings")]
 #endif
         public float lerpSpeed = 2f;
 #if ODIN_INSPECTOR
-        [BoxGroup("Lerp Settings"), ShowIf("@moveMode != MoveModes.Snap")]
+        [BoxGroup("Lerp Settings"), ShowIf("@moveMode == MoveModes.Lerp || moveMode == MoveModes.SLerp")]
 #endif
         public bool useCurve;
 #if ODIN_INSPECTOR
-        [BoxGroup("Lerp Settings"), ShowIf("@moveMode != MoveModes.Snap"), EnableIf("useCurve")]
+        [BoxGroup("Lerp Settings"), ShowIf("@moveMode == MoveModes.Lerp || moveMode == MoveModes.SLerp"), EnableIf("useCurve")]
 #endif
         public AnimationCurve lerpCurve = new AnimationCurve(
             new Keyframe(0f, 0f, 0f, 2),
             new Keyframe(1f, 1f, 0, 0f)
         );
+
+#if ODIN_INSPECTOR
+        [BoxGroup("Constant Speed Settings"), ShowIf("@moveMode == MoveModes.ConstantSpeed")]
+#else
+        [Header("Constant Speed Settings")]
+#endif
+        public float moveSpeed = 10f;
 
         private float lerpProgress;
         private Vector3 startPos;
@@ -156,6 +163,10 @@ namespace Abb2kTools.Utils
                     newPos = useCurve 
                         ? Vector3.Slerp(startPos, targetPos, t) 
                         : Vector3.Slerp(transform.position, targetPos, delta * lerpSpeed);
+                    break;
+
+                case MoveModes.ConstantSpeed:
+                    newPos = Vector3.MoveTowards(transform.position, targetPos, delta * moveSpeed);
                     break;
             }
 
