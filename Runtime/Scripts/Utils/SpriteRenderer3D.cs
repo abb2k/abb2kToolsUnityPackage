@@ -24,9 +24,41 @@ namespace Abb2kTools.Utils
 
         [SerializeField]
 #if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Tiling")]
+        [OnValueChanged("UpdateMaterialData"), LabelText("Color")]
 #endif
-        private Vector2 _tiling = Vector2.one;
+        private Color _color = Color.white;
+
+        [SerializeField]
+#if ODIN_INSPECTOR
+        [OnValueChanged("UpdateMaterialData"), LabelText("Flip X")]
+#endif
+        private bool _flipX;
+
+        [SerializeField]
+#if ODIN_INSPECTOR
+        [OnValueChanged("UpdateMaterialData"), LabelText("Flip Y")]
+#endif
+        private bool _flipY;
+
+        public enum DrawMode
+        {
+            Simple,
+            Sliced,
+            Tiled
+        }
+
+        [SerializeField]
+#if ODIN_INSPECTOR
+        [OnValueChanged("UpdateMaterialData"), LabelText("Draw Mode")]
+#endif
+        private DrawMode _drawMode = DrawMode.Simple;
+
+        [SerializeField]
+#if ODIN_INSPECTOR
+        [ShowIf("@this._drawMode != DrawMode.Simple")]
+        [OnValueChanged("UpdateMaterialData"), LabelText("Size")]
+#endif
+        private Vector2 _size = Vector2.one;
 
         private MaterialPropertyBlock _mpb;
 
@@ -65,6 +97,7 @@ namespace Abb2kTools.Utils
             if (_mpb == null)
                 _mpb = new MaterialPropertyBlock();
         }
+        
 #if !ODIN_INSPECTOR
         void OnValidate()
         {
@@ -119,13 +152,55 @@ namespace Abb2kTools.Utils
             Vector2 textureSize = new Vector2(_sprite.texture.width, _sprite.texture.height);
             Vector2 rectSize = new Vector2(_sprite.rect.width, _sprite.rect.height);
 
+            // Calculate Flip logic for Tiling and Offset
+            Vector2 finalTiling = rectSize / textureSize;
+            Vector2 finalOffset = _sprite.rect.position / textureSize;
+
+            if (_flipX)
+            {
+                finalTiling.x *= -1;
+                finalOffset.x += rectSize.x / textureSize.x;
+            }
+            
+            if (_flipY)
+            {
+                finalTiling.y *= -1;
+                finalOffset.y += rectSize.y / textureSize.y;
+            }
+
             _mpb.SetTexture("_MainTex", _sprite.texture);
-            _mpb.SetVector("_SprTiling", rectSize / textureSize);
-            _mpb.SetVector("_SprOffset", _sprite.rect.position / textureSize);
-            _mpb.SetVector("_tilingExtra", _tiling);
+            _mpb.SetColor("_Color", _color); // Depending on your shader, this might need to be "_BaseColor"
+            _mpb.SetVector("_SprTiling", finalTiling);
+            _mpb.SetVector("_SprOffset", finalOffset);
+            
+            // Push DrawMode settings to shader so your custom material can handle 9-slicing/tiling logic
+            _mpb.SetFloat("_DrawMode", (float)_drawMode);
+            _mpb.SetVector("_Size", _size);
 
             _renderer.SetPropertyBlock(_mpb);
         }
+
+#if UNITY_EDITOR
+#if ODIN_INSPECTOR
+        [Button("Open Sprite Editor"), PropertyOrder(-1)]
+#else
+        [ContextMenu("Open Sprite Editor")]
+#endif
+        private void OpenSpriteEditor()
+        {
+            if (_sprite == null || _sprite.texture == null) 
+            {
+                Debug.LogWarning("No Sprite assigned to open in the Sprite Editor.");
+                return;
+            }
+
+            // Selects the texture in the project window
+            Selection.activeObject = _sprite.texture;
+            
+            // Opens the Sprite Editor window natively
+            EditorApplication.ExecuteMenuItem("Window/2D/Sprite Editor");
+        }
+#endif
 
 #if ODIN_INSPECTOR
         [Button]
@@ -150,6 +225,13 @@ namespace Abb2kTools.Utils
             scale.x = rectSize.x / textureLargest * scaleFactor;
             scale.y = rectSize.y / textureLargest * scaleFactor;
             scale.z = !setNativeSizeForY ? rectSize.x / textureLargest * scaleFactor : 1;
+
+            // If drawing as sliced or tiled, we should also initialize the size property to the rect size
+            if (_drawMode != DrawMode.Simple)
+            {
+                _size = new Vector2(scale.x, scale.y);
+                UpdateMaterialData();
+            }
 
             transform.localScale = scale;
 
