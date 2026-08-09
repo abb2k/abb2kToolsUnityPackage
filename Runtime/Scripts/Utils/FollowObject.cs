@@ -83,6 +83,8 @@ namespace Abb2kTools.Utils
 #endif
         public float moveSpeed = 10f;
 
+        public Vector3 CurrentMoveDirection { get; private set; }
+
         private float lerpProgress;
         private Vector3 startPos;
         private Vector3 lastTargetPos;
@@ -173,6 +175,8 @@ namespace Abb2kTools.Utils
             if (constrains.x) newPos.x = transform.position.x;
             if (constrains.y) newPos.y = transform.position.y;
             if (constrains.z) newPos.z = transform.position.z;
+
+            CurrentMoveDirection = (newPos - transform.position).normalized;
 
             transform.position = newPos;
         }
