@@ -2,9 +2,9 @@
 
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Events
 {
-    public static class MonoBehaviourExtensions
+    public static class AbbTMonoBehaviourEventExtensions
     {
         public static ListenerHandle BindListener(this MonoBehaviour owner, ListenerHandle e) => e.BindTo(owner);
     }

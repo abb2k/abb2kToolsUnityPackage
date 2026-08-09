@@ -1,12 +1,14 @@
 using System.Collections.Generic;
 using System.Linq;
+using Abb2kTools.Singletons;
+
 #if ODIN_INSPECTOR
 using Sirenix.Utilities;
 #endif
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace Abb2kTools
+namespace Abb2kTools.AudioSystem
 {
     [System.Serializable]
     public class Audio
@@ -77,13 +79,25 @@ namespace Abb2kTools
         }
     }
 
+    [System.Serializable]
+    public class Sound
+    {   
+        [Header("Options")]
+        public AudioClip clip;
+        [Min(0)]
+        public float volume = 1;
+        public float pitch = 1;
+        [Range(-1, 1)]
+        public float panStereo = 0;
+    }
+
     public enum AudioAttachmentType
     {
         Direct,
         External
     }
 
-    public class SoundManager : Singleton<SoundManager>
+    public class SoundManager : PersistentSingleton<SoundManager>
     {
         private Dictionary<string, Audio> longLivingSound = new();
         private Dictionary<Transform, ExternalAudioSource> objectForTranform = new();

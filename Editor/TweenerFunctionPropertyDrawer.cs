@@ -4,7 +4,7 @@ using UnityEditor;
 using System;
 using System.Reflection;
 
-namespace Abb2kTools
+namespace Abb2kTools.Tweening
 {
     [CustomPropertyDrawer(typeof(TweenerFunction))]
     public class TweenerFunctionPropertyDrawer : PropertyDrawer

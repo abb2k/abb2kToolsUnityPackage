@@ -10,7 +10,7 @@ using Sirenix.Serialization;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace Abb2kTools
+namespace Abb2kTools.Tweening
 {
     public enum TweenSequanceElementAddType
     {

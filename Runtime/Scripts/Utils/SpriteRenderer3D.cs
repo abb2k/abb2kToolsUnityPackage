@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 using UnityEditor;
 #endif
 
-namespace Abb2kTools
+namespace Abb2kTools.Utils
 {
     [ExecuteAlways]
     [RequireComponent(typeof(MeshRenderer))]
@@ -28,7 +28,6 @@ namespace Abb2kTools
 #endif
         private Vector2 _tiling = Vector2.one;
 
-        [SerializeField, HideInInspector]
         private MaterialPropertyBlock _mpb;
 
         public enum SurfaceType

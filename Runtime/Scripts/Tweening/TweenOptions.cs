@@ -12,12 +12,13 @@ using UnityEngine;
 using UnityEngine.Events;
 
 
-namespace Abb2kTools
+namespace Abb2kTools.Tweening
 {
 #if ODIN_INSPECTOR
     [InlineProperty, HideLabel]
 #endif
-    public abstract class TweenOptions
+    [System.Serializable]
+    public class TweenOptions
     {
         protected virtual string ExtraStr => null;
 #if ODIN_INSPECTOR
@@ -200,9 +201,9 @@ namespace Abb2kTools
 #endif
         public UnityEvent<int> OnWaypointChange;
 
-        public abstract Tween Invoke();
+        public virtual Tween Invoke() { return null; }
 
-        protected Tween Setup(Tween t)
+        public Tween Setup(Tween t)
         {
             if (t == null) return null;
 

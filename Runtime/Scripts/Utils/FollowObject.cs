@@ -3,12 +3,12 @@ using Sirenix.OdinInspector;
 #endif
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Utils
 {
     public class FollowObject : MonoBehaviour
     {
         public enum MoveModes { Snap, Lerp, SLerp }
-        public enum FrameMovement { Update, Fixed }
+        public enum FrameMovement { Update, LateUpdate, Fixed, Manual }
 
 #if ODIN_INSPECTOR
         [BoxGroup("General")]
@@ -20,6 +20,14 @@ namespace Abb2kTools
         [BoxGroup("General")]
 #endif
         public Vector3 offset;
+#if ODIN_INSPECTOR
+        [BoxGroup("General")]
+#endif
+        public Vector3 forwardOffset;
+#if ODIN_INSPECTOR
+        [BoxGroup("General")]
+#endif
+        public float forwardOffsetSmoothness = 15f;
 #if ODIN_INSPECTOR
         [BoxGroup("General")]
 #endif
@@ -71,10 +79,20 @@ namespace Abb2kTools
         private float lerpProgress;
         private Vector3 startPos;
         private Vector3 lastTargetPos;
+        
+        // New variables for movement tracking
+        private Vector3 previousTargetPos;
+        private Vector3 currentDynamicOffset;
 
         private void Update()
         {
             if (frameMovement == FrameMovement.Update)
+                Move(Time.deltaTime);
+        }
+
+        private void LateUpdate()
+        {
+            if (frameMovement == FrameMovement.LateUpdate)
                 Move(Time.deltaTime);
         }
 
@@ -84,11 +102,31 @@ namespace Abb2kTools
                 Move(Time.fixedDeltaTime);
         }
 
+        public void ManualMove(float delta)
+        {
+            if (frameMovement == FrameMovement.Manual)
+                Move(delta);
+        }
+
         private void Move(float delta)
         {
             if (target == null) return;
 
-            Vector3 targetPos = target.position + offset;
+            Vector3 moveDelta = target.position - previousTargetPos;
+            previousTargetPos = target.position;
+
+            Vector3 targetDynamicOffset = Vector3.zero;
+            
+            if (moveDelta.sqrMagnitude > 0.0001f)
+            {
+                Vector3 moveDirection = moveDelta.normalized;
+                
+                targetDynamicOffset = Vector3.Scale(moveDirection, forwardOffset);
+            }
+
+            currentDynamicOffset = Vector3.Lerp(currentDynamicOffset, targetDynamicOffset, delta * forwardOffsetSmoothness);
+
+            Vector3 targetPos = target.position + offset + currentDynamicOffset;
 
             if (targetPos != lastTargetPos)
             {
@@ -98,7 +136,6 @@ namespace Abb2kTools
             }
 
             lerpProgress += delta * lerpSpeed;
-
             float t = lerpCurve.Evaluate(Mathf.Clamp01(lerpProgress));
 
             Vector3 newPos = transform.position;
@@ -110,11 +147,15 @@ namespace Abb2kTools
                     break;
 
                 case MoveModes.Lerp:
-                    newPos = Vector3.Lerp(startPos, targetPos, useCurve ? t : lerpProgress);
+                    newPos = useCurve 
+                        ? Vector3.Lerp(startPos, targetPos, t) 
+                        : Vector3.Lerp(transform.position, targetPos, delta * lerpSpeed);
                     break;
 
                 case MoveModes.SLerp:
-                    newPos = Vector3.Slerp(startPos, targetPos, useCurve ? t : lerpProgress);
+                    newPos = useCurve 
+                        ? Vector3.Slerp(startPos, targetPos, t) 
+                        : Vector3.Slerp(transform.position, targetPos, delta * lerpSpeed);
                     break;
             }
 

@@ -1,6 +1,8 @@
 using UnityEditor;
 using UnityEngine;
 
+namespace Abb2kTools
+{
 public class AddToList
 {
     [MenuItem("GameObject/3D Object/3D Sprite", priority = 10)]
@@ -35,4 +37,6 @@ public class AddToList
 
         Selection.activeObject = spr;
     }
+}
+
 }
