@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace Abb2kTools 
+namespace Abb2kTools
 {
     [CustomPropertyDrawer(typeof(Ranged))]
     public class RangedDrawer : PropertyDrawer
