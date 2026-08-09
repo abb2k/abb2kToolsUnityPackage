@@ -5,7 +5,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Events
 {
     [CustomPropertyDrawer(typeof(InstancedEventBinding))]
     public class InstancedEventBindingDrawer : PropertyDrawer

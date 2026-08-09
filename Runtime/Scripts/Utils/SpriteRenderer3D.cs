@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 using UnityEditor;
 #endif
 
-namespace Abb2kTools
+namespace Abb2kTools.Utils
 {
     [ExecuteAlways]
     [RequireComponent(typeof(MeshRenderer))]

@@ -8,7 +8,7 @@ using UnityEngine.Events;
 using UnityEditor;
 #endif
 
-namespace Abb2kTools
+namespace Abb2kTools.Events
 {
     // HELPER ADDED: Safely fetches the Object ID across all Unity versions
     internal static class ObjectIdHelper

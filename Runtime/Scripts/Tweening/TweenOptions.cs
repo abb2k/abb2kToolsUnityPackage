@@ -12,7 +12,7 @@ using UnityEngine;
 using UnityEngine.Events;
 
 
-namespace Abb2kTools
+namespace Abb2kTools.Tweening
 {
 #if ODIN_INSPECTOR
     [InlineProperty, HideLabel]

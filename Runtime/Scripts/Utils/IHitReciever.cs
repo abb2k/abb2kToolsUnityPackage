@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Utils
 {
     public interface IHitReciever
     {

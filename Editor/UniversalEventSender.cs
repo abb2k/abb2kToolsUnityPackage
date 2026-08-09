@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace Abb2kTools
+namespace Abb2kTools.Events
 {
 public class UniversalEventSender : EditorWindow
 {

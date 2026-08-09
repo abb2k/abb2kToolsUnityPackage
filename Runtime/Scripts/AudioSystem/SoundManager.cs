@@ -1,12 +1,14 @@
 using System.Collections.Generic;
 using System.Linq;
+using Abb2kTools.Singletons;
+
 #if ODIN_INSPECTOR
 using Sirenix.Utilities;
 #endif
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace Abb2kTools
+namespace Abb2kTools.AudioSystem
 {
     [System.Serializable]
     public class Audio

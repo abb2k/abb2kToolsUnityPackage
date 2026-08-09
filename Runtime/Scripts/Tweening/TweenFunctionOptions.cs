@@ -6,7 +6,7 @@ using Sirenix.OdinInspector;
 #endif
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Tweening
 {
     [System.Serializable]
     public class TweenFunctionOptions : TweenOptions

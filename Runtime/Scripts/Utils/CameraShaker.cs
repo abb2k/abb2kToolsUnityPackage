@@ -1,8 +1,9 @@
 #if DOTWEEN
+using Abb2kTools.Singletons;
 using DG.Tweening;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Utils
 {
     [System.Serializable]
     public class CamShake

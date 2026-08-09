@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using System.Linq;
 
-namespace Abb2kTools
+namespace Abb2kTools.UI
 {
 [System.Serializable]
 public class UIReference<E> where E : VisualElement

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Events
 {
     [Serializable]
     public class InstancedEventBinding

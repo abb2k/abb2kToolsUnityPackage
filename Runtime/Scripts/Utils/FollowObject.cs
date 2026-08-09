@@ -3,7 +3,7 @@ using Sirenix.OdinInspector;
 #endif
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Utils
 {
     public class FollowObject : MonoBehaviour
     {

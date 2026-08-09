@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Collections
 {
     [Serializable]
     public class WeightedListElement<T>

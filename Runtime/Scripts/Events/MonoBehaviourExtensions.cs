@@ -2,7 +2,7 @@
 
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Events
 {
     public static class MonoBehaviourExtensions
     {

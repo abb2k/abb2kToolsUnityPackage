@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Collections
 {
     [CustomPropertyDrawer(typeof(WeightedList<>))]
     public class WeightedListDrawer : PropertyDrawer

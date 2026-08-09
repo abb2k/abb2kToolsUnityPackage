@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using UnityEditor;
 #endif
 
-namespace Abb2kTools 
+namespace Abb2kTools.Singletons
 {
     public class SingletonPrefabRegistry : ScriptableObject
     {

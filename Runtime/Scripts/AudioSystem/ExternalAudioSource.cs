@@ -1,9 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
+using Abb2kTools.Utils;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace Abb2kTools
+namespace Abb2kTools.AudioSystem
 {
     public class ExternalAudioSource : MonoBehaviour
     {

@@ -11,7 +11,7 @@ using Sirenix.Utilities.Editor;
 #endif
 #endif
 
-namespace Abb2kTools
+namespace Abb2kTools.Collections
 {
     /// <summary>
     /// Apply this to any List/Array field, OR directly to a custom List Class definition.

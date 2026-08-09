@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Abb2kTools 
+namespace Abb2kTools.Singletons
 {
     public abstract class SingletonBase : MonoBehaviour
     {

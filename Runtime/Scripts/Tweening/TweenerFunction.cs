@@ -5,7 +5,7 @@ using System.Reflection;
 using DG.Tweening;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Tweening
 {
     [System.Serializable]
     public class TweenerFunction
