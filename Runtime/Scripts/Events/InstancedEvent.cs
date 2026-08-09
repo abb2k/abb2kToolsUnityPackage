@@ -611,6 +611,16 @@ namespace Abb2kTools.Events
             owner.destroyCancellationToken.Register(Destroy);
             return this;
         }
+
+        public void Ping()
+        {
+            if (owner == null) return;
+            if (!isEnabled) return;
+            if (!Application.isPlaying && !activeInEditor) return;
+            if (IsPlayModeListener && !Application.isPlaying) return;
+
+            owner.PingListener(this);
+        }
     }
 
     [System.Serializable]
@@ -873,7 +883,6 @@ namespace Abb2kTools.Events
             for (int i = 0; i < allTargets.Length; i++)
             {
                 var candidate = allTargets[i] as UnityEngine.Object;
-                // Replaced GetInstanceID
                 if (candidate != null && ObjectIdHelper.GetId(candidate) == state.TargetInstanceId)
                 {
                     return candidate;
@@ -956,11 +965,15 @@ namespace Abb2kTools.Events
 
             return null;
         }
+
+        internal virtual void PingListener(ListenerHandle handle) { }
     }
 
     [System.Serializable]
     public abstract class InstancedEventBase<TSelf> : InstancedEventBaseOpaque where TSelf : InstancedEventBaseOpaque
     {
+        protected bool hasPonged = false;
+
         public InstancedEventBase()
         {
         }
@@ -969,6 +982,16 @@ namespace Abb2kTools.Events
         {
             return InstancedEventHandler.GetSharedEventInstance<TSelf>();
         }
+
+        protected bool ValidatePingState()
+        {
+            if (!hasPonged)
+            {
+                Debug.LogWarning($"Ping() called on {GetType().Name}, but no Pong values were saved.");
+                return false;
+            }
+            return true;
+        }
     }
 
     [System.Serializable]
@@ -976,11 +999,33 @@ namespace Abb2kTools.Events
     {
         public InstancedEvent() : base() {}
 
-        public static void Send() => Get().MSend();
+        public static void Send(bool setAsPong = false) => Get().MSend(setAsPong);
 
-        protected virtual void MSend()
+        protected virtual void MSend(bool setAsPong = false)
         {
+            if (setAsPong) MPong();
             SendBase(OnDelegate);
+        }
+
+        public static void Pong() => Get().MPong();
+
+        protected virtual void MPong()
+        {
+            hasPonged = true;
+        }
+
+        public static void Ping() => Get().MPing();
+
+        protected virtual void MPing()
+        {
+            if (!ValidatePingState()) return;
+            MSend();
+        }
+
+        internal override void PingListener(ListenerHandle handle)
+        {
+            if (!ValidatePingState()) return;
+            OnDelegate(handle.Callback);
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele)
@@ -1002,13 +1047,38 @@ namespace Abb2kTools.Events
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1>
     {
+        private T1 pongValue1;
+
         public InstancedEvent() : base() {}
 
-        public static void Send(T1 param1) => Get().MSend(param1);
+        public static void Send(T1 param1, bool setAsPong = false) => Get().MSend(param1, setAsPong);
 
-        protected virtual void MSend(T1 param1)
+        protected virtual void MSend(T1 param1, bool setAsPong = false)
         {
+            if (setAsPong) MPong(param1);
             SendBase(dele => OnDelegate(dele, param1));
+        }
+
+        public static void Pong(T1 param1) => Get().MPong(param1);
+
+        protected virtual void MPong(T1 param1)
+        {
+            pongValue1 = param1;
+            hasPonged = true;
+        }
+
+        public static void Ping() => Get().MPing();
+
+        protected virtual void MPing()
+        {
+            if (!ValidatePingState()) return;
+            MSend(pongValue1);
+        }
+
+        internal override void PingListener(ListenerHandle handle)
+        {
+            if (!ValidatePingState()) return;
+            OnDelegate(handle.Callback, pongValue1);
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1)
@@ -1030,13 +1100,40 @@ namespace Abb2kTools.Events
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1, T2> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1, T2>
     {
+        private T1 pongValue1;
+        private T2 pongValue2;
+
         public InstancedEvent() : base() {}
 
-        public static void Send(T1 param1, T2 param2) => Get().MSend(param1, param2);
+        public static void Send(T1 param1, T2 param2, bool setAsPong = false) => Get().MSend(param1, param2, setAsPong);
 
-        protected virtual void MSend(T1 param1, T2 param2)
+        protected virtual void MSend(T1 param1, T2 param2, bool setAsPong = false)
         {
+            if (setAsPong) MPong(param1, param2);
             SendBase(dele => OnDelegate(dele, param1, param2));
+        }
+
+        public static void Pong(T1 param1, T2 param2) => Get().MPong(param1, param2);
+
+        protected virtual void MPong(T1 param1, T2 param2)
+        {
+            pongValue1 = param1;
+            pongValue2 = param2;
+            hasPonged = true;
+        }
+
+        public static void Ping() => Get().MPing();
+
+        protected virtual void MPing()
+        {
+            if (!ValidatePingState()) return;
+            MSend(pongValue1, pongValue2);
+        }
+
+        internal override void PingListener(ListenerHandle handle)
+        {
+            if (!ValidatePingState()) return;
+            OnDelegate(handle.Callback, pongValue1, pongValue2);
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1, T2 param2)
@@ -1058,13 +1155,42 @@ namespace Abb2kTools.Events
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1, T2, T3> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1, T2, T3>
     {
+        private T1 pongValue1;
+        private T2 pongValue2;
+        private T3 pongValue3;
+
         public InstancedEvent() : base() {}
 
-        public static void Send(T1 param1, T2 param2, T3 param3) => Get().MSend(param1, param2, param3);
+        public static void Send(T1 param1, T2 param2, T3 param3, bool setAsPong = false) => Get().MSend(param1, param2, param3, setAsPong);
 
-        protected virtual void MSend(T1 param1, T2 param2, T3 param3)
+        protected virtual void MSend(T1 param1, T2 param2, T3 param3, bool setAsPong = false)
         {
+            if (setAsPong) MPong(param1, param2, param3);
             SendBase(dele => OnDelegate(dele, param1, param2, param3));
+        }
+
+        public static void Pong(T1 param1, T2 param2, T3 param3) => Get().MPong(param1, param2, param3);
+
+        protected virtual void MPong(T1 param1, T2 param2, T3 param3)
+        {
+            pongValue1 = param1;
+            pongValue2 = param2;
+            pongValue3 = param3;
+            hasPonged = true;
+        }
+
+        public static void Ping() => Get().MPing();
+
+        protected virtual void MPing()
+        {
+            if (!ValidatePingState()) return;
+            MSend(pongValue1, pongValue2, pongValue3);
+        }
+
+        internal override void PingListener(ListenerHandle handle)
+        {
+            if (!ValidatePingState()) return;
+            OnDelegate(handle.Callback, pongValue1, pongValue2, pongValue3);
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1, T2 param2, T3 param3)
@@ -1086,13 +1212,44 @@ namespace Abb2kTools.Events
     [System.Serializable]
     public abstract class InstancedEvent<TSelf, T1, T2, T3, T4> : InstancedEventBase<TSelf> where TSelf : InstancedEvent<TSelf, T1, T2, T3, T4>
     {
+        private T1 pongValue1;
+        private T2 pongValue2;
+        private T3 pongValue3;
+        private T4 pongValue4;
+
         public InstancedEvent() : base() {}
 
-        public static void Send(T1 param1, T2 param2, T3 param3, T4 param4) => Get().MSend(param1, param2, param3, param4);
+        public static void Send(T1 param1, T2 param2, T3 param3, T4 param4, bool setAsPong = false) => Get().MSend(param1, param2, param3, param4, setAsPong);
 
-        protected virtual void MSend(T1 param1, T2 param2, T3 param3, T4 param4)
+        protected virtual void MSend(T1 param1, T2 param2, T3 param3, T4 param4, bool setAsPong = false)
         {
+            if (setAsPong) MPong(param1, param2, param3, param4);
             SendBase(dele => OnDelegate(dele, param1, param2, param3, param4));
+        }
+
+        public static void Pong(T1 param1, T2 param2, T3 param3, T4 param4) => Get().MPong(param1, param2, param3, param4);
+
+        protected virtual void MPong(T1 param1, T2 param2, T3 param3, T4 param4)
+        {
+            pongValue1 = param1;
+            pongValue2 = param2;
+            pongValue3 = param3;
+            pongValue4 = param4;
+            hasPonged = true;
+        }
+
+        public static void Ping() => Get().MPing();
+
+        protected virtual void MPing()
+        {
+            if (!ValidatePingState()) return;
+            MSend(pongValue1, pongValue2, pongValue3, pongValue4);
+        }
+
+        internal override void PingListener(ListenerHandle handle)
+        {
+            if (!ValidatePingState()) return;
+            OnDelegate(handle.Callback, pongValue1, pongValue2, pongValue3, pongValue4);
         }
 
         protected virtual ListenerResult OnDelegate(System.Delegate dele, T1 param1, T2 param2, T3 param3, T4 param4)
