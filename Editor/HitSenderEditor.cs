@@ -1,8 +1,7 @@
 using UnityEngine;
 using UnityEditor;
-using Abb2kTools.Utils;
 
-namespace Abb2kTools.EditorScripts
+namespace Abb2kTools.Utils
 {
     [CustomEditor(typeof(HitSender))]
     public class HitSenderEditor : Editor

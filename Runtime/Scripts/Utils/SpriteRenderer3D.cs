@@ -1,6 +1,3 @@
-#if ODIN_INSPECTOR
-using Sirenix.OdinInspector;
-#endif
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -16,28 +13,16 @@ namespace Abb2kTools.Utils
     public class SpriteRenderer3D : MonoBehaviour
     {
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Sprite")]
-#endif
         private Sprite _sprite;
         private Sprite _oldSpr;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Color")]
-#endif
         private Color _color = Color.white;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Flip X")]
-#endif
         private bool _flipX;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Flip Y")]
-#endif
         private bool _flipY;
 
         public enum DrawMode
@@ -48,16 +33,9 @@ namespace Abb2kTools.Utils
         }
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Draw Mode")]
-#endif
         private DrawMode _drawMode = DrawMode.Simple;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [ShowIf("@this._drawMode != DrawMode.Simple")]
-        [OnValueChanged("UpdateMaterialData"), LabelText("Size")]
-#endif
         private Vector2 _size = Vector2.one;
 
         private MaterialPropertyBlock _mpb;
@@ -69,21 +47,12 @@ namespace Abb2kTools.Utils
         }
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Surface Type")]
-#endif
         private SurfaceType _surfaceType = SurfaceType.Opaque;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [Required, LabelText("Opaque Material")]
-#endif
         private Material opaqueMaterial;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [Required, LabelText("Transparent Material")]
-#endif
         private Material transparentMaterial;
 
         [SerializeField]
@@ -97,20 +66,17 @@ namespace Abb2kTools.Utils
             if (_mpb == null)
                 _mpb = new MaterialPropertyBlock();
         }
-        
-#if !ODIN_INSPECTOR
+
         void OnValidate()
         {
             UpdateMaterialData();
         }
-#endif
 
         void Start()
         {
             UpdateMaterialData();
         }
-        
-#if !ODIN_INSPECTOR
+
         private void Update()
         {
             if (_oldSpr != _sprite)
@@ -119,9 +85,8 @@ namespace Abb2kTools.Utils
                 UpdateMaterialData();
             }
         }
-#endif
 
-        private void UpdateMaterialData()
+        public void UpdateMaterialData()
         {
             if (_renderer == null)
                 _renderer = GetComponent<MeshRenderer>();
@@ -169,7 +134,7 @@ namespace Abb2kTools.Utils
             }
 
             _mpb.SetTexture("_MainTex", _sprite.texture);
-            _mpb.SetColor("_Color", _color); // Depending on your shader, this might need to be "_BaseColor"
+            _mpb.SetColor("_Color", _color); 
             _mpb.SetVector("_SprTiling", finalTiling);
             _mpb.SetVector("_SprOffset", finalOffset);
             
@@ -181,12 +146,8 @@ namespace Abb2kTools.Utils
         }
 
 #if UNITY_EDITOR
-#if ODIN_INSPECTOR
-        [Button("Open Sprite Editor"), PropertyOrder(-1)]
-#else
         [ContextMenu("Open Sprite Editor")]
-#endif
-        private void OpenSpriteEditor()
+        public void OpenSpriteEditor()
         {
             if (_sprite == null || _sprite.texture == null) 
             {
@@ -202,12 +163,8 @@ namespace Abb2kTools.Utils
         }
 #endif
 
-#if ODIN_INSPECTOR
-        [Button]
-#else
         [ContextMenu("SetNativeSize")]
-#endif
-        private void SetNativeSize()
+        public void SetNativeSize()
         {
             if (_sprite == null) return;
 
