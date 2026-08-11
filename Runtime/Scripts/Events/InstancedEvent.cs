@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
+using System.Text.RegularExpressions;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -415,9 +417,53 @@ namespace Abb2kTools.Events
             }
 
             IsSpawning = true;
-            restoredEvent = (InstancedEventBaseOpaque)Activator.CreateInstance(eventType);
+            try
+            {
+                restoredEvent = (InstancedEventBaseOpaque)Activator.CreateInstance(eventType);
+            }
+            catch (MissingMethodException)
+            {
+            #if UNITY_EDITOR
+                UnityEngine.Object typeScript = null;
+                string fakeStackTrace = "";
+
+                string pattern = $@"\b(?:class|struct|record)\s+{eventType.Name}\b";
+                Regex regex = new Regex(pattern);
+
+                string[] guids = UnityEditor.AssetDatabase.FindAssets("t:MonoScript");
+                
+                foreach (string guid in guids)
+                {
+                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    if (!path.StartsWith("Assets/")) continue; 
+
+                    string[] lines = System.IO.File.ReadAllLines(path);
+                    for (int i = 0; i < lines.Length; i++)
+                    {
+                        if (regex.IsMatch(lines[i]))
+                        {
+                            typeScript = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEditor.MonoScript>(path);
+                            
+                            fakeStackTrace = $"\n{eventType.Name}:.ctor() (at {path}:{i + 1})";
+                            break;
+                        }
+                    }
+                    
+                    if (typeScript != null) break; 
+                }
+
+                string errorMessage = $"Instanced Event '{eventType.Name}' doesn't have a default constructor! Please define one (an empty constructor) alongside your existing constructor!{fakeStackTrace}";
+
+                Debug.LogFormat(LogType.Error, LogOption.NoStacktrace, typeScript, errorMessage);
+            #else
+                Debug.LogError($"Instanced Event '{eventType.Name}' doesn't have a default constructor! Please define one (an empty constructor) alongside your existing constructor!");
+            #endif
+            }
             IsSpawning = false;
-            restoredEvent.RestoreFromPersistence();
+
+            if (restoredEvent != null)
+                restoredEvent.RestoreFromPersistence();
+
             return true;
         }
 
