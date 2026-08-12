@@ -1,17 +1,28 @@
-using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace Abb2kTools.AudioSystem
 {
-    // [CreateAssetMenu(fileName = "SoundBase", menuName = "Scriptable Objects/SoundBase")]
+    public struct PlayableClipData
+    {
+        public AudioClip Clip;
+        public float Volume;
+        public float Pitch;
+        public float Delay;
+        public AudioMixerGroup PreferredMixerGroup;
+    }
+    
     public abstract class SoundModificationBase : ScriptableObject
     {
-        internal abstract float? Length { get; }
-
-        internal AudioSource ApplySettings(AudioSource source, Func<AudioSource, AudioSource> externalApply)
-        {
-            return externalApply(ApplySettings(source));
-        }
-        abstract protected AudioSource ApplySettings(AudioSource source);
+        /// <summary>
+        /// Recursively gathers all clips, volume/pitch modifiers, and delays within this modification tree.
+        /// </summary>
+        public abstract void CollectPlayableClips(
+            List<PlayableClipData> result, 
+            float currentVolume = 1f, 
+            float currentPitch = 1f, 
+            float currentDelay = 0f
+        );
     }
 }

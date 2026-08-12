@@ -1,22 +1,19 @@
 using UnityEngine;
-using UnityEngine.Audio;
 
 namespace Abb2kTools.AudioSystem
 {
     [System.Serializable]
     public class SoundEffect : SoundBase
-    {   
-        [Header("Options")]
-        public SoundModificationBase sound;
-        public AudioMixerGroup output;
+    {
+        [Header("SFX Randomization Modifiers")]
+        [Tooltip("Multiplies against the base volume.")]
+        public Ranged volumeRange = new Ranged(0.9f, 1.1f);
+        [Tooltip("Multiplies against the base pitch.")]
+        public Ranged pitchRange = new Ranged(0.9f, 1.1f);
 
-        internal override float? Length => sound.Length;
-
-        override internal AudioSource ApplySettings(AudioSource source) => sound.ApplySettings(source, s =>
+        public SoundHandle Play(Transform attachedTransform = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
-            s.outputAudioMixerGroup = output;
-
-            return s;
-        });
+            return SoundManager.Instance.PlaySFX(this, attachedTransform, attachType);
+        }
     }
 }
