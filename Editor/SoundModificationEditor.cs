@@ -17,31 +17,29 @@ namespace Abb2kTools.AudioSystem
             GUILayout.Space(15);
             
             // Draw a nice styled UI box for the preview controls
-            EditorGUILayout.BeginVertical("box");
-            EditorGUILayout.LabelField("Audio Preview Controls", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             
             GUILayout.BeginHorizontal();
 
-            GUI.backgroundColor = new Color(0.6f, 1f, 0.6f); // Light green play button
+            GUI.backgroundColor = new Color(0.6f, 1f, 0.6f);
             if (GUILayout.Button("▶ Play Preview", GUILayout.Height(35)))
             {
                 EditorAudioPreviewer.PlayPreview((SoundModificationBase)target);
             }
 
-            GUI.backgroundColor = new Color(1f, 0.6f, 0.6f); // Light red stop button
+            GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
             if (GUILayout.Button("■ Stop", GUILayout.Height(35), GUILayout.Width(80)))
             {
                 EditorAudioPreviewer.StopPreview();
             }
 
-            GUI.backgroundColor = Color.white; // Reset color
+            GUI.backgroundColor = Color.white;
             GUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();
         }
 
         private void OnDisable()
         {
-            // Ensure audio stops if you click off the asset
             EditorAudioPreviewer.StopPreview();
         }
     }
