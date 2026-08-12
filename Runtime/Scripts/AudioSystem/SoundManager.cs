@@ -21,7 +21,7 @@ namespace Abb2kTools.AudioSystem
         }
 
         /// <summary>
-        /// Plays a one-shot SoundEffect with randomized parameters. Auto-destroys when done.
+        /// Plays a SoundEffect. Auto-destroys when done.
         /// </summary>
         public SoundHandle PlaySFX(SoundEffect sfxSettings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
@@ -40,7 +40,6 @@ namespace Abb2kTools.AudioSystem
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
-                // Apply the random values as multipliers on top of the base settings
                 sfxSettings.ApplyBaseSettings(source, clipData, false, randVol, randPitch);
                 
                 handle.AddSource(source, clipData, sfxSettings.volume * randVol, sfxSettings.pitch * randPitch);
@@ -64,15 +63,12 @@ namespace Abb2kTools.AudioSystem
             soundSettings.sound.CollectPlayableClips(clipsToPlay);
             if (clipsToPlay.Count == 0) return null;
 
-            // LOOP LOGIC FIX:
-            // If it's just 1 clip with no delay, use sample-accurate native looping.
-            // If it's a composition, use our custom Sequence Looping to preserve delays rhythm.
             bool useNativeLoop = soundSettings.loop && clipsToPlay.Count == 1 && clipsToPlay[0].Delay <= 0f;
             bool useSequenceLoop = soundSettings.loop && !useNativeLoop;
 
             ExternalAudioSource holder = GetOrCreateHolder(attached, attachType);
             
-            SoundHandle handle = new SoundHandle(soundSettings.soundID, holder, isPersistent: true)
+            SoundHandle handle = new(soundSettings.soundID, holder, isPersistent: true)
             {
                 SequenceLoop = useSequenceLoop
             };
@@ -80,10 +76,8 @@ namespace Abb2kTools.AudioSystem
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
-                // Pass 1f as multiplier since persistent sounds don't randomize
                 soundSettings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f);
                 
-                // Let the Handle know the absolute final volume so SetVolume chains accurately
                 handle.AddSource(source, clipData, soundSettings.volume, soundSettings.pitch);
             }
 
@@ -108,8 +102,10 @@ namespace Abb2kTools.AudioSystem
 
         private ExternalAudioSource GetOrCreateHolder(Transform attached, AudioAttachmentType attachType)
         {
-            if (attached == null) attached = transform;
-            ExternalAudioSource holder = null;
+            if (attached == null)
+                attached = transform;
+            
+            ExternalAudioSource holder;
 
             if (attachType == AudioAttachmentType.Direct)
             {

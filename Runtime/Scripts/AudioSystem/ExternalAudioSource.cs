@@ -17,7 +17,6 @@ namespace Abb2kTools.AudioSystem
 
         public AudioSource AddAudioSource()
         {
-            // Create a fresh AudioSource component for guaranteed clean playback
             AudioSource newSource = gameObject.AddComponent<AudioSource>();
             _addedSources.Add(newSource);
             return newSource;
@@ -30,16 +29,13 @@ namespace Abb2kTools.AudioSystem
             source.Stop();
             source.clip = null; 
 
-            // 1. Remove it from our tracking list
             if (_addedSources.Contains(source))
             {
                 _addedSources.Remove(source);
             }
 
-            // 2. Destroy the actual component so it doesn't clutter the GameObject
             Destroy(source);
 
-            // 3. Auto-cleanup the entire empty holder object if required
             if (DestroyEntireObjectOnDeplete && _addedSources.Count == 0)
             {
                 OnDestroyed?.Invoke(this);
@@ -49,12 +45,10 @@ namespace Abb2kTools.AudioSystem
 
         private void Update()
         {
-            // Follow the attached transform if this is an external holder
-            if (attached != null)
-            {
-                transform.position = attached.position;
-                transform.rotation = attached.rotation;
-            }
+            if (!attached) return;
+
+            transform.position = attached.position;
+            transform.rotation = attached.rotation;
         }
 
         private void OnDestroy() => OnDestroyed?.Invoke(this);

@@ -16,13 +16,8 @@ namespace Abb2kTools.AudioSystem
     public abstract class SoundModificationBase : ScriptableObject
     {
         /// <summary>
-        /// Recursively gathers all clips, volume/pitch modifiers, and delays within this modification tree.
+        /// Recursively gathers all clips.
         /// </summary>
-        public abstract void CollectPlayableClips(
-            List<PlayableClipData> result, 
-            float currentVolume = 1f, 
-            float currentPitch = 1f, 
-            float currentDelay = 0f
-        );
+        public abstract void CollectPlayableClips(List<PlayableClipData> result, float currentVolume = 1f, float currentPitch = 1f, float currentDelay = 0f);
     }
 }

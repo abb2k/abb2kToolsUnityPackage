@@ -11,18 +11,16 @@ namespace Abb2kTools.AudioSystem
         private class CompositionElement
         {
             public SoundModificationBase sound;
-            [Min(0)] public float volume = 1;
-            public float pitch = 1;
-            [Min(0)] public float playDelay = 0;
+            [Min(0)]
+            public float volume    = 1;
+            public float pitch     = 1;
+            [Min(0)]
+            public float playDelay = 0;
         }
 
         [SerializeField] private CompositionElement[] composition;
 
-        public override void CollectPlayableClips(
-            List<PlayableClipData> result, 
-            float currentVolume = 1f, 
-            float currentPitch = 1f, 
-            float currentDelay = 0f)
+        public override void CollectPlayableClips(List<PlayableClipData> result, float currentVolume = 1f, float currentPitch = 1f, float currentDelay = 0f)
         {
             if (composition == null) return;
 

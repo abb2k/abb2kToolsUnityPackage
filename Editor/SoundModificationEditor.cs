@@ -5,18 +5,15 @@ using UnityEngine;
 
 namespace Abb2kTools.AudioSystem
 {
-    // Targets both SoundModification and SoundComposition automatically
     [CustomEditor(typeof(SoundModificationBase), true)]
-    public class SoundModificationEditor : UnityEditor.Editor
+    public class SoundModificationEditor : Editor
     {
         public override void OnInspectorGUI()
         {
-            // Draw the default inspector fields (Options, Arrays, etc.)
             DrawDefaultInspector();
 
             GUILayout.Space(15);
             
-            // Draw a nice styled UI box for the preview controls
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             
             GUILayout.BeginHorizontal();
@@ -62,7 +59,6 @@ namespace Abb2kTools.AudioSystem
             public float PitchMult;
         }
 
-        // NEW: Added volume and pitch parameters
         public static void PlayPreview(SoundModificationBase soundBase, float volMult = 1f, float pitchMult = 1f)
         {
             StopPreview(); 
@@ -78,7 +74,6 @@ namespace Abb2kTools.AudioSystem
             {
                 if (clip.Clip != null)
                 {
-                    // Store the multipliers
                     _pendingClips.Add(new PreviewClip { Data = clip, Played = false, VolMult = volMult, PitchMult = pitchMult });
                 }
             }
@@ -124,7 +119,6 @@ namespace Abb2kTools.AudioSystem
                         var src = _previewGO.AddComponent<AudioSource>();
                         src.clip = pClip.Data.Clip;
                         
-                        // NEW: Apply the math for the accurate preview
                         src.volume = pClip.Data.Volume * pClip.VolMult;
                         src.pitch = pClip.Data.Pitch * pClip.PitchMult;
                         

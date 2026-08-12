@@ -12,19 +12,15 @@ namespace Abb2kTools.AudioSystem
         [SerializeField] private AudioClip clip;
         [Min(0)]
         [SerializeField] private float volume = 1f;
-        [SerializeField] private float pitch = 1f;
+        [SerializeField] private float pitch  = 1f;
         [SerializeField] private AudioMixerGroup preferredMixerGroup;
 
         public AudioClip Clip => clip;
-        public float Volume => volume;
-        public float Pitch => pitch;
+        public float Volume   => volume;
+        public float Pitch    => pitch;
         public AudioMixerGroup PreferredMixerGroup => preferredMixerGroup;
 
-        public override void CollectPlayableClips(
-            List<PlayableClipData> result, 
-            float currentVolume = 1f, 
-            float currentPitch = 1f, 
-            float currentDelay = 0f)
+        public override void CollectPlayableClips(List<PlayableClipData> result, float currentVolume = 1f, float currentPitch = 1f, float currentDelay = 0f)
         {
             if (clip == null) return;
 

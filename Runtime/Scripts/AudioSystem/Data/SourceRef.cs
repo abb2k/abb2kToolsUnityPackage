@@ -13,7 +13,7 @@ namespace Abb2kTools.AudioSystem
         public SourceRef(AudioSource source, string ID, ExternalAudioSource holder)
         {
             this.Source = source;
-            this.ID = ID;
+            this.ID     = ID;
             this.Holder = holder;
         }
 

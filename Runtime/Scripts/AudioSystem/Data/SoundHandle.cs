@@ -7,13 +7,13 @@ namespace Abb2kTools.AudioSystem
 {
     public class SoundHandle
     {
-        public string ID { get; }
-        public bool IsPersistent { get; }
+        public string ID                  { get; }
+        public bool IsPersistent          { get; }
         public ExternalAudioSource Holder { get; }
 
-        public bool IsPaused { get; private set; }
-        public bool IsStopped { get; private set; } = true;
-        public bool SequenceLoop { get; set; } // Set by Manager for complex loops
+        public bool IsPaused     { get; private set; }
+        public bool IsStopped    { get; private set; } = true;
+        public bool SequenceLoop { get; set; }
 
         private event Action OnCompleteEvent;
 
@@ -42,7 +42,7 @@ namespace Abb2kTools.AudioSystem
 
         public void AddSource(AudioSource source, PlayableClipData clipData, float volumeMultiplier, float pitchMultiplier)
         {
-            float duration = (clipData.Clip.length / Mathf.Max(0.001f, clipData.Pitch * pitchMultiplier));
+            float duration = clipData.Clip.length / Mathf.Max(0.001f, clipData.Pitch * pitchMultiplier);
             _sources.Add(new SourceData
             {
                 Source = source,
@@ -53,9 +53,6 @@ namespace Abb2kTools.AudioSystem
             });
         }
 
-        // ==========================================
-        // CHAINABLE METHODS
-        // ==========================================
         public SoundHandle OnComplete(Action callback)
         {
             OnCompleteEvent += callback;
@@ -76,9 +73,6 @@ namespace Abb2kTools.AudioSystem
             return this;
         }
 
-        // ==========================================
-        // CONTROLS
-        // ==========================================
         public SoundHandle Play()
         {
             if (!IsStopped && !IsPaused) return this; 
@@ -87,6 +81,7 @@ namespace Abb2kTools.AudioSystem
             IsPaused = false;
 
             if (_playbackRoutine != null) SoundManager.Instance.StopCoroutine(_playbackRoutine);
+
             _playbackRoutine = SoundManager.Instance.StartCoroutine(PlaybackRoutine());
             
             return this;
@@ -95,7 +90,9 @@ namespace Abb2kTools.AudioSystem
         public void Pause()
         {
             if (IsStopped) return;
+
             IsPaused = true;
+
             foreach (var s in _sources)
                 if (s.IsPlaying && s.Source != null) s.Source.Pause();
         }
@@ -103,7 +100,9 @@ namespace Abb2kTools.AudioSystem
         public void Resume()
         {
             if (IsStopped) return;
+
             IsPaused = false;
+
             foreach (var s in _sources)
                 if (s.IsPlaying && s.Source != null) s.Source.UnPause();
         }
@@ -111,6 +110,7 @@ namespace Abb2kTools.AudioSystem
         public void Stop()
         {
             if (IsStopped) return;
+
             IsStopped = true;
 
             if (_playbackRoutine != null) SoundManager.Instance.StopCoroutine(_playbackRoutine);
@@ -124,6 +124,7 @@ namespace Abb2kTools.AudioSystem
         public void DestroyHandle()
         {
             IsStopped = true;
+
             if (_playbackRoutine != null) SoundManager.Instance.StopCoroutine(_playbackRoutine);
 
             foreach (var s in _sources)
@@ -140,10 +141,10 @@ namespace Abb2kTools.AudioSystem
         {
             foreach (var s in _sources)
             {
-                s.DelayTimer = 0f;
+                s.DelayTimer    = 0f;
                 s.PlaybackTimer = 0f;
-                s.IsPlaying = false;
-                s.IsFinished = false;
+                s.IsPlaying     = false;
+                s.IsFinished    = false;
             }
 
             while (true)
@@ -178,13 +179,13 @@ namespace Abb2kTools.AudioSystem
                         
                         if (s.IsPlaying)
                         {
-                            if (!s.Source.loop) // Exclude native loopers from timer
+                            if (!s.Source.loop)
                             {
                                 s.PlaybackTimer += Time.deltaTime;
                                 if (s.PlaybackTimer >= s.Duration)
                                 {
                                     s.Source.Stop();
-                                    s.IsPlaying = false;
+                                    s.IsPlaying  = false;
                                     s.IsFinished = true;
                                     finishedCount++;
                                 }
@@ -192,22 +193,21 @@ namespace Abb2kTools.AudioSystem
                         }
                     }
 
-                    // SEQUENCE LOOP LOGIC
                     if (finishedCount >= _sources.Count)
                     {
                         if (SequenceLoop)
                         {
                             foreach (var s in _sources)
                             {
-                                s.DelayTimer = 0f;
+                                s.DelayTimer    = 0f;
                                 s.PlaybackTimer = 0f;
-                                s.IsPlaying = false;
-                                s.IsFinished = false;
+                                s.IsPlaying     = false;
+                                s.IsFinished    = false;
                             }
                         }
                         else
                         {
-                            break; // Exit entirely if not looping
+                            break;
                         }
                     }
                 }
