@@ -1,6 +1,3 @@
-#if ODIN_INSPECTOR
-using Sirenix.OdinInspector;
-#endif
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -16,17 +13,30 @@ namespace Abb2kTools.Utils
     public class SpriteRenderer3D : MonoBehaviour
     {
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Sprite")]
-#endif
         private Sprite _sprite;
         private Sprite _oldSpr;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Tiling")]
-#endif
-        private Vector2 _tiling = Vector2.one;
+        private Color _color = Color.white;
+
+        [SerializeField]
+        private bool _flipX;
+
+        [SerializeField]
+        private bool _flipY;
+
+        public enum DrawMode
+        {
+            Simple,
+            Sliced,
+            Tiled
+        }
+
+        [SerializeField]
+        private DrawMode _drawMode = DrawMode.Simple;
+
+        [SerializeField]
+        private Vector2 _size = Vector2.one;
 
         private MaterialPropertyBlock _mpb;
 
@@ -37,21 +47,12 @@ namespace Abb2kTools.Utils
         }
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [OnValueChanged("UpdateMaterialData"), LabelText("Surface Type")]
-#endif
         private SurfaceType _surfaceType = SurfaceType.Opaque;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [Required, LabelText("Opaque Material")]
-#endif
         private Material opaqueMaterial;
 
         [SerializeField]
-#if ODIN_INSPECTOR
-        [Required, LabelText("Transparent Material")]
-#endif
         private Material transparentMaterial;
 
         [SerializeField]
@@ -65,19 +66,17 @@ namespace Abb2kTools.Utils
             if (_mpb == null)
                 _mpb = new MaterialPropertyBlock();
         }
-#if !ODIN_INSPECTOR
+
         void OnValidate()
         {
             UpdateMaterialData();
         }
-#endif
 
         void Start()
         {
             UpdateMaterialData();
         }
-        
-#if !ODIN_INSPECTOR
+
         private void Update()
         {
             if (_oldSpr != _sprite)
@@ -86,9 +85,8 @@ namespace Abb2kTools.Utils
                 UpdateMaterialData();
             }
         }
-#endif
 
-        private void UpdateMaterialData()
+        public void UpdateMaterialData()
         {
             if (_renderer == null)
                 _renderer = GetComponent<MeshRenderer>();
@@ -119,20 +117,54 @@ namespace Abb2kTools.Utils
             Vector2 textureSize = new Vector2(_sprite.texture.width, _sprite.texture.height);
             Vector2 rectSize = new Vector2(_sprite.rect.width, _sprite.rect.height);
 
+            // Calculate Flip logic for Tiling and Offset
+            Vector2 finalTiling = rectSize / textureSize;
+            Vector2 finalOffset = _sprite.rect.position / textureSize;
+
+            if (_flipX)
+            {
+                finalTiling.x *= -1;
+                finalOffset.x += rectSize.x / textureSize.x;
+            }
+            
+            if (_flipY)
+            {
+                finalTiling.y *= -1;
+                finalOffset.y += rectSize.y / textureSize.y;
+            }
+
             _mpb.SetTexture("_MainTex", _sprite.texture);
-            _mpb.SetVector("_SprTiling", rectSize / textureSize);
-            _mpb.SetVector("_SprOffset", _sprite.rect.position / textureSize);
-            _mpb.SetVector("_tilingExtra", _tiling);
+            _mpb.SetColor("_Color", _color); 
+            _mpb.SetVector("_SprTiling", finalTiling);
+            _mpb.SetVector("_SprOffset", finalOffset);
+            
+            // Push DrawMode settings to shader so your custom material can handle 9-slicing/tiling logic
+            _mpb.SetFloat("_DrawMode", (float)_drawMode);
+            _mpb.SetVector("_Size", _size);
 
             _renderer.SetPropertyBlock(_mpb);
         }
 
-#if ODIN_INSPECTOR
-        [Button]
-#else
-        [ContextMenu("SetNativeSize")]
+#if UNITY_EDITOR
+        [ContextMenu("Open Sprite Editor")]
+        public void OpenSpriteEditor()
+        {
+            if (_sprite == null || _sprite.texture == null) 
+            {
+                Debug.LogWarning("No Sprite assigned to open in the Sprite Editor.");
+                return;
+            }
+
+            // Selects the texture in the project window
+            Selection.activeObject = _sprite.texture;
+            
+            // Opens the Sprite Editor window natively
+            EditorApplication.ExecuteMenuItem("Window/2D/Sprite Editor");
+        }
 #endif
-        private void SetNativeSize()
+
+        [ContextMenu("SetNativeSize")]
+        public void SetNativeSize()
         {
             if (_sprite == null) return;
 
@@ -150,6 +182,13 @@ namespace Abb2kTools.Utils
             scale.x = rectSize.x / textureLargest * scaleFactor;
             scale.y = rectSize.y / textureLargest * scaleFactor;
             scale.z = !setNativeSizeForY ? rectSize.x / textureLargest * scaleFactor : 1;
+
+            // If drawing as sliced or tiled, we should also initialize the size property to the rect size
+            if (_drawMode != DrawMode.Simple)
+            {
+                _size = new Vector2(scale.x, scale.y);
+                UpdateMaterialData();
+            }
 
             transform.localScale = scale;
 
