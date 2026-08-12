@@ -39,5 +39,41 @@ namespace Abb2kTools.AudioSystem
             if (sfx == null) return null;
             return sfx.Play(transform, attachType);
         }
+
+        /// <summary>
+        /// Retrieves/Creates a persistent sound using Direct attachment.
+        /// </summary>
+        public static SoundHandle MakeSound(this GameObject gameObject, Sound sound)
+        {
+            if (sound == null) return null;
+            return sound.GetHandle(gameObject.transform, AudioAttachmentType.Direct);
+        }
+
+        /// <summary>
+        /// Retrieves/Creates a persistent sound with a specified attachment type.
+        /// </summary>
+        public static SoundHandle MakeSound(this GameObject gameObject, Sound sound, AudioAttachmentType attachType)
+        {
+            if (sound == null) return null;
+            return sound.GetHandle(gameObject.transform, attachType);
+        }
+
+        /// <summary>
+        /// Retrieves/Creates a persistent sound using Direct attachment.
+        /// </summary>
+        public static SoundHandle MakeSound(this Transform transform, Sound sound)
+        {
+            if (sound == null) return null;
+            return sound.GetHandle(transform, AudioAttachmentType.Direct);
+        }
+
+        /// <summary>
+        /// Retrieves/Creates a persistent sound with a specified attachment type.
+        /// </summary>
+        public static SoundHandle MakeSound(this Transform transform, Sound sound, AudioAttachmentType attachType)
+        {
+            if (sound == null) return null;
+            return sound.GetHandle(transform, attachType);
+        }
     }
 }
