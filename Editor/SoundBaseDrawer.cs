@@ -1,10 +1,9 @@
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
-using Abb2kTools.AudioSystem;
 using System.Collections.Generic;
 
-namespace Abb2kTools.AudioSystem.Editor
+namespace Abb2kTools.AudioSystem
 {
     [CustomPropertyDrawer(typeof(SoundBase), true)]
     public class SoundBaseDrawer : PropertyDrawer
