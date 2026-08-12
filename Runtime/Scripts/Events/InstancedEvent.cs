@@ -667,6 +667,13 @@ namespace Abb2kTools.Events
 
             return owner.PingListener(this);
         }
+
+        public static implicit operator bool(ListenerHandle handle)
+        {
+            if (handle is null || handle.owner is null) return false;
+
+            return handle.isEnabled && !string.IsNullOrEmpty(handle.uniqueId);
+        }
     }
 
     [System.Serializable]

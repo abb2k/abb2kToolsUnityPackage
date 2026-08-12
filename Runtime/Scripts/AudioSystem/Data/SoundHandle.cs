@@ -220,5 +220,7 @@ namespace Abb2kTools.AudioSystem
 
             if (!IsPersistent) DestroyHandle();
         }
+
+        public static implicit operator bool(SoundHandle handle) => handle != null && !handle.IsStopped;
     }
 }
