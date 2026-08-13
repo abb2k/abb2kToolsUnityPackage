@@ -10,10 +10,13 @@ namespace Abb2kTools.AudioSystem
     {
         [Header("Options")]
         [SerializeField] private AudioClip clip;
-        [Min(0)]
-        [SerializeField] private float volume = 1f;
+        [Min(0)] [SerializeField] private float volume = 1f;
         [SerializeField] private float pitch  = 1f;
         [SerializeField] private AudioMixerGroup preferredMixerGroup;
+
+        [Header("Trimming")]
+        [Min(0)] [SerializeField] private float startOffset = 0f;
+        [Min(0)] [SerializeField] private float endOffset = 0f;
 
         public AudioClip Clip => clip;
         public float Volume   => volume;
@@ -24,12 +27,17 @@ namespace Abb2kTools.AudioSystem
         {
             if (clip == null) return;
 
+            float clampedStart = Mathf.Clamp(startOffset, 0f, clip.length);
+            float clampedEnd = Mathf.Clamp(endOffset, 0f, clip.length - clampedStart);
+
             result.Add(new PlayableClipData
             {
                 Clip = clip,
                 Volume = volume * currentVolume,
                 Pitch = pitch * currentPitch,
                 Delay = currentDelay,
+                StartOffset = clampedStart,
+                EndOffset = clampedEnd,
                 PreferredMixerGroup = preferredMixerGroup
             });
         }

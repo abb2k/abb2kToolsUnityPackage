@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using DG.Tweening; // Added DOTween integration
 
 namespace Abb2kTools.AudioSystem
 {
@@ -32,6 +33,10 @@ namespace Abb2kTools.AudioSystem
 
         private readonly List<SourceData> _sources = new();
         private Coroutine _playbackRoutine;
+        
+        private float _currentVolumeMultiplier = 1f;
+        private float _currentPitchMultiplier = 1f;
+        private readonly List<Tween> _activeTweens = new();
 
         public SoundHandle(string id, ExternalAudioSource holder, bool isPersistent)
         {
@@ -42,7 +47,7 @@ namespace Abb2kTools.AudioSystem
 
         public void AddSource(AudioSource source, PlayableClipData clipData, float volumeMultiplier, float pitchMultiplier)
         {
-            float duration = clipData.Clip.length / Mathf.Max(0.001f, clipData.Pitch * pitchMultiplier);
+            float duration = (clipData.Clip.length - clipData.StartOffset - clipData.EndOffset) / Mathf.Max(0.001f, clipData.Pitch * pitchMultiplier);
             _sources.Add(new SourceData
             {
                 Source = source,
@@ -61,16 +66,53 @@ namespace Abb2kTools.AudioSystem
 
         public SoundHandle SetVolume(float volumeMultiplier)
         {
+            _currentVolumeMultiplier = volumeMultiplier;
             foreach (var s in _sources)
-                if (s.Source != null) s.Source.volume = s.BaseVolume * volumeMultiplier;
+                if (s.Source != null) s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
             return this;
         }
 
         public SoundHandle SetPitch(float pitchMultiplier)
         {
+            _currentPitchMultiplier = pitchMultiplier;
             foreach (var s in _sources)
-                if (s.Source != null) s.Source.pitch = s.BasePitch * pitchMultiplier;
+                if (s.Source != null) s.Source.pitch = s.BasePitch * _currentPitchMultiplier;
             return this;
+        }
+        
+        /// <summary>
+        /// Fades the volume multiplier of this sound handle to a target value.
+        /// </summary>
+        public Tween DOFade(float endValue, float duration)
+        {
+            Tween t = DOTween.To(() => _currentVolumeMultiplier, x => SetVolume(x), endValue, duration);
+            TrackTween(t);
+            return t;
+        }
+
+        /// <summary>
+        /// Tweens the pitch multiplier of this sound handle to a target value.
+        /// </summary>
+        public Tween DOPitch(float endValue, float duration)
+        {
+            Tween t = DOTween.To(() => _currentPitchMultiplier, x => SetPitch(x), endValue, duration);
+            TrackTween(t);
+            return t;
+        }
+
+        private void TrackTween(Tween t)
+        {
+            _activeTweens.Add(t);
+            t.OnKill(() => _activeTweens.Remove(t));
+        }
+
+        private void KillAllActiveTweens()
+        {
+            foreach (var t in _activeTweens)
+            {
+                if (t != null && t.IsActive()) t.Kill();
+            }
+            _activeTweens.Clear();
         }
 
         public SoundHandle Play()
@@ -93,6 +135,9 @@ namespace Abb2kTools.AudioSystem
 
             IsPaused = true;
 
+            foreach (var t in _activeTweens)
+                if (t != null && t.IsActive()) t.Pause();
+
             foreach (var s in _sources)
                 if (s.IsPlaying && s.Source != null) s.Source.Pause();
         }
@@ -103,6 +148,9 @@ namespace Abb2kTools.AudioSystem
 
             IsPaused = false;
 
+            foreach (var t in _activeTweens)
+                if (t != null && t.IsActive()) t.Play();
+
             foreach (var s in _sources)
                 if (s.IsPlaying && s.Source != null) s.Source.UnPause();
         }
@@ -112,6 +160,7 @@ namespace Abb2kTools.AudioSystem
             if (IsStopped) return;
 
             IsStopped = true;
+            KillAllActiveTweens();
 
             if (_playbackRoutine != null) SoundManager.Instance.StopCoroutine(_playbackRoutine);
 
@@ -124,6 +173,7 @@ namespace Abb2kTools.AudioSystem
         public void DestroyHandle()
         {
             IsStopped = true;
+            KillAllActiveTweens();
 
             if (_playbackRoutine != null) SoundManager.Instance.StopCoroutine(_playbackRoutine);
 
@@ -168,6 +218,7 @@ namespace Abb2kTools.AudioSystem
                         {
                             if (s.DelayTimer >= s.ClipData.Delay)
                             {
+                                s.Source.time = s.ClipData.StartOffset; 
                                 s.Source.Play();
                                 s.IsPlaying = true;
                             }

@@ -63,7 +63,9 @@ namespace Abb2kTools.AudioSystem
             soundSettings.sound.CollectPlayableClips(clipsToPlay);
             if (clipsToPlay.Count == 0) return null;
 
-            bool useNativeLoop = soundSettings.loop && clipsToPlay.Count == 1 && clipsToPlay[0].Delay <= 0f;
+            bool hasOffsets = clipsToPlay.Count > 0 && (clipsToPlay[0].StartOffset > 0f || clipsToPlay[0].EndOffset > 0f);
+            
+            bool useNativeLoop = soundSettings.loop && clipsToPlay.Count == 1 && clipsToPlay[0].Delay <= 0f && !hasOffsets;
             bool useSequenceLoop = soundSettings.loop && !useNativeLoop;
 
             ExternalAudioSource holder = GetOrCreateHolder(attached, attachType);

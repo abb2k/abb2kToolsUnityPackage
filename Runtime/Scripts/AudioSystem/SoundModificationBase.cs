@@ -10,6 +10,8 @@ namespace Abb2kTools.AudioSystem
         public float Volume;
         public float Pitch;
         public float Delay;
+        public float StartOffset;
+        public float EndOffset;
         public AudioMixerGroup PreferredMixerGroup;
     }
     
