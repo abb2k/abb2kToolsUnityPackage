@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace Abb2kTools.AudioSystem
+namespace Abb2kTools.AudioSystem.Editor
 {
     [CustomEditor(typeof(SoundModificationBase), true)]
     public class SoundModificationEditor : UnityEditor.Editor
@@ -53,9 +53,6 @@ namespace Abb2kTools.AudioSystem
             List<PlayableClipData> clips = new();
             soundBase.CollectPlayableClips(clips);
 
-            // ==========================================
-            // SPACEBAR HOTKEY LISTENER
-            // ==========================================
             Event e = Event.current;
             if (e != null && e.type == EventType.KeyDown && e.keyCode == KeyCode.Space)
             {
@@ -64,9 +61,6 @@ namespace Abb2kTools.AudioSystem
                 Repaint();
             }
 
-            // ==========================================
-            // PREVIEW & ZOOM CONTROLS
-            // ==========================================
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             
             GUILayout.BeginHorizontal();
@@ -102,7 +96,6 @@ namespace Abb2kTools.AudioSystem
             _zoomY = GUILayout.HorizontalSlider(_zoomY, 1f, 10f, GUILayout.Width(100));
 
             GUILayout.EndHorizontal();
-
             GUILayout.Space(5);
 
             DrawTimelineGUI(soundBase, clips);
@@ -114,19 +107,9 @@ namespace Abb2kTools.AudioSystem
         private void TogglePlayPause(SoundModificationBase soundBase)
         {
             bool isPlayingHere = EditorAudioPreviewer.IsPlaying && EditorAudioPreviewer.CurrentTarget == soundBase;
-
-            if (!isPlayingHere)
-            {
-                EditorAudioPreviewer.PlayPreview(soundBase);
-            }
-            else if (EditorAudioPreviewer.IsPaused)
-            {
-                EditorAudioPreviewer.ResumePreview();
-            }
-            else
-            {
-                EditorAudioPreviewer.PausePreview();
-            }
+            if (!isPlayingHere) EditorAudioPreviewer.PlayPreview(soundBase);
+            else if (EditorAudioPreviewer.IsPaused) EditorAudioPreviewer.ResumePreview();
+            else EditorAudioPreviewer.PausePreview();
         }
 
         private void DrawTimelineGUI(SoundModificationBase soundBase, List<PlayableClipData> clips)
@@ -278,13 +261,44 @@ namespace Abb2kTools.AudioSystem
 
             EditorGUI.DrawRect(fullBlockRect, new Color(0.15f, 0.25f, 0.35f, 0.9f));
 
-            Texture2D waveformTex = GetWaveformTexture(clipData.Clip, 256, 64, new Color(0.4f, 0.8f, 1f, 0.8f), new Color(0f, 0f, 0f, 0f));
+            Color baseColor = new Color(0.4f, 0.8f, 1f, 0.8f);
+            if (clipData.Filters != null && clipData.Filters.enableDistortion)
+            {
+                baseColor = Color.Lerp(baseColor, new Color(1f, 0.3f, 0.1f, 0.9f), clipData.Filters.distortionLevel);
+            }
+
+            Texture2D waveformTex = GetWaveformTexture(clipData.Clip, 256, 64, baseColor, new Color(0f, 0f, 0f, 0f));
             if (waveformTex != null)
             {
                 float volumeScale = Mathf.Clamp01(clipData.Volume); 
+                if (clipData.Filters != null && clipData.Filters.enableDistortion) volumeScale = Mathf.Clamp01(volumeScale + clipData.Filters.distortionLevel);
+                
                 float waveHeight = fullBlockRect.height * volumeScale;
                 Rect waveRect = new Rect(fullBlockRect.x, fullBlockRect.y + ((fullBlockRect.height - waveHeight) / 2f), fullBlockRect.width, waveHeight);
+                
+                // Draw Base Waveform
                 GUI.DrawTexture(waveRect, waveformTex, ScaleMode.StretchToFill);
+
+                // 2. Draw Ghosted Echo Waveforms
+                if (clipData.Filters != null && clipData.Filters.enableEcho)
+                {
+                    float echoDelaySec = clipData.Filters.echoDelay / 1000f;
+                    int bounces = Mathf.Clamp(Mathf.RoundToInt(clipData.Filters.echoDecayRatio * 5f), 1, 5);
+                    
+                    for (int e = 1; e <= bounces; e++)
+                    {
+                        float ghostStartNorm = (trueStart + (echoDelaySec * e) - timelineStartTime) / timelineDuration;
+                        float ghostX = trackAreaRect.x + (ghostStartNorm * trackAreaRect.width);
+                        
+                        float ghostAlpha = 0.4f * Mathf.Pow(clipData.Filters.echoDecayRatio, e);
+                        
+                        Rect ghostRect = new Rect(ghostX, waveRect.y, blockWidth, waveRect.height);
+                        
+                        GUI.color = new Color(1f, 1f, 1f, ghostAlpha); 
+                        GUI.DrawTexture(ghostRect, waveformTex, ScaleMode.StretchToFill);
+                    }
+                    GUI.color = Color.white; 
+                }
             }
 
             float maxTrimWidth = fullBlockRect.width;
@@ -419,7 +433,6 @@ namespace Abb2kTools.AudioSystem
 
             serializedObject.ApplyModifiedProperties();
 
-            // FIX: Instantly live-sync the previewer active clips when dragging in play mode!
             if (EditorAudioPreviewer.IsPlaying && EditorAudioPreviewer.CurrentTarget == targetBase)
             {
                 EditorAudioPreviewer.RefreshLiveClips(targetBase);
@@ -609,9 +622,6 @@ namespace Abb2kTools.AudioSystem
             }
         }
 
-        /// <summary>
-        /// Updates clip parameters in real-time during live drag edits without restarting the preview timeline.
-        /// </summary>
         public static void RefreshLiveClips(SoundModificationBase soundBase)
         {
             if (!IsPlaying) return;
@@ -637,7 +647,6 @@ namespace Abb2kTools.AudioSystem
                         pClip.Source.outputAudioMixerGroup = newClipData.PreferredMixerGroup;
                 }
 
-                // Adjust played flag dynamically if the delay shifted around current playhead
                 if (currentTime < newClipData.Delay)
                 {
                     pClip.Played = false;
@@ -684,7 +693,12 @@ namespace Abb2kTools.AudioSystem
 
                     if (pClip.Source == null)
                     {
-                        pClip.Source = _previewGO.AddComponent<AudioSource>();
+                        GameObject clipGO = new GameObject("PreviewClip");
+                        clipGO.transform.parent = _previewGO.transform;
+                        pClip.Source = clipGO.AddComponent<AudioSource>();
+
+                        // Apply the filters to this isolated GameObject!
+                        pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
                         pClip.Source.volume = pClip.Data.Volume * pClip.VolMult;
                         pClip.Source.pitch = pClip.Data.Pitch * pClip.PitchMult;
@@ -728,7 +742,12 @@ namespace Abb2kTools.AudioSystem
 
                     if (pClip.Source == null)
                     {
-                        pClip.Source = _previewGO.AddComponent<AudioSource>();
+                        GameObject clipGO = new GameObject("PreviewClip");
+                        clipGO.transform.parent = _previewGO.transform;
+                        pClip.Source = clipGO.AddComponent<AudioSource>();
+
+                        // Apply the filters to this isolated GameObject!
+                        pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
                         pClip.Source.volume = pClip.Data.Volume * pClip.VolMult;
                         pClip.Source.pitch = pClip.Data.Pitch * pClip.PitchMult;
@@ -771,21 +790,37 @@ namespace Abb2kTools.AudioSystem
 
             foreach (var pClip in _pendingClips)
             {
+                // Calculate how long the filter tails need to survive after the clip ends
+                float tailDuration = 0f;
+                if (pClip.Data.Filters != null)
+                {
+                    if (pClip.Data.Filters.enableEcho) tailDuration = (pClip.Data.Filters.echoDelay / 1000f) * 5f; // Roughly 5 bounces
+                    if (pClip.Data.Filters.enableReverb) tailDuration = Mathf.Max(tailDuration, 3f); // Standard reverb tail
+                }
+
                 if (!pClip.Played)
                 {
                     allClipsStarted = false;
                     if (elapsed >= pClip.Data.Delay)
                     {
-                        pClip.Source = _previewGO.AddComponent<AudioSource>();
+                        GameObject clipGO = new GameObject("PreviewClip");
+                        clipGO.transform.parent = _previewGO.transform;
+                        
+                        pClip.Source = clipGO.AddComponent<AudioSource>();
                         pClip.Source.clip = pClip.Data.Clip;
                         pClip.Source.volume = pClip.Data.Volume * pClip.VolMult;
                         pClip.Source.pitch = pClip.Data.Pitch * pClip.PitchMult;
                         if (pClip.Data.PreferredMixerGroup != null) pClip.Source.outputAudioMixerGroup = pClip.Data.PreferredMixerGroup;
 
-                        pClip.Source.time = pClip.Data.StartOffset;
-                        pClip.Source.Play();
+                        pClip.Data.Filters?.ApplyTo(pClip.Source);
 
+                        pClip.Source.time = pClip.Data.StartOffset;
                         pClip.Duration = (pClip.Data.Clip.length - pClip.Data.StartOffset - pClip.Data.EndOffset) / Mathf.Max(0.001f, pClip.Source.pitch);
+                        
+                        // FIX: Use SetScheduledEndTime to stop reading the clip, but keep the AudioSource alive for the echo tail!
+                        pClip.Source.Play();
+                        pClip.Source.SetScheduledEndTime(AudioSettings.dspTime + pClip.Duration);
+
                         pClip.StartPlayTime = EditorApplication.timeSinceStartup;
                         pClip.Played = true;
                         isAnythingStillPlaying = true;
@@ -793,10 +828,17 @@ namespace Abb2kTools.AudioSystem
                 }
                 else
                 {
-                    if (pClip.Source != null && pClip.Source.isPlaying)
+                    if (pClip.Source != null && pClip.Source.gameObject != null)
                     {
-                        if (EditorApplication.timeSinceStartup - pClip.StartPlayTime >= pClip.Duration) pClip.Source.Stop();
-                        else isAnythingStillPlaying = true;
+                        // Wait for the duration PLUS the tail before physically destroying the source
+                        if (EditorApplication.timeSinceStartup - pClip.StartPlayTime >= (pClip.Duration + tailDuration)) 
+                        {
+                            GameObject.DestroyImmediate(pClip.Source.gameObject);
+                        }
+                        else 
+                        {
+                            isAnythingStillPlaying = true;
+                        }
                     }
                 }
             }

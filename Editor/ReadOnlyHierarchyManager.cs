@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 
-namespace Abb2kTools
+namespace Abb2kTools.Editor
 {
 [InitializeOnLoad]
 public static class ReadOnlyHierarchyManager

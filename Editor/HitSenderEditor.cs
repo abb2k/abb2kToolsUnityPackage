@@ -1,10 +1,10 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace Abb2kTools.Utils
+namespace Abb2kTools.Utils.Editor
 {
     [CustomEditor(typeof(HitSender))]
-    public class HitSenderEditor : Editor
+    public class HitSenderEditor : UnityEditor.Editor
     {
         private SerializedProperty hitRecieverObjProp;
         private SerializedProperty hitIDProp;

@@ -33,6 +33,8 @@ namespace Abb2kTools.AudioSystem
         [Tooltip("Trims X seconds off the end of the entire composition timeline.")]
         [Min(0)] [SerializeField] private float endOffset = 0f;
 
+        [SerializeField] public AudioFilterSettings filters;
+
 #if UNITY_EDITOR
         private void OnValidate()
         {
@@ -96,6 +98,11 @@ namespace Abb2kTools.AudioSystem
 
                     clip.StartOffset = Mathf.Clamp(clip.StartOffset, 0f, clip.Clip.length);
                     clip.EndOffset = Mathf.Clamp(clip.EndOffset, 0f, clip.Clip.length - clip.StartOffset);
+
+                    if (clip.Filters == null) clip.Filters = new AudioFilterSettings();
+                    else clip.Filters = clip.Filters.Clone();
+
+                    clip.Filters.MergeWithParent(this.filters);
 
                     result[i] = clip;
                 }

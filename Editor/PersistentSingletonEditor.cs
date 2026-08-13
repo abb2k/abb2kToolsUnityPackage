@@ -6,7 +6,7 @@ using UnityEditor.SceneManagement;
 using Sirenix.OdinInspector.Editor;
 #endif
 
-namespace Abb2kTools.Singletons
+namespace Abb2kTools.Singletons.Editor
 {
 #if ODIN_INSPECTOR
     

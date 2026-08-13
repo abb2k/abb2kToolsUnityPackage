@@ -23,6 +23,8 @@ namespace Abb2kTools.AudioSystem
         public float Pitch    => pitch;
         public AudioMixerGroup PreferredMixerGroup => preferredMixerGroup;
 
+        [SerializeField] public AudioFilterSettings filters;
+
         public override void CollectPlayableClips(List<PlayableClipData> result, float currentVolume = 1f, float currentPitch = 1f, float currentDelay = 0f)
         {
             if (clip == null) return;
@@ -38,7 +40,8 @@ namespace Abb2kTools.AudioSystem
                 Delay = currentDelay,
                 StartOffset = clampedStart,
                 EndOffset = clampedEnd,
-                PreferredMixerGroup = preferredMixerGroup
+                PreferredMixerGroup = preferredMixerGroup,
+                Filters = filters
             });
         }
     }

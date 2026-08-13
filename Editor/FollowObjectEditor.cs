@@ -2,10 +2,10 @@ using UnityEngine;
 using UnityEditor;
 using Abb2kTools.Utils;
 
-namespace Abb2kTools.Utils
+namespace Abb2kTools.Utils.Editor
 {
     [CustomEditor(typeof(FollowObject))]
-    public class FollowObjectEditor : Editor
+    public class FollowObjectEditor : UnityEditor.Editor
     {
         // General Properties
         private SerializedProperty targetProp;

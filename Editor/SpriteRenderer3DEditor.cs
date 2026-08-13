@@ -1,10 +1,10 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace Abb2kTools.Utils
+namespace Abb2kTools.Utils.Editor
 {
     [CustomEditor(typeof(SpriteRenderer3D))]
-    public class SpriteRenderer3DEditor : Editor
+    public class SpriteRenderer3DEditor : UnityEditor.Editor
     {
         private SerializedProperty spriteProp;
         private SerializedProperty colorProp;

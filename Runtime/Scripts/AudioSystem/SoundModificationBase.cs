@@ -13,6 +13,7 @@ namespace Abb2kTools.AudioSystem
         public float StartOffset;
         public float EndOffset;
         public AudioMixerGroup PreferredMixerGroup;
+        public AudioFilterSettings Filters;
     }
     
     public abstract class SoundModificationBase : ScriptableObject

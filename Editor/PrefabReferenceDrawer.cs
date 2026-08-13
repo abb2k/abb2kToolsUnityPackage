@@ -3,7 +3,7 @@ using System;
 using UnityEditor;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Editor
 {
 [CustomPropertyDrawer(typeof(PrefabReferenceBase<>))]
 public class PrefabReferenceDrawer : PropertyDrawer

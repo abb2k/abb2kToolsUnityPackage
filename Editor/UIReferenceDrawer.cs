@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System;
 using System.Reflection;
 
-namespace Abb2kTools.UI
+namespace Abb2kTools.UI.Editor
 {
 [CustomPropertyDrawer(typeof(UIReference<>), true)]
 public class UIReferenceDrawer : PropertyDrawer
