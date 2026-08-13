@@ -2,7 +2,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using DG.Tweening; // Added DOTween integration
+#if DOTWEEN
+using DG.Tweening;
+#endif
 
 namespace Abb2kTools.AudioSystem
 {
@@ -36,7 +38,10 @@ namespace Abb2kTools.AudioSystem
         
         private float _currentVolumeMultiplier = 1f;
         private float _currentPitchMultiplier = 1f;
+
+#if DOTWEEN
         private readonly List<Tween> _activeTweens = new();
+#endif
 
         public SoundHandle(string id, ExternalAudioSource holder, bool isPersistent)
         {
@@ -79,6 +84,8 @@ namespace Abb2kTools.AudioSystem
                 if (s.Source != null) s.Source.pitch = s.BasePitch * _currentPitchMultiplier;
             return this;
         }
+
+#if DOTWEEN
         
         /// <summary>
         /// Fades the volume multiplier of this sound handle to a target value.
@@ -114,6 +121,8 @@ namespace Abb2kTools.AudioSystem
             }
             _activeTweens.Clear();
         }
+
+#endif
 
         public SoundHandle Play()
         {
