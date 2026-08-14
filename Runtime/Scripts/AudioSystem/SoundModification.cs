@@ -23,7 +23,9 @@ namespace Abb2kTools.AudioSystem
         public float Pitch    => pitch;
         public AudioMixerGroup PreferredMixerGroup => preferredMixerGroup;
 
-        [SerializeField] public AudioFilterSettings filters;
+        [SerializeField] private AudioFilterSettings filters;
+
+        public override AudioFilterSettings Filters => filters;
 
         public override void CollectPlayableClips(List<PlayableClipData> result, float currentVolume = 1f, float currentPitch = 1f, float currentDelay = 0f)
         {

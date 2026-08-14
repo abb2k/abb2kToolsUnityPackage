@@ -33,7 +33,9 @@ namespace Abb2kTools.AudioSystem
         [Tooltip("Trims X seconds off the end of the entire composition timeline.")]
         [Min(0)] [SerializeField] private float endOffset = 0f;
 
-        [SerializeField] public AudioFilterSettings filters;
+        [SerializeField] private AudioFilterSettings filters;
+
+        public override AudioFilterSettings Filters => filters;
 
 #if UNITY_EDITOR
         private void OnValidate()
