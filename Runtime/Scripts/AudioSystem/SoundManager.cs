@@ -20,9 +20,6 @@ namespace Abb2kTools.AudioSystem
             }
         }
 
-        /// <summary>
-        /// Plays a SoundEffect. Auto-destroys when done.
-        /// </summary>
         public SoundHandle PlaySFX(SoundEffect sfxSettings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
             if (sfxSettings == null || sfxSettings.sound == null) return null;
@@ -41,17 +38,17 @@ namespace Abb2kTools.AudioSystem
             {
                 AudioSource source = holder.AddAudioSource();
                 sfxSettings.ApplyBaseSettings(source, clipData, false, randVol, randPitch);
-                
                 handle.AddSource(source, clipData, sfxSettings.volume * randVol, sfxSettings.pitch * randPitch);
             }
+
+            // Auto-detect and configure SoundCoding
+            if (sfxSettings.sound is SoundCoding coding)
+                handle.InitializeCoding(coding);
 
             handle.Play();
             return handle;
         }
 
-        /// <summary>
-        /// Gets an existing persistent sound by ID, or creates it if it doesn't exist.
-        /// </summary>
         public SoundHandle GetOrCreatePersistentSound(Sound soundSettings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
             if (soundSettings == null || soundSettings.sound == null) return null;
@@ -79,9 +76,12 @@ namespace Abb2kTools.AudioSystem
             {
                 AudioSource source = holder.AddAudioSource();
                 soundSettings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f);
-                
                 handle.AddSource(source, clipData, soundSettings.volume, soundSettings.pitch);
             }
+
+            // Auto-detect and configure SoundCoding
+            if (soundSettings.sound is SoundCoding coding)
+                handle.InitializeCoding(coding);
 
             if (!string.IsNullOrEmpty(soundSettings.soundID))
                 _persistentSounds[soundSettings.soundID] = handle;
@@ -104,8 +104,7 @@ namespace Abb2kTools.AudioSystem
 
         private ExternalAudioSource GetOrCreateHolder(Transform attached, AudioAttachmentType attachType)
         {
-            if (attached == null)
-                attached = transform;
+            if (attached == null) attached = transform;
             
             ExternalAudioSource holder;
 
