@@ -60,5 +60,70 @@ namespace Abb2kTools.AudioSystem
             else
                 audioSource.outputAudioMixerGroup = clipData.PreferredMixerGroup;
         }
+
+        /// <summary>
+        /// Analyzes the asset and calculates the exact timeline metadata of what will play, 
+        /// including all randomizations, filters, delays, and offsets.
+        /// </summary>
+        public SoundAudioInfo GetAudioInfo(float globalVolumeMult = 1f, float globalPitchMult = 1f)
+        {
+            var info = new SoundAudioInfo();
+            var clips = new System.Collections.Generic.List<PlayableClipData>();
+            
+            sound.CollectPlayableClips(clips, globalVolumeMult, globalPitchMult, 0f);
+
+            info.TotalClips = clips.Count;
+            var mixerCounts = new System.Collections.Generic.Dictionary<AudioMixerGroup, int>();
+
+            float maxEndTime = 0f;
+            float maxEndTimeWithTails = 0f;
+
+            foreach (var clip in clips)
+            {
+                if (clip.Clip == null) continue;
+
+                float pitch = Mathf.Max(0.001f, clip.Pitch);
+                float actualDuration = (clip.Clip.length - clip.StartOffset - clip.EndOffset) / pitch;
+                
+                float clipEndTime = clip.Delay + actualDuration;
+
+                if (clipEndTime > maxEndTime) 
+                    maxEndTime = clipEndTime;
+
+                float tail = 0f;
+                if (clip.Filters != null)
+                {
+                    if (clip.Filters.enableDistortion || clip.Filters.enableEcho || clip.Filters.enableReverb) 
+                        info.ContainsFilters = true;
+
+                    if (clip.Filters.enableEcho) tail = (clip.Filters.echoDelay / 1000f) * 5f; 
+                    if (clip.Filters.enableReverb) tail = Mathf.Max(tail, 3f); 
+                }
+
+                if (clipEndTime + tail > maxEndTimeWithTails) 
+                    maxEndTimeWithTails = clipEndTime + tail;
+
+                if (clip.PreferredMixerGroup != null)
+                {
+                    if (mixerCounts.ContainsKey(clip.PreferredMixerGroup)) mixerCounts[clip.PreferredMixerGroup]++;
+                    else mixerCounts[clip.PreferredMixerGroup] = 1;
+                }
+            }
+
+            info.TotalDuration = maxEndTime;
+            info.DurationWithTails = maxEndTimeWithTails;
+
+            int highestCount = 0;
+            foreach (var kvp in mixerCounts)
+            {
+                if (kvp.Value > highestCount)
+                {
+                    highestCount = kvp.Value;
+                    info.DominantMixerGroup = kvp.Key;
+                }
+            }
+
+            return info;
+        }
     }
 }

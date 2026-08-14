@@ -86,7 +86,7 @@ namespace Abb2kTools.Singletons.Editor
 #else
 
     [CustomEditor(typeof(SingletonBase), true)]
-    public class SingletonEditor : Editor
+    public class SingletonEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {
