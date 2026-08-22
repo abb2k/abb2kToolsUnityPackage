@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace Abb2kTools.AudioSystem
 {
+    [Icon("packages/com.abb2k.abb2ktools/Editor/Icons/SoundManager.png")]
     public class SoundManager : PersistentSingleton<SoundManager>
     {
         private readonly Dictionary<string, SoundHandle> _persistentSounds = new();

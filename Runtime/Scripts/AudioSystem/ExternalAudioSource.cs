@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace Abb2kTools.AudioSystem
 {
+    [Icon("packages/com.abb2k.abb2ktools/Editor/Icons/ExternalAudioSource.png")]
     public class ExternalAudioSource : MonoBehaviour
     {
         public Transform attached;
