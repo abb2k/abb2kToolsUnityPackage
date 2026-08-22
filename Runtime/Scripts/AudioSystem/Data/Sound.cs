@@ -6,7 +6,7 @@ namespace Abb2kTools.AudioSystem
     public class Sound : SoundBase
     {
         [Header("Persistent Options")]
-        public string soundID;
+        public string soundID = "No ID!";
         public bool loop = true;
 
         /// <summary>

@@ -219,7 +219,15 @@ namespace Abb2kTools.AudioSystem.Editor
                 EditorGUIUtility.singleLineHeight
             );
 
-            property.isExpanded = EditorGUI.Foldout(foldoutRect, property.isExpanded, displayLabel, true);
+            if (property.serializedObject.targetObject is AdvancedAudioSource)
+            {
+                property.isExpanded = true;
+                EditorGUI.LabelField(foldoutRect, displayLabel, EditorStyles.boldLabel);
+            }
+            else
+            {
+                property.isExpanded = EditorGUI.Foldout(foldoutRect, property.isExpanded, displayLabel, true);
+            }
 
             if (!property.isExpanded)
             {
@@ -244,9 +252,14 @@ namespace Abb2kTools.AudioSystem.Editor
                         );
 
                         GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
-                        if (GUI.Button(tinyButtonRect, "▶", EditorStyles.miniButton))
+                        
+                        // Check if shift is held before drawing the button
+                        bool isShiftClick = Event.current.shift;
+                        GUIContent tinyBtnContent = new GUIContent("▶", "Click to preview\nShift-Click to preview with 3D settings in Scene");
+                        
+                        if (GUI.Button(tinyButtonRect, tinyBtnContent, EditorStyles.miniButton))
                         {
-                            TriggerPreview(property);
+                            TriggerPreview(property, isShiftClick);
                         }
                         GUI.backgroundColor = Color.white;
                     }
@@ -322,11 +335,15 @@ namespace Abb2kTools.AudioSystem.Editor
                             Rect stopBtnRect = new Rect(buttonRectFull.xMax - 75f, buttonRectFull.y, 75f, buttonRectFull.height);
                             
                             GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
-                            if (GUI.Button(playBtnRect, "▶ Preview Audio Settings"))
+
+                            bool isShiftClick = Event.current.shift;
+                            GUIContent playBtnContent = new GUIContent("▶ Preview Audio Settings", "Click to preview\nShift-Click to preview with 3D settings in Scene");
+
+                            if (GUI.Button(playBtnRect, playBtnContent))
                             {
-                                TriggerPreview(property);
+                                TriggerPreview(property, isShiftClick);
                             }
-                            
+                                                        
                             GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
                             if (GUI.Button(stopBtnRect, "■ Stop"))
                             {
@@ -455,7 +472,7 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorGUI.EndProperty();
         }
 
-        private void TriggerPreview(SerializedProperty property)
+        private void TriggerPreview(SerializedProperty property, bool use3DSettings = false)
         {
             var soundProp = property.FindPropertyRelative(Sound);
             if (soundProp == null || soundProp.objectReferenceValue == null) return;
@@ -481,7 +498,17 @@ namespace Abb2kTools.AudioSystem.Editor
                 basePitch *= Random.Range(pMin, pMax);
             }
 
-            EditorAudioPreviewer.PlayPreview(mod, baseVol, basePitch);
+            Transform targetTransform = null;
+            
+            if (use3DSettings)
+            {
+                if (property.serializedObject.targetObject is Component targetComponent)
+                {
+                    targetTransform = targetComponent.transform;
+                }
+            }
+
+            EditorAudioPreviewer.PlayPreview(mod, baseVol, basePitch, targetTransform, use3DSettings ? property : null);
         }
     }
 }
