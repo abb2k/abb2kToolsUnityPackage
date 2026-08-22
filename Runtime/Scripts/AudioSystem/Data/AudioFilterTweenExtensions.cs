@@ -1,3 +1,4 @@
+#if DOTWEEN
 using DG.Tweening;
 using UnityEngine;
 
@@ -35,3 +36,4 @@ namespace Abb2kTools.AudioSystem
         }
     }
 }
+#endif
