@@ -85,16 +85,12 @@ namespace Abb2kTools.AudioSystem
         {
             CodingData = coding;
             
-            // Because SoundCoding can contain multi-clip compositions (SoundComposition), 
-            // SoundManager allocates an AudioSource for every individual clip in the hierarchy.
-            // We configure all of them to respect their respective delays and trims.
             foreach (var s in _sources)
             {
                 if (s.Source == null) continue;
 
                 coding.Filters?.ApplyTo(s.Source);
                 
-                // If it's a persistent/coding handle, we manage playback times manually in PlaybackRoutine
                 s.Source.loop = false; 
             }
         }
@@ -112,12 +108,10 @@ namespace Abb2kTools.AudioSystem
 
             CurrentSection = sec;
             
-            // Position all underlying AudioSources relative to the section's start time
             foreach (var s in _sources)
             {
                 if (s.Source == null) continue;
 
-                // Calculate where this specific clip falls relative to the section start
                 float clipTargetTime = sec.startTime + s.ClipData.Delay + s.ClipData.StartOffset;
                 s.Source.time = Mathf.Clamp(clipTargetTime, 0f, s.Source.clip.length - 0.01f);
                 

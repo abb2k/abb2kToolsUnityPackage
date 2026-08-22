@@ -65,6 +65,8 @@ namespace Abb2kTools.AudioSystem.Editor
             serializedObject.Update();
             SoundCoding coding = (SoundCoding)target;
 
+            EditorGUILayout.HelpBox("This Feature is a work in progress and may be changed!", MessageType.Warning);
+
             EditorGUILayout.PropertyField(serializedObject.FindProperty("inputSound"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("filters"));
 
@@ -434,6 +436,10 @@ namespace Abb2kTools.AudioSystem.Editor
             {
                 _isolatedSection = null;
                 StartPreview(coding, targetTime);
+
+                _isPaused = true;
+                if (_primarySource != null) _primarySource.Pause();
+                if (_secondarySource != null) _secondarySource.Pause();
             }
             else if (_primarySource != null && _primarySource.clip != null)
             {
@@ -539,6 +545,10 @@ namespace Abb2kTools.AudioSystem.Editor
                     if (leftHandle.Contains(e.mousePosition)) StartDrag(index, type, 1, e.mousePosition.x);
                     else if (rightHandle.Contains(e.mousePosition)) StartDrag(index, type, 2, e.mousePosition.x);
                     else if (activeBody.Contains(e.mousePosition)) StartDrag(index, type, 0, e.mousePosition.x);
+
+                    _isPaused = true;
+                    if (_primarySource != null) _primarySource.Pause();
+                    if (_secondarySource != null) _secondarySource.Pause();
                 }
             }
             else if (type == 1 && e.type == EventType.MouseDown && e.button == 0 && rightHandle.Contains(e.mousePosition))

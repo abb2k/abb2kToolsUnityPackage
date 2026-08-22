@@ -13,7 +13,7 @@ namespace Abb2kTools.AudioSystem
         {
             public SoundModificationBase sound;
             [Min(0)] public float volume    = 1;
-            public float pitch     = 1;
+            public float pitch              = 1;
             [Min(0)] public float playDelay = 0;
             
             [Header("Trimming")]
