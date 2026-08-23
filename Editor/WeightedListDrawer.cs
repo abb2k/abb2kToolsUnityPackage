@@ -5,24 +5,52 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace Abb2kTools.Collections
+namespace Abb2kTools.Collections.Editor
 {
     [CustomPropertyDrawer(typeof(WeightedList<>))]
     public class WeightedListDrawer : PropertyDrawer
     {
-        private const float BoxPadding = 6f;
-        private const float HeaderHeight = 18f;
-
         private readonly Dictionary<string, ReorderableList> lists = new();
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            return GetList(property).GetHeight();
+            if (!property.isExpanded)
+                return EditorGUIUtility.singleLineHeight;
+
+            return GetList(property).GetHeight() + EditorGUIUtility.singleLineHeight + 4f;
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
+            position.height = EditorGUIUtility.singleLineHeight;
+
+            // Calculate total weight for the header display
+            SerializedProperty elements = property.FindPropertyRelative("elements");
+            float total = 0f;
+            if (elements != null)
+            {
+                for (int i = 0; i < elements.arraySize; i++)
+                    total += elements.GetArrayElementAtIndex(i).FindPropertyRelative("_weight").floatValue;
+            }
+
+            string labelText = $"{label.text} (Total Weight: {total:0.##})";
+
+            // Draw clean main foldout header
+            property.isExpanded = EditorGUI.Foldout(position, property.isExpanded, labelText, true);
+
+            if (!property.isExpanded)
+                return;
+
+            // Draw the reorderable list right below the foldout title line
+            position.y += EditorGUIUtility.singleLineHeight + 4f;
+            position.height = GetList(property).GetHeight();
+
+            int oldIndent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+
             GetList(property).DoList(position);
+
+            EditorGUI.indentLevel = oldIndent;
         }
 
         private ReorderableList GetList(SerializedProperty property)
@@ -32,28 +60,20 @@ namespace Abb2kTools.Collections
 
             SerializedProperty elements = property.FindPropertyRelative("elements");
 
-            list = new ReorderableList(property.serializedObject, elements, true, true, true, true);
-
-            list.drawHeaderCallback = rect =>
-            {
-                float total = 0f;
-                for (int i = 0; i < elements.arraySize; i++)
-                    total += elements.GetArrayElementAtIndex(i).FindPropertyRelative("_weight").floatValue;
-
-                EditorGUI.LabelField(rect, $"{property.displayName} (Total Weight: {total:0.##})");
-            };
+            // Pass false for 'displayHeader' since we handle the foldout header cleanly above
+            list = new ReorderableList(property.serializedObject, elements, true, false, true, true);
 
             list.elementHeightCallback = index =>
             {
-                SerializedProperty element = elements.GetArrayElementAtIndex(index);
-                SerializedProperty value = element.FindPropertyRelative("element");
+                SerializedProperty entry = elements.GetArrayElementAtIndex(index);
+                SerializedProperty value = entry.FindPropertyRelative("element");
 
-                float valueHeight = GetValueHeight(value);
+                float valueHeight = EditorGUI.GetPropertyHeight(value, true);
+                float sliderHeight = EditorGUIUtility.singleLineHeight;
+                float helpBoxHeight = EditorGUIUtility.singleLineHeight + 4;
+                float spacing = 12f;
 
-                return valueHeight
-                       + EditorGUIUtility.singleLineHeight  // weight slider
-                       + EditorGUIUtility.singleLineHeight  // help box
-                       + 20; // padding between sections
+                return valueHeight + sliderHeight + helpBoxHeight + spacing;
             };
 
             list.drawElementCallback = (rect, index, active, focused) =>
@@ -63,22 +83,38 @@ namespace Abb2kTools.Collections
                 SerializedProperty weight = entry.FindPropertyRelative("_weight");
 
                 rect.y += 4;
-
+                
+                const float leftIndentOffset = 10f;
                 const float rightPadding = 12f;
 
-                float valueHeight = GetValueHeight(value);
+                int oldIndent = EditorGUI.indentLevel;
+                EditorGUI.indentLevel = 0;
 
-                Rect valueRect = new Rect(rect.x, rect.y, rect.width - rightPadding, valueHeight);
-                DrawValue(valueRect, value);
+                Rect adjustedRect = new Rect(
+                    rect.x + leftIndentOffset, 
+                    rect.y, 
+                    rect.width - leftIndentOffset - rightPadding, 
+                    rect.height);
 
+                string elementTitle = GetElementTitle(value, index);
+
+                // 1. Draw the element with the dynamic title label
+                float valueHeight = EditorGUI.GetPropertyHeight(value, true);
+                Rect valueRect = new Rect(adjustedRect.x, adjustedRect.y, adjustedRect.width, valueHeight);
+                
+                GUIContent elementLabel = new GUIContent(elementTitle);
+                EditorGUI.PropertyField(valueRect, value, elementLabel, true);
+
+                // 2. Draw the weight slider right below the element
                 Rect weightRect = new Rect(
-                    rect.x,
-                    valueRect.yMax + 5,
-                    rect.width - rightPadding,
+                    adjustedRect.x,
+                    valueRect.yMax + 4,
+                    adjustedRect.width,
                     EditorGUIUtility.singleLineHeight);
 
                 weight.floatValue = EditorGUI.Slider(weightRect, "Weight", weight.floatValue, 0f, 100f);
 
+                // 3. Calculate and display calculated chance info box
                 float total = 0f;
                 for (int i = 0; i < elements.arraySize; i++)
                     total += elements.GetArrayElementAtIndex(i).FindPropertyRelative("_weight").floatValue;
@@ -86,107 +122,34 @@ namespace Abb2kTools.Collections
                 float chance = total > 0 ? weight.floatValue / total * 100f : 0;
 
                 Rect chanceRect = new Rect(
-                    rect.x,
+                    adjustedRect.x,
                     weightRect.yMax + 3,
-                    rect.width - rightPadding,
+                    adjustedRect.width,
                     EditorGUIUtility.singleLineHeight);
 
-                EditorGUI.HelpBox(chanceRect, $"Chance: {chance:0.0}%   Weight: {weight.floatValue:0.##}", MessageType.None);
+                EditorGUI.HelpBox(chanceRect, $"Chance: {chance:0.0}%    Weight: {weight.floatValue:0.##}", MessageType.None);
+
+                EditorGUI.indentLevel = oldIndent;
             };
 
             lists[property.propertyPath] = list;
             return list;
         }
 
-
-        // ---- helpers ----
-
-        private static bool ShouldFlatten(SerializedProperty value)
+        private static string GetElementTitle(SerializedProperty value, int index)
         {
-            // Only plain [Serializable] classes/structs get the foldout-bypass + box treatment.
-            // Built-in types (Vector3, Color, Rect, object refs, primitives...) draw as a single
-            // control already, so leave them alone.
-            return value.propertyType == SerializedPropertyType.Generic
-                   && value.hasVisibleChildren;
-        }
-
-        private static float GetChildrenHeight(SerializedProperty value)
-        {
-            float height = 0f;
-            SerializedProperty child = value.Copy();
+            SerializedProperty first = value.Copy();
             SerializedProperty end = value.GetEndProperty();
-            bool enterChildren = true;
 
-            while (child.NextVisible(enterChildren) && !SerializedProperty.EqualContents(child, end))
+            if (first.NextVisible(true) && !SerializedProperty.EqualContents(first, end))
             {
-                height += EditorGUI.GetPropertyHeight(child, true) + EditorGUIUtility.standardVerticalSpacing;
-                enterChildren = false;
+                if (first.propertyType == SerializedPropertyType.String && !string.IsNullOrEmpty(first.stringValue))
+                {
+                    return first.stringValue;
+                }
             }
 
-            return height;
-        }
-
-        private static float GetValueHeight(SerializedProperty value)
-        {
-            if (!ShouldFlatten(value))
-                return EditorGUI.GetPropertyHeight(value, GUIContent.none, true);
-
-            float height = 0f;
-            SerializedProperty child = value.Copy();
-            SerializedProperty end = value.GetEndProperty();
-            bool enterChildren = true;
-
-            while (child.NextVisible(enterChildren) && !SerializedProperty.EqualContents(child, end))
-            {
-                height += EditorGUI.GetPropertyHeight(child, true) + EditorGUIUtility.standardVerticalSpacing;
-                enterChildren = false;
-            }
-
-            return height;
-        }
-
-        // // Peeks the first visible child; if it's a string with a value, use it as the title
-        // // (mirrors the vanilla "name field becomes element label" convention).
-        // private static string GetElementTitle(SerializedProperty value, int index)
-        // {
-        //     SerializedProperty first = value.Copy();
-        //     SerializedProperty end = value.GetEndProperty();
-
-        //     if (first.NextVisible(true) && !SerializedProperty.EqualContents(first, end))
-        //     {
-        //         if (first.propertyType == SerializedPropertyType.String
-        //             && !string.IsNullOrEmpty(first.stringValue))
-        //         {
-        //             return first.stringValue;
-        //         }
-        //     }
-
-        //     return $"Element {index}";
-        // }
-
-        private static void DrawValue(Rect rect, SerializedProperty value)
-        {
-            if (!ShouldFlatten(value))
-            {
-                EditorGUI.PropertyField(rect, value, GUIContent.none, true);
-                return;
-            }
-
-            SerializedProperty child = value.Copy();
-            SerializedProperty end = value.GetEndProperty();
-            bool enterChildren = true;
-            float y = rect.y;
-
-            while (child.NextVisible(enterChildren) && !SerializedProperty.EqualContents(child, end))
-            {
-                float h = EditorGUI.GetPropertyHeight(child, true);
-                Rect childRect = new Rect(rect.x, y, rect.width, h);
-
-                EditorGUI.PropertyField(childRect, child, true);
-
-                y += h + EditorGUIUtility.standardVerticalSpacing;
-                enterChildren = false;
-            }
+            return $"Element {index}";
         }
     }
 }

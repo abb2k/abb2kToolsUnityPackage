@@ -6,7 +6,7 @@ using UnityEditor.SceneManagement;
 using Sirenix.OdinInspector.Editor;
 #endif
 
-namespace Abb2kTools.Singletons
+namespace Abb2kTools.Singletons.Editor
 {
 #if ODIN_INSPECTOR
     
@@ -86,7 +86,7 @@ namespace Abb2kTools.Singletons
 #else
 
     [CustomEditor(typeof(SingletonBase), true)]
-    public class SingletonEditor : Editor
+    public class SingletonEditor : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {

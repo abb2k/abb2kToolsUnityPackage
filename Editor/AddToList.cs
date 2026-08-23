@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Editor
 {
 public class AddToList
 {

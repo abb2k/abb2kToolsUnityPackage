@@ -3,68 +3,69 @@ using System;
 using UnityEditor;
 using UnityEngine;
 
-namespace Abb2kTools
+namespace Abb2kTools.Editor
 {
-[CustomPropertyDrawer(typeof(PrefabReferenceBase<>))]
-public class PrefabReferenceDrawer : PropertyDrawer
-{
-    public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+    // Adding 'true' to CustomPropertyDrawer ensures it targets inherited generic classes smoothly
+    [CustomPropertyDrawer(typeof(PrefabReferenceBase<>), true)]
+    public class PrefabReferenceDrawer : PropertyDrawer
     {
-        EditorGUI.BeginProperty(position, label, property);
-
-        SerializedProperty componentProp = property.FindPropertyRelative("_component");
-
-        Type fieldType = fieldInfo.FieldType;
-        if (fieldType.IsArray) 
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-            fieldType = fieldType.GetElementType();
-        }
-        else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(System.Collections.Generic.List<>))
-        {
-            fieldType = fieldType.GetGenericArguments()[0];
-        }
+            EditorGUI.BeginProperty(position, label, property);
 
-        Type componentType = fieldType.GetGenericArguments()[0];
+            SerializedProperty componentProp = property.FindPropertyRelative("_component");
 
-        GameObject currentPrefab = null;
-        if (componentProp.objectReferenceValue != null)
-        {
-            currentPrefab = ((Component)componentProp.objectReferenceValue).gameObject;
-        }
-
-        EditorGUI.BeginChangeCheck();
-
-        GameObject newPrefab = (GameObject)EditorGUI.ObjectField(position, label, currentPrefab, typeof(GameObject), false);
-
-        if (EditorGUI.EndChangeCheck())
-        {
-            if (newPrefab == null)
+            Type fieldType = fieldInfo.FieldType;
+            if (fieldType.IsArray) 
             {
-                componentProp.objectReferenceValue = null;
+                fieldType = fieldType.GetElementType();
             }
-            else
+            else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(System.Collections.Generic.List<>))
             {
-                Component comp = newPrefab.GetComponent(componentType);
-                
-                if (comp != null && comp.transform.parent == null)
+                fieldType = fieldType.GetGenericArguments()[0];
+            }
+
+            Type componentType = fieldType.GetGenericArguments()[0];
+
+            GameObject currentPrefab = null;
+            if (componentProp.objectReferenceValue != null)
+            {
+                currentPrefab = ((Component)componentProp.objectReferenceValue).gameObject;
+            }
+
+            EditorGUI.BeginChangeCheck();
+
+            GameObject newPrefab = (GameObject)EditorGUI.ObjectField(position, label, currentPrefab, typeof(GameObject), false);
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                if (newPrefab == null)
                 {
-                    componentProp.objectReferenceValue = comp;
-                }
-                else if (comp == null)
-                {
-                    Debug.LogWarning($"[PrefabReference] The selected prefab does not have the '{componentType.Name}' component!");
                     componentProp.objectReferenceValue = null;
                 }
                 else
                 {
-                    Debug.LogWarning($"[PrefabReference] The '{componentType.Name}' component must be on the ROOT object of the prefab.");
-                    componentProp.objectReferenceValue = null;
+                    Component comp = newPrefab.GetComponent(componentType);
+                    
+                    if (comp != null && comp.transform.parent == null)
+                    {
+                        componentProp.objectReferenceValue = comp;
+                    }
+                    else if (comp == null)
+                    {
+                        Debug.LogWarning($"[PrefabReference] The selected prefab does not have the '{componentType.Name}' component!");
+                        componentProp.objectReferenceValue = null;
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[PrefabReference] The '{componentType.Name}' component must be on the ROOT object of the prefab.");
+                        componentProp.objectReferenceValue = null;
+                    }
                 }
             }
-        }
 
-        EditorGUI.EndProperty();
+            EditorGUI.EndProperty();
+        }
     }
 }
 #endif
-}

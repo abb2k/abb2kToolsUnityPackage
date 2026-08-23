@@ -1,225 +1,133 @@
 using System.Collections.Generic;
-using System.Linq;
 using Abb2kTools.Singletons;
-
-#if ODIN_INSPECTOR
-using Sirenix.Utilities;
-#endif
 using UnityEngine;
-using UnityEngine.Audio;
 
 namespace Abb2kTools.AudioSystem
 {
-    [System.Serializable]
-    public class Audio
-    {
-        public AudioSource Source {get; private set;}
-        public string ID {get; private set;}
-        public ExternalAudioSource Holder {get; private set;}
-
-        private Audio(){}
-        public Audio(AudioSource source, string ID, ExternalAudioSource holder)
-        {
-            this.Source = source;
-            this.ID = ID;
-            this.Holder = holder;
-        }
-
-        public bool CompareID(string otherID) => ID.Equals(otherID);
-    }
-
-    [System.Serializable]
-    public class SourceSettings
-    {   
-        [Header("Options")]
-        public AudioClip clip;
-        public AudioMixerGroup output;
-        [Min(0)]
-        public float volume = 1;
-        public float pitch = 1;
-        public bool loop;
-        [Range(-1, 1)]
-        public float panStereo = 0;
-        [Range(0, 1)]
-        public float spatialBlend = 0;
-        [Range(0, 1.1f)]
-        public float reverbZoneMix = 0;
-        [Range(0, 256)]
-        public int prio = 0;
-        [Header("3D")]
-        [Range(0, 5)]
-        public float dopplerLevel = 0;
-        [Range(0, 360)]
-        public float spread = 0;
-        public AudioRolloffMode rolloff = AudioRolloffMode.Logarithmic;
-        [Min(0)]
-        public float minDist = 1;
-        [Min(0)]
-        public float maxDist = 500;
-
-        public AudioSource ApplySettings(AudioSource source)
-        {
-            source.clip = clip;
-            source.volume = volume;
-            source.pitch = pitch;
-            source.loop = loop;
-            source.panStereo = panStereo;
-            source.playOnAwake = false;
-            source.spatialBlend = spatialBlend;
-            source.reverbZoneMix = reverbZoneMix;
-            source.priority = prio;
-            source.dopplerLevel = dopplerLevel;
-            source.rolloffMode = rolloff;
-            source.minDistance = minDist;
-            source.maxDistance = maxDist;
-            source.spread = spread;
-            source.outputAudioMixerGroup = output;
-
-            return source;
-        }
-    }
-
-    [System.Serializable]
-    public class Sound
-    {   
-        [Header("Options")]
-        public AudioClip clip;
-        [Min(0)]
-        public float volume = 1;
-        public float pitch = 1;
-        [Range(-1, 1)]
-        public float panStereo = 0;
-    }
-
-    public enum AudioAttachmentType
-    {
-        Direct,
-        External
-    }
-
+    [Icon("packages/com.abb2k.abb2ktools/Editor/Icons/SoundManager.png")]
     public class SoundManager : PersistentSingleton<SoundManager>
     {
-        private Dictionary<string, Audio> longLivingSound = new();
-        private Dictionary<Transform, ExternalAudioSource> objectForTranform = new();
+        private readonly Dictionary<string, SoundHandle> _persistentSounds = new();
+        private readonly Dictionary<Transform, ExternalAudioSource> _externalHolders = new();
 
         private AudioListener _mainListener;
-        private AudioListener MainListener
+        public AudioListener MainListener
         {
-            get => GrabListener();
-            set => _mainListener = value;
+            get
+            {
+                if (!_mainListener)
+                    _mainListener = FindAnyObjectByType<AudioListener>();
+                return _mainListener;
+            }
         }
 
-        private AudioListener GrabListener()
+        public SoundHandle PlaySFX(SoundEffect sfxSettings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
-            if (!_mainListener)
-                _mainListener = FindAnyObjectByType<AudioListener>();
+            if (sfxSettings == null || sfxSettings.sound == null) return null;
 
-            return _mainListener;
+            List<PlayableClipData> clipsToPlay = new();
+            sfxSettings.sound.CollectPlayableClips(clipsToPlay);
+            if (clipsToPlay.Count == 0) return null;
+
+            ExternalAudioSource holder = GetOrCreateHolder(attached, attachType);
+            SoundHandle handle = new SoundHandle(null, holder, isPersistent: false);
+
+            float randVol = sfxSettings.volumeRange.GetRandomInRange();
+            float randPitch = sfxSettings.pitchRange.GetRandomInRange();
+
+            foreach (var clipData in clipsToPlay)
+            {
+                AudioSource source = holder.AddAudioSource();
+                sfxSettings.ApplyBaseSettings(source, clipData, false, randVol, randPitch);
+                handle.AddSource(source, clipData, sfxSettings.volume * randVol, sfxSettings.pitch * randPitch);
+            }
+
+            // Auto-detect and configure SoundCoding
+            if (sfxSettings.sound is SoundCoding coding)
+                handle.InitializeCoding(coding);
+
+            handle.Play();
+            return handle;
         }
 
-        private (AudioSource, ExternalAudioSource) CreateSource(SourceSettings settings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
+        public SoundHandle GetOrCreatePersistentSound(Sound soundSettings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
-            AudioSource source = null;
+            if (soundSettings == null || soundSettings.sound == null) return null;
 
-            ExternalAudioSource obj = null;
+            if (_persistentSounds.TryGetValue(soundSettings.soundID, out var existingHandle))
+                return existingHandle;
 
-            if (attached == null)
-                attached = transform;
+            List<PlayableClipData> clipsToPlay = new();
+            soundSettings.sound.CollectPlayableClips(clipsToPlay);
+            if (clipsToPlay.Count == 0) return null;
+
+            bool hasOffsets = clipsToPlay.Count > 0 && (clipsToPlay[0].StartOffset > 0f || clipsToPlay[0].EndOffset > 0f);
+            
+            bool useNativeLoop = soundSettings.loop && clipsToPlay.Count == 1 && clipsToPlay[0].Delay <= 0f && !hasOffsets;
+            bool useSequenceLoop = soundSettings.loop && !useNativeLoop;
+
+            ExternalAudioSource holder = GetOrCreateHolder(attached, attachType);
+            
+            SoundHandle handle = new(soundSettings.soundID, holder, isPersistent: true)
+            {
+                SequenceLoop = useSequenceLoop
+            };
+
+            foreach (var clipData in clipsToPlay)
+            {
+                AudioSource source = holder.AddAudioSource();
+                soundSettings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f);
+                handle.AddSource(source, clipData, soundSettings.volume, soundSettings.pitch);
+            }
+
+            // Auto-detect and configure SoundCoding
+            if (soundSettings.sound is SoundCoding coding)
+                handle.InitializeCoding(coding);
+
+            if (!string.IsNullOrEmpty(soundSettings.soundID))
+                _persistentSounds[soundSettings.soundID] = handle;
+
+            return handle;
+        }
+
+        public SoundHandle GetPersistentSound(string soundID)
+        {
+            return _persistentSounds.TryGetValue(soundID, out var handle) ? handle : null;
+        }
+
+        public void RemovePersistentSound(string soundID)
+        {
+            if (_persistentSounds.ContainsKey(soundID))
+            {
+                _persistentSounds.Remove(soundID);
+            }
+        }
+
+        private ExternalAudioSource GetOrCreateHolder(Transform attached, AudioAttachmentType attachType)
+        {
+            if (attached == null) attached = transform;
+            
+            ExternalAudioSource holder;
 
             if (attachType == AudioAttachmentType.Direct)
             {
-                if (!attached.gameObject.TryGetComponent(out obj))
-                    obj = attached.gameObject.AddComponent<ExternalAudioSource>();
-                source = obj.AddAudioSource();
+                if (!attached.gameObject.TryGetComponent(out holder))
+                    holder = attached.gameObject.AddComponent<ExternalAudioSource>();
             }
-            else if (attachType == AudioAttachmentType.External)
+            else
             {
-                
-                if (!objectForTranform.ContainsKey(attached))
+                if (!_externalHolders.TryGetValue(attached, out holder) || holder == null)
                 {
-                    obj = new GameObject("Audio Source").AddComponent<ExternalAudioSource>();
-                    obj.transform.SetParent(transform);
-                    obj.SetAttached(attached);
-                    obj.DestroyEntireObjectOnDeplete = true;
-                    objectForTranform.Add(attached, obj);
-                }
-                else
-                {
-                    obj = objectForTranform[attached];
-                }
+                    var holderGO = new GameObject($"AudioSourceHolder_[{attached.name}]");
+                    holderGO.transform.SetParent(transform);
+                    holder = holderGO.AddComponent<ExternalAudioSource>();
+                    holder.SetAttached(attached);
+                    holder.DestroyEntireObjectOnDeplete = true;
 
-                source = obj.AddAudioSource();
-            }
-
-            if (!source) return (source, obj);
-
-            obj.OnDestroyed -= OnSourceKilled;
-            obj.OnDestroyed += OnSourceKilled;
-
-            return (settings.ApplySettings(source), obj);
-        }
-
-        public Audio CreateNewSource(string ID, SourceSettings settings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
-        {
-            var source = CreateSource(settings, attached, attachType);
-            longLivingSound.Add(ID, new Audio(source.Item1, ID, source.Item2));
-
-            return longLivingSound[ID];
-        }
-
-        public Audio GetSource(string ID)
-        {
-            return longLivingSound.ContainsKey(ID) ? longLivingSound[ID] : null;
-        }
-
-        public void DestroySource(string ID)
-        {
-            if (!longLivingSound.ContainsKey(ID)) return;
-
-            longLivingSound[ID].Holder.DeleteSource(longLivingSound[ID].Source);
-
-            if (objectForTranform.ContainsKey(longLivingSound[ID].Holder.attached))
-            {                
-                if (longLivingSound[ID].Holder.AddedSources.Count == 0)
-                {
-                    objectForTranform.Remove(longLivingSound[ID].Holder.attached);
-
-                    Destroy(longLivingSound[ID].Holder.gameObject);
+                    _externalHolders[attached] = holder;
                 }
             }
-
-            longLivingSound.Remove(ID);
-        }
-
-        public AudioSource CreateSFX(SourceSettings settings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
-        {
-            if (settings.clip == null) return null;
-
-            var source = CreateSource(settings, attached, attachType);
-            source.Item2.SetKillTimerForSource(source.Item1, source.Item1.clip.length);
-            source.Item1.Play();
-            return settings.ApplySettings(source.Item1);
-        }
-
-        void OnSourceKilled(ExternalAudioSource externalSource)
-        {
-            if (objectForTranform.ContainsKey(externalSource.transform))
-                objectForTranform.Remove(externalSource.transform);
-            if (externalSource.attached != null && objectForTranform.ContainsKey(externalSource.attached))
-                objectForTranform.Remove(externalSource.attached);
-
-            HashSet<string> IDSToRemove = new();
-
-            var sources = externalSource.AddedSources;
-            
-            foreach (var (ID, Audio) in longLivingSound)
-            {
-                if (sources.Contains(Audio.Source))
-                    IDSToRemove.Add(ID);
-            }
-
-            foreach (var x in IDSToRemove)
-                longLivingSound.Remove(x);
+            return holder;
         }
     }
 }

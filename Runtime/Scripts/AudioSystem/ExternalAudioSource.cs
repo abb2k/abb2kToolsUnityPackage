@@ -1,64 +1,57 @@
-using System.Collections;
+using System;
 using System.Collections.Generic;
-using Abb2kTools.Utils;
 using UnityEngine;
-using UnityEngine.Events;
 
 namespace Abb2kTools.AudioSystem
 {
+    [Icon("packages/com.abb2k.abb2ktools/Editor/Icons/ExternalAudioSource.png")]
     public class ExternalAudioSource : MonoBehaviour
     {
-        public event UnityAction<ExternalAudioSource> OnDestroyed;
-        public HashSet<AudioSource> AddedSources {get; private set;} = new();
-        [HideInInspector]
-        public bool DestroyEntireObjectOnDeplete;
         public Transform attached;
-        private FollowObject follow;
-        public void SetAttached(Transform attach)
-        {
-            this.attached = attach;
-            
-            if (!gameObject.TryGetComponent(out follow))
-                follow = gameObject.AddComponent<FollowObject>();
+        public bool DestroyEntireObjectOnDeplete = false;
 
-            follow.target = attach;
-        }
+        public event Action<ExternalAudioSource> OnDestroyed;
+
+        private readonly List<AudioSource> _addedSources = new();
+
+        public void SetAttached(Transform target) => attached = target;
 
         public AudioSource AddAudioSource()
         {
-            var source = gameObject.AddComponent<AudioSource>();
-            AddedSources.Add(source);
-            return source;
+            AudioSource newSource = gameObject.AddComponent<AudioSource>();
+            _addedSources.Add(newSource);
+            return newSource;
         }
 
         public void DeleteSource(AudioSource source)
         {
-            if (!AddedSources.Contains(source)) return;
-            AddedSources.Remove(source);
+            if (source == null) return;
+            
+            source.Stop();
+            source.clip = null; 
+
+            if (_addedSources.Contains(source))
+            {
+                _addedSources.Remove(source);
+            }
 
             Destroy(source);
 
-            if (AddedSources.Count != 0) return;
-
-            if (DestroyEntireObjectOnDeplete)
-                Destroy(gameObject);
-            else
-                Destroy(this);
-        }
-
-        public void SetKillTimerForSource(AudioSource source, float time)
-        {
-            StartCoroutine(Timer(source, time));
-            IEnumerator Timer(AudioSource source, float time)
+            if (DestroyEntireObjectOnDeplete && _addedSources.Count == 0)
             {
-                yield return new WaitForSeconds(time);
-                DeleteSource(source);
+                OnDestroyed?.Invoke(this);
+                Destroy(gameObject);
             }
         }
 
-        void OnDestroy()
+        private void Update()
         {
-            OnDestroyed?.Invoke(this);
+            if (!attached) return;
+
+            transform.position = attached.position;
+            transform.rotation = attached.rotation;
         }
+
+        private void OnDestroy() => OnDestroyed?.Invoke(this);
     }
 }

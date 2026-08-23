@@ -1,28 +1,13 @@
 using System;
-#if ODIN_INSPECTOR
-using Sirenix.OdinInspector;
-#endif
 using UnityEngine;
 
 namespace Abb2kTools.Utils
 {
     public class HitSender : MonoBehaviour
     {
-#if !ODIN_INSPECTOR
         [SerializeField]
-        [Header("Reference")]
-#else
-        [SerializeField, HideInInspector]
-#endif
         private GameObject _hitRecieverObj;
-#if ODIN_INSPECTOR
-        [BoxGroup("Reference")]
-        [ShowInInspector, PropertyOrder(-1), SceneObjectsOnly, ValidateInput(
-            "ValidateGameObject",
-            "To work the 'HitReciever' interface must be set, or the object in this field must have a 'IHitReciever' component on it.",
-            InfoMessageType.Warning
-        )]
-#endif
+
         public GameObject HitRecieverObj
         {
             get => _hitRecieverObj;
@@ -35,12 +20,9 @@ namespace Abb2kTools.Utils
                     _hitReciever = null;
             }
         }
-        [SerializeField, HideInInspector]
+
         private IHitReciever _hitReciever;
-#if ODIN_INSPECTOR
-        [BoxGroup("Reference")]
-        [ShowInInspector, SceneObjectsOnly, PropertyOrder(-1)]
-#endif
+
         public IHitReciever HitReciever
         {
             get
@@ -58,11 +40,6 @@ namespace Abb2kTools.Utils
             }
         }
 
-#if ODIN_INSPECTOR
-        [BoxGroup("Options")]
-#else
-        [Header("Options")]
-#endif
         public int hitID;
 
         [Flags]
@@ -74,46 +51,15 @@ namespace Abb2kTools.Utils
             Exit = 1 << 2
         }
 
-#if ODIN_INSPECTOR
-        [BoxGroup("Options")]
-#else
-        [Header("3D")]
-#endif
         public bool send3D;
-
-#if ODIN_INSPECTOR
-        [BoxGroup("Options/3D"), ShowIf("send3D"), LabelText("Collision"), LabelWidth(52.5f)]
-#endif
         public HitTypes sendCollision3D;
-#if ODIN_INSPECTOR
-        [BoxGroup("Options/3D"), ShowIf("send3D"), LabelText("Trigger"), LabelWidth(52.5f)]
-#endif
         public HitTypes sendTrigger3D;
 
-#if ODIN_INSPECTOR
-        [BoxGroup("Options")]
-#else
-        [Header("2D")]
-#endif
         public bool send2D;
-
-#if ODIN_INSPECTOR
-        [BoxGroup("Options/2D"), ShowIf("send2D"), LabelText("Collision"), LabelWidth(52.5f)]
-#endif
         public HitTypes sendCollision2D;
-#if ODIN_INSPECTOR
-        [BoxGroup("Options/2D"), ShowIf("send2D"), LabelText("Trigger"), LabelWidth(52.5f)]
-#endif
         public HitTypes sendTrigger2D;
 
-#if ODIN_INSPECTOR
-        private bool ValidateGameObject(GameObject HitRecieverObj)
-        {
-            return HitReciever == null ? HitRecieverObj.TryGetComponent(out IHitReciever _) : true;
-        }
-#endif
-
-#region Collision
+        #region Collision
 
         void OnCollisionEnter(Collision collision)
         {
@@ -133,8 +79,9 @@ namespace Abb2kTools.Utils
                 HitReciever?.OnCollision(collision, MakeData(IHitReciever.HitType.Exit));
         }
 
-#endregion
-#region Trigger
+        #endregion
+
+        #region Trigger
 
         void OnTriggerEnter(Collider other)
         {
@@ -154,8 +101,9 @@ namespace Abb2kTools.Utils
                 HitReciever?.OnTrigger(other, MakeData(IHitReciever.HitType.Exit));
         }
 
-#endregion
-#region Collision2D
+        #endregion
+
+        #region Collision2D
 
         void OnCollisionEnter2D(Collision2D collision)
         {
@@ -175,8 +123,9 @@ namespace Abb2kTools.Utils
                 HitReciever?.OnCollision2D(collision, MakeData(IHitReciever.HitType.Exit));
         }
 
-#endregion
-#region Trigger2D
+        #endregion
+
+        #region Trigger2D
 
         void OnTriggerEnter2D(Collider2D collision)
         {
@@ -196,7 +145,7 @@ namespace Abb2kTools.Utils
                 HitReciever?.OnTrigger2D(collision, MakeData(IHitReciever.HitType.Exit));
         }
 
-#endregion
+        #endregion
 
         private IHitReciever.HitData MakeData(IHitReciever.HitType type) => new IHitReciever.HitData
         {

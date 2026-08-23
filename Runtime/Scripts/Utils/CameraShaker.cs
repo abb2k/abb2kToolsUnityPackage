@@ -23,6 +23,7 @@ namespace Abb2kTools.Utils
         public CamShake rotationShake;
     }
 
+    [Icon("packages/com.abb2k.abb2ktools/Editor/Icons/CameraShaker.png")]
     public class CameraShaker : PersistentSingleton<CameraShaker>
     {
         private Camera _camera;
