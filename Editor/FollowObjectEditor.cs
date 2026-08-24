@@ -36,6 +36,11 @@ namespace Abb2kTools.Utils.Editor
         private SerializedProperty syncRotationToCustomTargetProp;
         private SerializedProperty syncRotationTargetProp;
 
+        // Sync Rotation Constraints
+        private SerializedProperty syncRotConstrainsXProp;
+        private SerializedProperty syncRotConstrainsYProp;
+        private SerializedProperty syncRotConstrainsZProp;
+
         // Rotation Mode Properties
         private SerializedProperty rotationModeProp;
         private SerializedProperty rotationLerpSpeedProp;
@@ -71,6 +76,11 @@ namespace Abb2kTools.Utils.Editor
             syncRotationToCustomTargetProp = serializedObject.FindProperty("syncRotationToCustomTarget");
             syncRotationTargetProp = serializedObject.FindProperty("syncRotationTarget");
 
+            SerializedProperty syncRotConstrainsProp = serializedObject.FindProperty("syncRotationConstrains");
+            syncRotConstrainsXProp = syncRotConstrainsProp.FindPropertyRelative("x");
+            syncRotConstrainsYProp = syncRotConstrainsProp.FindPropertyRelative("y");
+            syncRotConstrainsZProp = syncRotConstrainsProp.FindPropertyRelative("z");
+
             rotationModeProp = serializedObject.FindProperty("rotationMode");
             rotationLerpSpeedProp = serializedObject.FindProperty("rotationLerpSpeed");
             rotationUseCurveProp = serializedObject.FindProperty("rotationUseCurve");
@@ -100,7 +110,6 @@ namespace Abb2kTools.Utils.Editor
 
             EditorGUILayout.PropertyField(moveModeProp);
 
-            // Determine current move mode (0 = Snap, 1 = Lerp, 2 = SLerp, 3 = ConstantSpeed)
             int currentMoveMode = moveModeProp.enumValueIndex;
 
             // --- LERP SETTINGS BOX ---
@@ -172,6 +181,21 @@ namespace Abb2kTools.Utils.Editor
             {
                 EditorGUI.indentLevel++;
                 EditorGUILayout.PropertyField(syncRotationTargetProp, new GUIContent("Sync Target Object"));
+
+                // Sync Rotation Constraints
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PrefixLabel("Constrains");
+                
+                float origLabelWidth = EditorGUIUtility.labelWidth;
+                EditorGUIUtility.labelWidth = 15f;
+                
+                EditorGUILayout.PropertyField(syncRotConstrainsXProp, new GUIContent("X"), GUILayout.Width(45));
+                EditorGUILayout.PropertyField(syncRotConstrainsYProp, new GUIContent("Y"), GUILayout.Width(45));
+                EditorGUILayout.PropertyField(syncRotConstrainsZProp, new GUIContent("Z"), GUILayout.Width(45));
+                
+                EditorGUIUtility.labelWidth = origLabelWidth;
+                EditorGUILayout.EndHorizontal();
+
                 EditorGUI.indentLevel--;
             }
 

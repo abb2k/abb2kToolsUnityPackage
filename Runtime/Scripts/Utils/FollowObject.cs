@@ -42,6 +42,7 @@ namespace Abb2kTools.Utils
 
         public bool syncRotationToCustomTarget = false;
         public Transform syncRotationTarget;
+        public Constrains syncRotationConstrains = new();
 
         public MoveModes rotationMode = MoveModes.Lerp;
         public float rotationLerpSpeed = 5f;
@@ -199,7 +200,16 @@ namespace Abb2kTools.Utils
             // Option 3: Send current object's exact rotation to a custom target
             if (syncRotationToCustomTarget && syncRotationTarget != null)
             {
-                syncRotationTarget.rotation = transform.rotation;
+                Vector3 sourceRotEuler = transform.rotation.eulerAngles;
+                Vector3 targetRotEuler = syncRotationTarget.rotation.eulerAngles;
+
+                // If constrained, keep the target's existing rotation for that axis. 
+                // Otherwise, take the rotation from this object.
+                float newRotX = syncRotationConstrains.x ? targetRotEuler.x : sourceRotEuler.x;
+                float newRotY = syncRotationConstrains.y ? targetRotEuler.y : sourceRotEuler.y;
+                float newRotZ = syncRotationConstrains.z ? targetRotEuler.z : sourceRotEuler.z;
+
+                syncRotationTarget.rotation = Quaternion.Euler(newRotX, newRotY, newRotZ);
             }
         }
 
