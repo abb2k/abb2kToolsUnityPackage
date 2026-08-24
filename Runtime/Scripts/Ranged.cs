@@ -70,7 +70,7 @@ namespace Abb2kTools {
 
         public float Clamp(float value)
         {
-            return Mathf.Clamp(min, max, value);
+            return Mathf.Clamp(value, min, max);
         }
 
         public float GetRandomInRange()
