@@ -68,6 +68,11 @@ namespace Abb2kTools {
             return Mathf.InverseLerp(min, max, value);
         }
 
+        public float Clamp(float value)
+        {
+            return Mathf.Clamp(min, max, value);
+        }
+
         public float GetRandomInRange()
         {
             _lastChosenValue = Random.Range(min, max);
