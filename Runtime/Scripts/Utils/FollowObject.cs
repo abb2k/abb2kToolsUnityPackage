@@ -3,6 +3,7 @@ using UnityEngine;
 namespace Abb2kTools.Utils
 {
     [Icon("packages/com.abb2k.abb2ktools/Editor/Icons/FollowObject.png")]
+    [AddComponentMenu("Abb2kTools/Utils/FollowObject")]
     public class FollowObject : MonoBehaviour
     {
         public enum MoveModes { Snap, Lerp, SLerp, ConstantSpeed }

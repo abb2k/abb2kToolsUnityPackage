@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace Abb2kTools.Utils
 {
+    [AddComponentMenu("Abb2kTools/Utils/HitSender")]
     public class HitSender : MonoBehaviour
     {
         [SerializeField]
