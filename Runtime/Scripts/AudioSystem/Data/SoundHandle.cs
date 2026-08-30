@@ -43,9 +43,6 @@ namespace Abb2kTools.AudioSystem
         private readonly List<Tween> _activeTweens = new();
 #endif
 
-        // ==========================================
-        // SoundCoding Integration
-        // ==========================================
         public SoundCoding CodingData { get; private set; }
         public SoundCodingSection CurrentSection { get; private set; }
         
@@ -60,6 +57,8 @@ namespace Abb2kTools.AudioSystem
         private SoundCodingTransition _queuedTransition;
         private float _queuedTransitionTriggerTime = -1f;
         private float _lastPlaybackTime = -1f;
+
+        public event Action OnLoopRestart;
 
         public SoundHandle(string id, ExternalAudioSource holder, bool isPersistent)
         {
@@ -262,10 +261,6 @@ namespace Abb2kTools.AudioSystem
             OnSectionChanged?.Invoke(CurrentSection);
         }
 
-        // ==========================================
-        // Core Audio Methods
-        // ==========================================
-
         public SoundHandle OnComplete(Action callback)
         {
             OnCompleteEvent += callback;
@@ -337,7 +332,6 @@ namespace Abb2kTools.AudioSystem
             
             if (CodingData != null && CurrentSection == null && CodingData.sections.Count > 0)
             {
-                // Look for the designated default starting section, or fallback to the first section
                 string targetSectionId = CodingData.defaultSectionId;
                 if (string.IsNullOrEmpty(targetSectionId) || CodingData.GetSection(targetSectionId) == null)
                 {
@@ -457,7 +451,6 @@ namespace Abb2kTools.AudioSystem
                                 float currentTime = s.Source.time;
                                 float maxTime = CurrentSection.startTime + CurrentSection.duration;
 
-                                // 1. Check for queued transition crossing
                                 if (_queuedTransition != null && _queuedTransitionTriggerTime >= 0f)
                                 {
                                     bool crossed = false;
@@ -475,13 +468,10 @@ namespace Abb2kTools.AudioSystem
                                     }
                                 }
 
-                                // 2. Handle section end boundary checking
-                                // 2. Handle section end boundary checking
                                 if (currentTime >= maxTime && !_isTransitioning)
                                 {
                                     if (CurrentSection.loopSection)
                                     {
-                                        // Loop all active sources back to the section start
                                         foreach (var srcData in _sources)
                                         {
                                             if (srcData.Source != null)
@@ -518,7 +508,6 @@ namespace Abb2kTools.AudioSystem
                     }
                     else
                     {
-                        // Standard Audio Handling
                         int finishedCount = 0;
                         foreach (var s in _sources)
                         {
@@ -564,6 +553,8 @@ namespace Abb2kTools.AudioSystem
                         {
                             if (SequenceLoop)
                             {
+                                OnLoopRestart?.Invoke();
+
                                 foreach (var s in _sources)
                                 {
                                     s.DelayTimer    = 0f;
@@ -572,10 +563,7 @@ namespace Abb2kTools.AudioSystem
                                     s.IsFinished    = false;
                                 }
                             }
-                            else
-                            {
-                                break;
-                            }
+                            else break;
                         }
                     }
                 }
@@ -590,5 +578,22 @@ namespace Abb2kTools.AudioSystem
         }
 
         public static implicit operator bool(SoundHandle handle) => handle != null && !handle.IsStopped;
+
+        public void UpdateRandomModifiers(float volumeMultiplier, float pitchMultiplier)
+        {
+            foreach (var s in _sources)
+            {
+                s.BaseVolume = s.ClipData.Volume * volumeMultiplier;
+                s.BasePitch = s.ClipData.Pitch * pitchMultiplier;
+                
+                s.Duration = (s.ClipData.Clip.length - s.ClipData.StartOffset - s.ClipData.EndOffset) / Mathf.Max(0.001f, s.BasePitch);
+
+                if (s.Source != null)
+                {
+                    s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
+                    s.Source.pitch = s.BasePitch * _currentPitchMultiplier;
+                }
+            }
+        }
     }
 }

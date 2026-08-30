@@ -5,6 +5,9 @@ namespace Abb2kTools.AudioSystem
     [System.Serializable]
     public class SoundEffect : SoundBase
     {
+        [Header("SFX Playback")]
+        public bool loop = false;
+
         [Header("SFX Randomization Modifiers")]
         [Tooltip("Multiplies against the base volume.")]
         public Ranged volumeRange = new(0.9f, 1.1f);

@@ -86,10 +86,6 @@ namespace Abb2kTools.AudioSystem
         [HideInInspector] public List<SoundCodingTransition> transitions = new();
         [HideInInspector] public List<TransitionPoint> transitionPoints = new();
 
-        /// <summary>
-        /// Recursively gathers all playable clips from the inputSound hierarchy 
-        /// and applies SoundCoding container filters and overrides.
-        /// </summary>
         public override void CollectPlayableClips(List<PlayableClipData> result, float currentVolume = 1f, float currentPitch = 1f, float currentDelay = 0f)
         {
             if (inputSound == null) return;
@@ -97,7 +93,6 @@ namespace Abb2kTools.AudioSystem
             int startIndex = result.Count;
             inputSound.CollectPlayableClips(result, currentVolume, currentPitch, currentDelay);
 
-            // Merge container-level filters into every collected clip from the input hierarchy
             for (int i = startIndex; i < result.Count; i++)
             {
                 var clip = result[i];

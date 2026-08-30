@@ -61,10 +61,6 @@ namespace Abb2kTools.AudioSystem
                 audioSource.outputAudioMixerGroup = clipData.PreferredMixerGroup;
         }
 
-        /// <summary>
-        /// Analyzes the asset and calculates the exact timeline metadata of what will play, 
-        /// including all randomizations, filters, delays, and offsets.
-        /// </summary>
         public SoundAudioInfo GetAudioInfo(float globalVolumeMult = 1f, float globalPitchMult = 1f)
         {
             var info = new SoundAudioInfo();

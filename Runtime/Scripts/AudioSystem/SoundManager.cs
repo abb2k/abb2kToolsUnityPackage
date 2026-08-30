@@ -30,7 +30,10 @@ namespace Abb2kTools.AudioSystem
             if (clipsToPlay.Count == 0) return null;
 
             ExternalAudioSource holder = GetOrCreateHolder(attached, attachType);
-            SoundHandle handle = new SoundHandle(null, holder, isPersistent: false);
+            SoundHandle handle = new(null, holder, isPersistent: false)
+            {
+                SequenceLoop = sfxSettings.loop
+            };
 
             float randVol = sfxSettings.volumeRange.GetRandomInRange();
             float randPitch = sfxSettings.pitchRange.GetRandomInRange();
@@ -42,7 +45,16 @@ namespace Abb2kTools.AudioSystem
                 handle.AddSource(source, clipData, sfxSettings.volume * randVol, sfxSettings.pitch * randPitch);
             }
 
-            // Auto-detect and configure SoundCoding
+            if (sfxSettings.loop)
+            {
+                handle.OnLoopRestart += () =>
+                {
+                    float newRandVol = sfxSettings.volumeRange.GetRandomInRange();
+                    float newRandPitch = sfxSettings.pitchRange.GetRandomInRange();
+                    handle.UpdateRandomModifiers(sfxSettings.volume * newRandVol, sfxSettings.pitch * newRandPitch);
+                };
+            }
+
             if (sfxSettings.sound is SoundCoding coding)
                 handle.InitializeCoding(coding);
 
@@ -80,7 +92,6 @@ namespace Abb2kTools.AudioSystem
                 handle.AddSource(source, clipData, soundSettings.volume, soundSettings.pitch);
             }
 
-            // Auto-detect and configure SoundCoding
             if (soundSettings.sound is SoundCoding coding)
                 handle.InitializeCoding(coding);
 

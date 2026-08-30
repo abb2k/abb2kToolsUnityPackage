@@ -18,7 +18,6 @@ namespace Abb2kTools.AudioSystem
         public bool enableReverb = false;
         public AudioReverbPreset reverbPreset = AudioReverbPreset.Generic;
 
-        // Creates a deep copy so parent compositions don't mutate child scriptable objects
         public AudioFilterSettings Clone()
         {
             return new AudioFilterSettings

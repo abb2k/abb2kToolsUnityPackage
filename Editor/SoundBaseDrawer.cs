@@ -34,19 +34,7 @@ namespace Abb2kTools.AudioSystem.Editor
         };
 
         private static readonly Dictionary<string, bool> _3dSettingsStates = new();
-        
-        // // --- Timeline State ---
-        // private static readonly Dictionary<string, bool> _timelineStates = new();
-        // private static readonly Dictionary<string, Vector2> _timelineScrolls = new();
-        // private static readonly Dictionary<AudioClip, Texture2D> _waveformCache = new();
-        // private static float _zoomX = 1f;
-        // private static float _zoomY = 1f;
-        // private static bool _isDraggingPlayhead;
-        // private const float TIMELINE_AREA_HEIGHT = 220f;
-        // private const float PRE_PAD_SECONDS = 2f;
-        // private const float POST_PAD_SECONDS = 2f;
 
-        // Forces the inspector to repaint while audio is playing so the playhead moves smoothly
         static SoundBaseDrawer()
         {
             EditorApplication.update += () =>
@@ -160,17 +148,6 @@ namespace Abb2kTools.AudioSystem.Editor
                     }
                     height += 5f; 
                 }
-
-                // // Add space for the Timeline Foldout
-                // SerializedProperty soundProp = property.FindPropertyRelative(Sound);
-                // if (soundProp != null && soundProp.objectReferenceValue != null)
-                // {
-                //     height += 20f + EditorGUIUtility.standardVerticalSpacing; 
-                //     if (GetFoldoutState(property, _timelineStates))
-                //     {
-                //         height += TIMELINE_AREA_HEIGHT + EditorGUIUtility.standardVerticalSpacing;
-                //     }
-                // }
             }
 
             return height + EditorGUIUtility.standardVerticalSpacing;
@@ -253,7 +230,6 @@ namespace Abb2kTools.AudioSystem.Editor
 
                         GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
                         
-                        // Check if shift is held before drawing the button
                         bool isShiftClick = Event.current.shift;
                         GUIContent tinyBtnContent = new GUIContent("▶", "Click to preview\nShift-Click to preview with 3D settings in Scene");
                         
@@ -379,7 +355,30 @@ namespace Abb2kTools.AudioSystem.Editor
                     {
                         float propHeight = EditorGUI.GetPropertyHeight(prop, true);
                         Rect propRect = new(boxRect.x + 6, innerY, boxRect.width - 12, propHeight);
+
+                        if (prop.name.Equals("soundID") && prop.propertyType == SerializedPropertyType.String)
+                        {
+                            float buttonWidth = 60f;
+                            float spacing = 5f;
+                            float singleLineHeight = EditorGUIUtility.singleLineHeight;
+
+                            Rect buttonRect = new(
+                                propRect.x + propRect.width - buttonWidth, 
+                                propRect.y + propRect.height - singleLineHeight,
+                                buttonWidth, 
+                                singleLineHeight
+                            );
+                            
+                            propRect.width -= buttonWidth + spacing;
+
+                            if (GUI.Button(buttonRect, "Random"))
+                            {
+                                prop.stringValue = "SND_" + System.Guid.NewGuid().ToString("N").Substring(0, 8);
+                            }
+                        }
+
                         EditorGUI.PropertyField(propRect, prop, true);
+
                         innerY += propHeight + EditorGUIUtility.standardVerticalSpacing;
                     }
 

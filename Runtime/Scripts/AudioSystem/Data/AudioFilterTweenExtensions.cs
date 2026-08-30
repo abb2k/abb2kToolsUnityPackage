@@ -6,8 +6,6 @@ namespace Abb2kTools.AudioSystem
 {
     public static class AudioFilterTweenExtensions
     {
-        // NO DOKill() calls are used here, ensuring your other tweens remain safe.
-
         public static Tweener DODistortionLevel(this AudioSource source, float endValue, float duration)
         {
             var filter = source.GetComponent<AudioDistortionFilter>();

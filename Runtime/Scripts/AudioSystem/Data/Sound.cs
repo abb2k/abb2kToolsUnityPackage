@@ -17,6 +17,11 @@ namespace Abb2kTools.AudioSystem
             return SoundManager.Instance.GetOrCreatePersistentSound(this, attachedTransform, attachType);
         }
 
+        public Sound() : base()
+        {
+            soundID = "SND_" + System.Guid.NewGuid().ToString("N").Substring(0, 8);
+        }
+
         // /// <summary>
         // /// Plays this sound if an active handle exists.
         // /// </summary>
