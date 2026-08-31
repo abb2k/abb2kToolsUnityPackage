@@ -3,7 +3,10 @@ using UnityEngine;
 namespace Abb2kTools
 {
 public struct OkPayload<T> { public T Value; public OkPayload(T v) => Value = v; }
-public struct ErrPayload<E> { public E Error; public ErrPayload(E e) => Error = e; }
+public struct ErrPayload<E> {
+    public E Error;
+    public ErrPayload(E e) => Error = e;
+}
 
 public abstract class ResultBase<E>
 {
@@ -26,6 +29,13 @@ public class Result : ResultBase<string>
 
     public static OkPayload<T> Ok<T>(T value) => new OkPayload<T>(value);
     public static ErrPayload<string> Err(string error) => new ErrPayload<string>(error);
+    public static ErrPayload<string> ErrLog(string error)
+    {
+        ErrPayload<string> err = Err(error);
+        Debug.LogError((Result)err);
+
+        return err;
+    }
     public static ErrPayload<E> Err<E>(E error) => new ErrPayload<E>(error);
 
     public static implicit operator Result(ErrPayload<string> payload)
@@ -60,6 +70,14 @@ public class Result<R> : ResultBase<string>
         return toReturn;
     }
 
+    public static Result<R> ErrLog(string error)
+    {
+        Result<R> res = Err(error);
+        Debug.LogError(res);
+
+        return res;
+    }
+
     public static implicit operator Result<R>(OkPayload<R> payload) => Ok(payload.Value);
     public static implicit operator Result<R>(ErrPayload<string> payload) => Err(payload.Error);
 }
@@ -85,6 +103,14 @@ public class Result<R, E> : ResultBase<E>
         toReturn.isError = true;
         toReturn.error = errorValue;
         return toReturn;
+    }
+
+    public static Result<R, E> ErrLog(E error)
+    {
+        Result<R, E> res = Err(error);
+        Debug.LogError(res);
+
+        return res;
     }
 
     public static implicit operator Result<R, E>(OkPayload<R> payload) => Ok(payload.Value);
