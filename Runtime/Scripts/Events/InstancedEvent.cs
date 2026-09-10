@@ -12,7 +12,6 @@ using UnityEditor;
 
 namespace Abb2kTools.Events
 {
-    // HELPER ADDED: Safely fetches the Object ID across all Unity versions
     internal static class ObjectIdHelper
     {
         private static readonly Func<UnityEngine.Object, int> _getIdFunc;
@@ -21,25 +20,20 @@ namespace Abb2kTools.Events
         {
             var type = typeof(UnityEngine.Object);
             
-            // Try GetEntityId first (Newer Unity versions)
             var method = type.GetMethod("GetEntityId", BindingFlags.Public | BindingFlags.Instance);
             
-            // FIX: Ensure the method actually returns an int before we try to use it
             if (method != null && method.ReturnType != typeof(int))
             {
                 method = null;
             }
             
-            // Fallback to GetInstanceID (Older Unity versions)
             if (method == null)
             {
                 method = type.GetMethod("GetInstanceID", BindingFlags.Public | BindingFlags.Instance);
             }
 
-            // Double check return type safety
             if (method != null && method.ReturnType == typeof(int))
             {
-                // Create an open delegate for high-performance (zero-allocation) execution
                 _getIdFunc = (Func<UnityEngine.Object, int>)Delegate.CreateDelegate(typeof(Func<UnityEngine.Object, int>), method);
             }
         }
@@ -500,6 +494,66 @@ namespace Abb2kTools.Events
             return null;
         }
 #endif
+
+        public static void Send<TSelf>(InstancedEvent<TSelf> instancedEvent, bool setAsPong = false) where TSelf : InstancedEvent<TSelf> 
+            => instancedEvent?.ISend(setAsPong);
+
+        public static void Pong<TSelf>(InstancedEvent<TSelf> instancedEvent) where TSelf : InstancedEvent<TSelf> 
+            => instancedEvent?.IPong();
+
+        public static Result Ping<TSelf>(InstancedEvent<TSelf> instancedEvent) where TSelf : InstancedEvent<TSelf> 
+            => instancedEvent != null ? instancedEvent.IPing() : Result.Err("Event instance is null.");
+
+        public static ListenerHandle Listen<TSelf>(InstancedEvent<TSelf> instancedEvent, System.Func<ListenerResult> callback, int priority = 0) where TSelf : InstancedEvent<TSelf> 
+            => instancedEvent?.IListen(callback, priority);
+
+        public static void Send<TSelf, T1>(InstancedEvent<TSelf, T1> instancedEvent, T1 param1, bool setAsPong = false) where TSelf : InstancedEvent<TSelf, T1> 
+            => instancedEvent?.ISend(param1, setAsPong);
+
+        public static void Pong<TSelf, T1>(InstancedEvent<TSelf, T1> instancedEvent, T1 param1) where TSelf : InstancedEvent<TSelf, T1> 
+            => instancedEvent?.IPong(param1);
+
+        public static Result Ping<TSelf, T1>(InstancedEvent<TSelf, T1> instancedEvent) where TSelf : InstancedEvent<TSelf, T1> 
+            => instancedEvent != null ? instancedEvent.IPing() : Result.Err("Event instance is null.");
+
+        public static ListenerHandle Listen<TSelf, T1>(InstancedEvent<TSelf, T1> instancedEvent, System.Func<T1, ListenerResult> callback, int priority = 0) where TSelf : InstancedEvent<TSelf, T1> 
+            => instancedEvent?.IListen(callback, priority);
+
+        public static void Send<TSelf, T1, T2>(InstancedEvent<TSelf, T1, T2> instancedEvent, T1 param1, T2 param2, bool setAsPong = false) where TSelf : InstancedEvent<TSelf, T1, T2> 
+            => instancedEvent?.ISend(param1, param2, setAsPong);
+
+        public static void Pong<TSelf, T1, T2>(InstancedEvent<TSelf, T1, T2> instancedEvent, T1 param1, T2 param2) where TSelf : InstancedEvent<TSelf, T1, T2> 
+            => instancedEvent?.IPong(param1, param2);
+
+        public static Result Ping<TSelf, T1, T2>(InstancedEvent<TSelf, T1, T2> instancedEvent) where TSelf : InstancedEvent<TSelf, T1, T2> 
+            => instancedEvent != null ? instancedEvent.IPing() : Result.Err("Event instance is null.");
+
+        public static ListenerHandle Listen<TSelf, T1, T2>(InstancedEvent<TSelf, T1, T2> instancedEvent, System.Func<T1, T2, ListenerResult> callback, int priority = 0) where TSelf : InstancedEvent<TSelf, T1, T2> 
+            => instancedEvent?.IListen(callback, priority);
+
+        public static void Send<TSelf, T1, T2, T3>(InstancedEvent<TSelf, T1, T2, T3> instancedEvent, T1 param1, T2 param2, T3 param3, bool setAsPong = false) where TSelf : InstancedEvent<TSelf, T1, T2, T3> 
+            => instancedEvent?.ISend(param1, param2, param3, setAsPong);
+
+        public static void Pong<TSelf, T1, T2, T3>(InstancedEvent<TSelf, T1, T2, T3> instancedEvent, T1 param1, T2 param2, T3 param3) where TSelf : InstancedEvent<TSelf, T1, T2, T3> 
+            => instancedEvent?.IPong(param1, param2, param3);
+
+        public static Result Ping<TSelf, T1, T2, T3>(InstancedEvent<TSelf, T1, T2, T3> instancedEvent) where TSelf : InstancedEvent<TSelf, T1, T2, T3> 
+            => instancedEvent != null ? instancedEvent.IPing() : Result.Err("Event instance is null.");
+
+        public static ListenerHandle Listen<TSelf, T1, T2, T3>(InstancedEvent<TSelf, T1, T2, T3> instancedEvent, System.Func<T1, T2, T3, ListenerResult> callback, int priority = 0) where TSelf : InstancedEvent<TSelf, T1, T2, T3> 
+            => instancedEvent?.IListen(callback, priority);
+
+        public static void Send<TSelf, T1, T2, T3, T4>(InstancedEvent<TSelf, T1, T2, T3, T4> instancedEvent, T1 param1, T2 param2, T3 param3, T4 param4, bool setAsPong = false) where TSelf : InstancedEvent<TSelf, T1, T2, T3, T4> 
+            => instancedEvent?.ISend(param1, param2, param3, param4, setAsPong);
+
+        public static void Pong<TSelf, T1, T2, T3, T4>(InstancedEvent<TSelf, T1, T2, T3, T4> instancedEvent, T1 param1, T2 param2, T3 param3, T4 param4) where TSelf : InstancedEvent<TSelf, T1, T2, T3, T4> 
+            => instancedEvent?.IPong(param1, param2, param3, param4);
+
+        public static Result Ping<TSelf, T1, T2, T3, T4>(InstancedEvent<TSelf, T1, T2, T3, T4> instancedEvent) where TSelf : InstancedEvent<TSelf, T1, T2, T3, T4> 
+            => instancedEvent != null ? instancedEvent.IPing() : Result.Err("Event instance is null.");
+
+        public static ListenerHandle Listen<TSelf, T1, T2, T3, T4>(InstancedEvent<TSelf, T1, T2, T3, T4> instancedEvent, System.Func<T1, T2, T3, T4, ListenerResult> callback, int priority = 0) where TSelf : InstancedEvent<TSelf, T1, T2, T3, T4> 
+            => instancedEvent?.IListen(callback, priority);
     }
  
     [System.Serializable]
@@ -1051,6 +1105,11 @@ namespace Abb2kTools.Events
     {
         public InstancedEvent() : base() {}
 
+        internal void ISend(bool setAsPong = false) => Get().MSend(setAsPong);
+        internal void IPong() => Get().MPong();
+        internal Result IPing() => Get().MPing();
+        internal ListenerHandle IListen(System.Func<ListenerResult> callback, int priority = 0) => Get().MListen(callback, priority);
+
         public static void Send(bool setAsPong = false) => Get().MSend(setAsPong);
 
         protected virtual void MSend(bool setAsPong = false)
@@ -1065,6 +1124,7 @@ namespace Abb2kTools.Events
         {
             hasPonged = true;
         }
+
 
         public static Result Ping() => Get().MPing();
 
@@ -1110,6 +1170,11 @@ namespace Abb2kTools.Events
         private T1 pongValue1;
 
         public InstancedEvent() : base() {}
+
+        internal void ISend(T1 param1, bool setAsPong = false) => Get().MSend(param1, setAsPong);
+        internal void IPong(T1 param1) => Get().MPong(param1);
+        internal Result IPing() => Get().MPing();
+        internal ListenerHandle IListen(System.Func<T1, ListenerResult> callback, int priority = 0) => Get().MListen(callback, priority);
 
         public static void Send(T1 param1, bool setAsPong = false) => Get().MSend(param1, setAsPong);
 
@@ -1172,6 +1237,11 @@ namespace Abb2kTools.Events
         private T2 pongValue2;
 
         public InstancedEvent() : base() {}
+
+        internal void ISend(T1 param1, T2 param2, bool setAsPong = false) => Get().MSend(param1, param2, setAsPong);
+        internal void IPong(T1 param1, T2 param2) => Get().MPong(param1, param2);
+        internal Result IPing() => Get().MPing();
+        internal ListenerHandle IListen(System.Func<T1, T2, ListenerResult> callback, int priority = 0) => Get().MListen(callback, priority);
 
         public static void Send(T1 param1, T2 param2, bool setAsPong = false) => Get().MSend(param1, param2, setAsPong);
 
@@ -1236,6 +1306,11 @@ namespace Abb2kTools.Events
         private T3 pongValue3;
 
         public InstancedEvent() : base() {}
+
+        internal void ISend(T1 param1, T2 param2, T3 param3, bool setAsPong = false) => Get().MSend(param1, param2, param3, setAsPong);
+        internal void IPong(T1 param1, T2 param2, T3 param3) => Get().MPong(param1, param2, param3);
+        internal Result IPing() => Get().MPing();
+        internal ListenerHandle IListen(System.Func<T1, T2, T3, ListenerResult> callback, int priority = 0) => Get().MListen(callback, priority);
 
         public static void Send(T1 param1, T2 param2, T3 param3, bool setAsPong = false) => Get().MSend(param1, param2, param3, setAsPong);
 
@@ -1302,6 +1377,11 @@ namespace Abb2kTools.Events
         private T4 pongValue4;
 
         public InstancedEvent() : base() {}
+
+        internal void ISend(T1 param1, T2 param2, T3 param3, T4 param4, bool setAsPong = false) => Get().MSend(param1, param2, param3, param4, setAsPong);
+        internal void IPong(T1 param1, T2 param2, T3 param3, T4 param4) => Get().MPong(param1, param2, param3, param4);
+        internal Result IPing() => Get().MPing();
+        internal ListenerHandle IListen(System.Func<T1, T2, T3, T4, ListenerResult> callback, int priority = 0) => Get().MListen(callback, priority);
 
         public static void Send(T1 param1, T2 param2, T3 param3, T4 param4, bool setAsPong = false) => Get().MSend(param1, param2, param3, param4, setAsPong);
 
