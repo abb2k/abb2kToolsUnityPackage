@@ -33,12 +33,53 @@ namespace Abb2kTools.Singletons
 
         public virtual void OnCreation() { }
 
+        public static bool TryGet(out T result, bool createIfMissing = false)
+        {
+            lock (objLock)
+            {
+                if (instance != null)
+                {
+                    result = instance;
+                    return true;
+                }
+
+#if UNITY_EDITOR
+                if (!Application.isPlaying)
+                {
+                    result = Get();
+                    return result != null;
+                }
+#endif
+
+                if (createIfMissing)
+                {
+                    result = Get();
+                    return result != null;
+                }
+
+                result = null;
+                return false;
+            }
+        }
+
         public static T Get()
         {
             lock (objLock)
             {
                 if (!instance)
                 {
+#if UNITY_EDITOR
+                    if (!Application.isPlaying)
+                    {
+#if UNITY_2023_1_OR_NEWER
+                        instance = FindAnyObjectByType<T>();
+#else
+                        instance = FindObjectOfType<T>();
+#endif
+                        return instance; 
+                    }
+#endif
+
                     if (!typeof(PersistentSingleton<T>).IsAssignableFrom(typeof(T)))
                     {
                         return null;
@@ -71,7 +112,7 @@ namespace Abb2kTools.Singletons
             }
         }
 
-        void OnDestroy()
+        protected virtual void OnDestroy()
         {
             if (instance != this as T) return;
             instance = null;
