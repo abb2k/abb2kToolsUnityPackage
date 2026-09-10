@@ -752,7 +752,7 @@ namespace Abb2kTools.Events
             }
         }
 
-        [SerializeField]
+        [SerializeField, HideInInspector]
         protected List<ListenerHandle> instancesByPriority = new();
 
         internal void SaveToPersistence()
