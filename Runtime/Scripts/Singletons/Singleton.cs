@@ -7,6 +7,7 @@ namespace Abb2kTools.Singletons
         public abstract bool IsPersistent { get; }
     }
 
+    [DefaultExecutionOrder(-100)]
     public abstract class Singleton<T> : SingletonBase where T : MonoBehaviour
     {
         public override bool IsPersistent => this is PersistentSingleton<T>;
@@ -125,6 +126,7 @@ namespace Abb2kTools.Singletons
         }
     }
 
+    [DefaultExecutionOrder(-100)]
     public abstract class PersistentSingleton<T> : Singleton<T>, IReadOnlyHierarchy where T : MonoBehaviour
     {
        
