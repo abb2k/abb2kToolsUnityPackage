@@ -17,7 +17,7 @@ namespace Abb2kTools {
             }
         }
 
-        public Ranged(float min, float max, bool randomize = true)
+        public Ranged(float min, float max)
         {
             this.min = min;
             this.max = max;
@@ -27,12 +27,14 @@ namespace Abb2kTools {
         /// <summary>
         /// A range from 0 to 1.
         /// </summary>
-        public static readonly Ranged range01 = new(0, 1, false);
+        public static readonly Ranged range01 = new(0, 1);
 
         /// <summary>
         /// A range from -1 to 1.
         /// </summary>
-        public static readonly Ranged rangeOneMinusOne = new(-1, 1, false);
+        public static readonly Ranged rangeOneMinusOne = new(-1, 1);
+
+        public readonly Ranged Flipped => new(max, min);
 
         public static implicit operator float(Ranged r) => r.LastChosenValue;
         public static implicit operator int(Ranged r) => Mathf.RoundToInt(r.LastChosenValue);
@@ -58,12 +60,12 @@ namespace Abb2kTools {
         public static Ranged operator -(Ranged a, int b) => new(a.min - b, a.max - b);
         public static Ranged operator -(int a, Ranged b) => new(a - b.min, a - b.max);
 
-        public float Map01(float value01)
+        public float Lerp(float value01)
         {
             return Mathf.Lerp(min, max, value01);
         }
 
-        public float Unmap01(float value)
+        public float InverseLerp(float value)
         {
             return Mathf.InverseLerp(min, max, value);
         }
@@ -73,15 +75,15 @@ namespace Abb2kTools {
             return Mathf.Clamp(value, min, max);
         }
 
-        public float GetRandomInRange()
+        public float Random()
         {
-            _lastChosenValue = Random.Range(min, max);
+            _lastChosenValue = UnityEngine.Random.Range(min, max);
             return _lastChosenValue.Value;
         }
 
-        public int GetRandomIntInRange()
+        public int RandomInt()
         {
-            _lastChosenValue = Random.Range(Mathf.RoundToInt(min), Mathf.RoundToInt(max) + 1);
+            _lastChosenValue = UnityEngine.Random.Range(Mathf.RoundToInt(min), Mathf.RoundToInt(max) + 1);
             return Mathf.RoundToInt(_lastChosenValue.Value);
         }
 
