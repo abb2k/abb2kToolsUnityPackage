@@ -12,7 +12,7 @@ namespace Abb2kTools {
         public float LastChosenValue {
             get {
                 if (_lastChosenValue == null)
-                    return GetRandomInRange();
+                    return Random();
                 return _lastChosenValue.Value;
             }
         }
