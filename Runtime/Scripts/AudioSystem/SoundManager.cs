@@ -35,8 +35,8 @@ namespace Abb2kTools.AudioSystem
                 SequenceLoop = sfxSettings.loop
             };
 
-            float randVol = sfxSettings.volumeRange.GetRandomInRange();
-            float randPitch = sfxSettings.pitchRange.GetRandomInRange();
+            float randVol = sfxSettings.volumeRange.Random();
+            float randPitch = sfxSettings.pitchRange.Random();
 
             foreach (var clipData in clipsToPlay)
             {
@@ -49,8 +49,8 @@ namespace Abb2kTools.AudioSystem
             {
                 handle.OnLoopRestart += () =>
                 {
-                    float newRandVol = sfxSettings.volumeRange.GetRandomInRange();
-                    float newRandPitch = sfxSettings.pitchRange.GetRandomInRange();
+                    float newRandVol = sfxSettings.volumeRange.Random();
+                    float newRandPitch = sfxSettings.pitchRange.Random();
                     handle.UpdateRandomModifiers(sfxSettings.volume * newRandVol, sfxSettings.pitch * newRandPitch);
                 };
             }
