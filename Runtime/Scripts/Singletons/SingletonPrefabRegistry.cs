@@ -31,24 +31,23 @@ namespace Abb2kTools.Singletons
             }
             return null;
         }
-        
+
 #if UNITY_EDITOR
         public static void RegisterPrefab(string typeName, GameObject prefab)
         {
             SingletonPrefabRegistry instance = Resources.Load<SingletonPrefabRegistry>("SingletonPrefabRegistry");
-
             if (instance == null)
             {
                 if (!AssetDatabase.IsValidFolder("Assets/Resources"))
                     AssetDatabase.CreateFolder("Assets", "Resources");
-                
+
                 instance = CreateInstance<SingletonPrefabRegistry>();
                 AssetDatabase.CreateAsset(instance, "Assets/Resources/SingletonPrefabRegistry.asset");
             }
 
             instance.mappings.RemoveAll(m => m.singletonTypeName == typeName);
             instance.mappings.Add(new PrefabMapping { singletonTypeName = typeName, prefab = prefab });
-            
+
             EditorUtility.SetDirty(instance);
             AssetDatabase.SaveAssets();
         }

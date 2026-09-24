@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 using UnityEditor.SceneManagement; 
+using System;
 
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector.Editor;
@@ -55,6 +56,11 @@ namespace Abb2kTools.Singletons.Editor
                     this.DrawLinkUI(singletonTarget, prefabAsset);
                 }
             }
+
+            if (isPersistent)
+            {
+                this.DrawAutoInitializeToggle(singletonTarget);
+            }
             
             EditorGUI.BeginDisabledGroup(lockInspector);
             base.OnInspectorGUI();
@@ -66,7 +72,7 @@ namespace Abb2kTools.Singletons.Editor
             int variableCount = 0;
             foreach (var prop in Tree.RootProperty.Children)
             {
-                if (prop.Name != "m_Script") variableCount++;
+                if (prop.Name != "m_Script" && prop.Name != "autoInitializeOnStartup") variableCount++;
             }
             return variableCount > 0;
         }
@@ -131,6 +137,11 @@ namespace Abb2kTools.Singletons.Editor
                 }
             }
 
+            if (isPersistent)
+            {
+                this.DrawAutoInitializeToggle(singletonTarget);
+            }
+
             EditorGUI.BeginDisabledGroup(lockInspector);
             DrawDefaultInspector();
             EditorGUI.EndDisabledGroup();
@@ -144,7 +155,7 @@ namespace Abb2kTools.Singletons.Editor
             while (iterator.NextVisible(enterChildren))
             {
                 enterChildren = false;
-                if (iterator.name != "m_Script") variableCount++;
+                if (iterator.name != "m_Script" && iterator.name != "autoInitializeOnStartup") variableCount++;
             }
             return variableCount > 0;
         }
@@ -210,6 +221,46 @@ namespace Abb2kTools.Singletons.Editor
             GUI.Label(rect, title, style);
             
             GUILayout.Space(8);
+        }
+
+        public static void DrawAutoInitializeToggle(SingletonBase singletonTarget)
+        {
+            GameObject prefabAsset = GetPrefabAsset(singletonTarget.gameObject);
+            string typeName = singletonTarget.GetType().FullName;
+            GameObject linkedPrefab = SingletonPrefabRegistry.GetPrefab(typeName);
+            
+            bool isLinked = linkedPrefab != null && linkedPrefab == prefabAsset;
+
+            EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+
+            EditorGUI.BeginDisabledGroup(!isLinked);
+            bool newToggleValue = EditorGUILayout.ToggleLeft(
+                new GUIContent("Auto-Initialize on Startup", "Toggle must be set on a valid linked Prefab."), 
+                singletonTarget.AutoInitialize, 
+                EditorStyles.boldLabel
+            );
+
+            if (newToggleValue != singletonTarget.AutoInitialize)
+            {
+                Undo.RecordObject(singletonTarget, "Toggle Auto Initialize");
+                singletonTarget.AutoInitialize = newToggleValue;
+                EditorUtility.SetDirty(singletonTarget);
+                
+                if (PrefabUtility.IsPartOfPrefabInstance(singletonTarget.gameObject))
+                {
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(singletonTarget);
+                }
+            }
+            EditorGUI.EndDisabledGroup();
+
+            EditorGUILayout.EndHorizontal();
+            
+            // if (!isLinked)
+            // {
+            //     EditorGUILayout.HelpBox("Pack and Link this singleton as a Prefab to enable Auto-Initialization.", MessageType.Warning);
+            // }
+            
+            GUILayout.Space(5);
         }
 
         public static void DrawRootError()
@@ -287,6 +338,7 @@ namespace Abb2kTools.Singletons.Editor
     public static class SingletonEditorExtensions 
     {
         public static void DrawCoolHeader(this UnityEditor.Editor editor, SingletonBase target) => SingletonEditorUtils.DrawCoolHeader(target);
+        public static void DrawAutoInitializeToggle(this UnityEditor.Editor editor, SingletonBase target) => SingletonEditorUtils.DrawAutoInitializeToggle(target);
         public static GameObject GetPrefabAsset(this UnityEditor.Editor editor, GameObject go) => SingletonEditorUtils.GetPrefabAsset(go);
         public static void DrawRootError(this UnityEditor.Editor editor) => SingletonEditorUtils.DrawRootError();
         public static void DrawSceneWarning(this UnityEditor.Editor editor) => SingletonEditorUtils.DrawSceneWarning();
