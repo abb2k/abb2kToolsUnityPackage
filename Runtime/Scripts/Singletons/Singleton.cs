@@ -86,7 +86,17 @@ namespace Abb2kTools.Singletons
             else if (instance != this)
                 Destroy(gameObject);
 
-            if (this is PersistentSingleton<T>) DontDestroyOnLoad(gameObject);
+            if (this is PersistentSingleton<T>)
+            {
+                if (transform.parent == null)
+                {
+                    DontDestroyOnLoad(gameObject);
+                }
+                else
+                {
+                    Debug.LogError($"[PersistentSingleton] DontDestroyOnLoad failed for '{gameObject.name}' ({typeof(T).Name}) because it is not a root object. Please unparent it.", this);
+                }
+            }
 
             if (!createdByGet && !isCreatingByGet)
                 OnCreation();
