@@ -85,9 +85,15 @@ namespace Abb2kTools.Singletons
         protected virtual void Awake()
         {
             if (instance == null)
+            {
                 instance = this as T;
+                Application.quitting += PrepareForQuit; 
+            }
             else if (instance != this)
+            {
                 Destroy(gameObject);
+                return;
+            }
 
             if (this is PersistentSingleton<T>)
             {
@@ -106,6 +112,14 @@ namespace Abb2kTools.Singletons
         }
 
         public virtual void OnCreation() { }
+
+        private void PrepareForQuit()
+        {
+            if (this != null && gameObject != null)
+            {
+                gameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+        }
 
         public static bool TryGet(out T result, bool createIfMissing = false)
         {
@@ -142,6 +156,11 @@ namespace Abb2kTools.Singletons
             {
                 if (!instance)
                 {
+                    if (applicationIsQuitting && !ReferenceEquals(instance, null))
+                    {
+                        return instance;
+                    }
+
 #if UNITY_EDITOR
                     if (!Application.isPlaying)
                     {
@@ -196,6 +215,9 @@ namespace Abb2kTools.Singletons
         protected virtual void OnDestroy()
         {
             if (instance != this as T) return;
+            
+            Application.quitting -= PrepareForQuit; 
+            
             instance = null;
         }
 
