@@ -31,7 +31,6 @@ namespace Abb2kTools.Singletons
             {
                 if (map.prefab == null) continue;
 
-                // Read the value directly from the prefab asset before it spawns
                 SingletonBase singletonComponent = map.prefab.GetComponent<SingletonBase>();
                 
                 if (singletonComponent != null && singletonComponent.AutoInitialize)
@@ -143,11 +142,6 @@ namespace Abb2kTools.Singletons
             {
                 if (!instance)
                 {
-                    if (applicationIsQuitting)
-                    {
-                        return null; 
-                    }
-
 #if UNITY_EDITOR
                     if (!Application.isPlaying)
                     {
@@ -168,15 +162,22 @@ namespace Abb2kTools.Singletons
                     isCreatingByGet = true;
 
                     GameObject prefab = SingletonPrefabRegistry.GetPrefab(typeof(T).FullName);
+                    GameObject go;
 
                     if (prefab != null)
                     {
-                        GameObject go = Instantiate(prefab);
+                        go = Instantiate(prefab);
                         go.name = typeof(T).Name;
                     }
                     else
                     {
-                        new GameObject(typeof(T).Name).AddComponent<T>();
+                        go = new GameObject(typeof(T).Name);
+                        go.AddComponent<T>();
+                    }
+
+                    if (applicationIsQuitting)
+                    {
+                        go.hideFlags = HideFlags.HideAndDontSave;
                     }
 
                     isCreatingByGet = false;
@@ -208,6 +209,5 @@ namespace Abb2kTools.Singletons
     [DefaultExecutionOrder(-100)]
     public abstract class PersistentSingleton<T> : Singleton<T>, IReadOnlyHierarchy where T : MonoBehaviour
     {
-        
     }
 }
