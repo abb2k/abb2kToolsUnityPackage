@@ -17,9 +17,13 @@ namespace Abb2kTools.Singletons
             set => autoInitializeOnStartup = value;
         }
 
+        protected static bool applicationIsQuitting = false;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoInitializeSingletonsOnStartup()
         {
+            Application.quitting += () => applicationIsQuitting = true;
+
             SingletonPrefabRegistry registry = Resources.Load<SingletonPrefabRegistry>("SingletonPrefabRegistry");
             if (registry == null) return;
 
@@ -139,6 +143,11 @@ namespace Abb2kTools.Singletons
             {
                 if (!instance)
                 {
+                    if (applicationIsQuitting)
+                    {
+                        return null; 
+                    }
+
 #if UNITY_EDITOR
                     if (!Application.isPlaying)
                     {
@@ -199,6 +208,6 @@ namespace Abb2kTools.Singletons
     [DefaultExecutionOrder(-100)]
     public abstract class PersistentSingleton<T> : Singleton<T>, IReadOnlyHierarchy where T : MonoBehaviour
     {
-
+        
     }
 }
