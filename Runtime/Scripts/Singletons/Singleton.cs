@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Abb2kTools.Singletons
@@ -87,12 +86,11 @@ namespace Abb2kTools.Singletons
             if (instance == null)
             {
                 instance = this as T;
-                Application.quitting += PrepareForQuit; 
             }
             else if (instance != this)
             {
                 Destroy(gameObject);
-                return;
+                return; 
             }
 
             if (this is PersistentSingleton<T>)
@@ -112,14 +110,6 @@ namespace Abb2kTools.Singletons
         }
 
         public virtual void OnCreation() { }
-
-        private void PrepareForQuit()
-        {
-            if (this != null && gameObject != null)
-            {
-                gameObject.hideFlags = HideFlags.HideAndDontSave;
-            }
-        }
 
         public static bool TryGet(out T result, bool createIfMissing = false)
         {
@@ -156,9 +146,14 @@ namespace Abb2kTools.Singletons
             {
                 if (!instance)
                 {
-                    if (applicationIsQuitting && !ReferenceEquals(instance, null))
+                    if (applicationIsQuitting)
                     {
-                        return instance;
+                        if (!ReferenceEquals(instance, null))
+                        {
+                            return instance;
+                        }
+                        
+                        return null;
                     }
 
 #if UNITY_EDITOR
@@ -194,11 +189,6 @@ namespace Abb2kTools.Singletons
                         go.AddComponent<T>();
                     }
 
-                    if (applicationIsQuitting)
-                    {
-                        go.hideFlags = HideFlags.HideAndDontSave;
-                    }
-
                     isCreatingByGet = false;
 
                     if (instance is Singleton<T> singleton)
@@ -216,9 +206,10 @@ namespace Abb2kTools.Singletons
         {
             if (instance != this as T) return;
             
-            Application.quitting -= PrepareForQuit; 
-            
-            instance = null;
+            if (!applicationIsQuitting)
+            {
+                instance = null;
+            }
         }
 
         public void DestroySingleton()
