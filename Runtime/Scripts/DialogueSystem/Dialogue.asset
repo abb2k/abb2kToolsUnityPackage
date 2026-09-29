@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e7c5f39fa3b4af438f4f67582db93cd, type: 3}
+  m_Name: Dialogue
+  m_EditorClassIdentifier: abb2kTools::Dialogue
+  rooms:
+  - {fileID: 9199349424795495897}
+  - {fileID: 3943881754016118574}
+  links:
+  - {fileID: 3584106898065401704}
+--- !u!114 &3584106898065401704
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
+  m_Name: DialogueLink (1)
+  m_EditorClassIdentifier: abb2kTools::DialogueLink
+  destination: {fileID: 3943881754016118574}
+  curvePoints: []
+--- !u!114 &3943881754016118574
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
+  m_Name: DialogueData
+  m_EditorClassIdentifier: abb2kTools::DialogueData
+  transitions: []
+--- !u!114 &9199349424795495897
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
+  m_Name: silly
+  m_EditorClassIdentifier: abb2kTools::DialogueData
+  transitions:
+  - {fileID: 3584106898065401704}
