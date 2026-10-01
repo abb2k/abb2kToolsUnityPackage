@@ -9,6 +9,8 @@ using UnityEngine.UIElements;
 public class DialogueTransitionEdgeData
 {
     public DialogueLink transition;
+    public bool startsAtEntry;
+    public bool endsAtExit;
     public DialogueNodeSide outputSide;
     public DialogueNodeSide inputSide;
     public DialogueTransitionStroke stroke;
@@ -60,18 +62,29 @@ public sealed class DialogueTransitionStroke : VisualElement
         const float arrowHalfWidth = 5f;
         var arrowBase = end - direction * arrowLength;
         var perpendicular = new Vector2(-direction.y, direction.x) * arrowHalfWidth;
-        var drawColor = _edge.selected ? _edge.selectedColor : _lineColor;
+        var edgeData = _edge.userData as DialogueTransitionEdgeData;
+        var defaultColor = _edge.selected ? _edge.selectedColor : _lineColor;
+        var entryColor = _edge.selected ? _edge.selectedColor : new Color(0.2f, 0.85f, 0.32f, 1f);
+        var exitColor = _edge.selected ? _edge.selectedColor : new Color(0.95f, 0.24f, 0.22f, 1f);
         var painter = context.painter2D;
 
-        painter.strokeColor = drawColor;
         painter.lineWidth = _lineWidth;
-        painter.BeginPath();
-        painter.MoveTo(start);
-        for (int i = 1; i < localRoute.Count; i++)
-            painter.LineTo(localRoute[i]);
-        painter.Stroke();
+        if (edgeData?.startsAtEntry == true && edgeData.endsAtExit)
+        {
+            var half = GetHalfwayRoute(localRoute, out var routeIndex);
+            DrawRoute(painter, localRoute, 0, routeIndex, half, entryColor);
+            DrawRoute(painter, localRoute, routeIndex, localRoute.Count - 1, half, exitColor);
+        }
+        else
+        {
+            var routeColor = edgeData?.endsAtExit == true ? exitColor :
+                edgeData?.startsAtEntry == true ? entryColor : defaultColor;
+            DrawRoute(painter, localRoute, 0, localRoute.Count - 1, null, routeColor);
+        }
 
-        painter.fillColor = drawColor;
+        var arrowColor = edgeData?.endsAtExit == true ? exitColor :
+            edgeData?.startsAtEntry == true ? entryColor : defaultColor;
+        painter.fillColor = arrowColor;
         painter.BeginPath();
         painter.MoveTo(end);
         painter.LineTo(arrowBase + perpendicular);
@@ -79,43 +92,69 @@ public sealed class DialogueTransitionStroke : VisualElement
         painter.ClosePath();
         painter.Fill();
     }
+
+    private static void DrawRoute(Painter2D painter, List<Vector2> route, int startIndex, int endIndex, Vector2? splitPoint, Color color)
+    {
+        painter.strokeColor = color;
+        painter.BeginPath();
+        painter.MoveTo(startIndex == 0 ? route[0] : splitPoint.Value);
+        if (startIndex > 0)
+            for (int i = startIndex + 1; i <= endIndex; i++) painter.LineTo(route[i]);
+        else
+            for (int i = 1; i <= endIndex; i++) painter.LineTo(route[i]);
+        if (splitPoint.HasValue && startIndex == 0) painter.LineTo(splitPoint.Value);
+        painter.Stroke();
+    }
+
+    private static Vector2 GetHalfwayRoute(List<Vector2> route, out int routeIndex)
+    {
+        float totalLength = 0;
+        for (int i = 1; i < route.Count; i++) totalLength += Vector2.Distance(route[i - 1], route[i]);
+        float halfway = totalLength * 0.5f;
+        float traversed = 0;
+        for (int i = 1; i < route.Count; i++)
+        {
+            float segmentLength = Vector2.Distance(route[i - 1], route[i]);
+            if (traversed + segmentLength >= halfway)
+            {
+                routeIndex = i;
+                return Vector2.Lerp(route[i - 1], route[i], (halfway - traversed) / segmentLength);
+            }
+            traversed += segmentLength;
+        }
+        routeIndex = route.Count - 1;
+        return route[routeIndex];
+    }
 }
 
-public sealed class DialogueCurvePointHandle : VisualElement
+public sealed class DialogueCurvePointHandle : GraphElement
 {
     public readonly DialogueLink transition;
     public readonly DialogueCurvePoint point;
-    private readonly VisualElement _coordinateRoot;
-    private readonly System.Action _beginDrag;
     private readonly System.Action<Vector2> _move;
-    private readonly System.Action _endDrag;
     private readonly System.Action _setLinear;
     private readonly System.Action _setEased;
     private readonly System.Action _delete;
-    private bool _dragging;
+    private bool _suppressMoveCallback;
     private bool _selected;
-    private int _pointerId;
 
     public DialogueCurvePointHandle(
         DialogueLink transition,
         DialogueCurvePoint point,
-        VisualElement coordinateRoot,
-        System.Action beginDrag,
         System.Action<Vector2> move,
-        System.Action endDrag,
         System.Action setLinear,
         System.Action setEased,
         System.Action delete)
     {
         this.transition = transition;
         this.point = point;
-        _coordinateRoot = coordinateRoot;
-        _beginDrag = beginDrag;
         _move = move;
-        _endDrag = endDrag;
         _setLinear = setLinear;
         _setEased = setEased;
         _delete = delete;
+
+        viewDataKey = $"{DialogueGraphLayout.GetAssetKey(transition)}:curve:{point.id}";
+        capabilities = Capabilities.Selectable | Capabilities.Movable | Capabilities.Groupable;
 
         style.position = Position.Absolute;
         style.width = 12;
@@ -132,17 +171,25 @@ public sealed class DialogueCurvePointHandle : VisualElement
         UpdateSelectionStyle();
         focusable = true;
 
-        RegisterCallback<PointerDownEvent>(OnPointerDown);
         RegisterCallback<MouseDownEvent>(OnMouseDown);
-        coordinateRoot.RegisterCallback<PointerMoveEvent>(OnPointerMove);
-        coordinateRoot.RegisterCallback<PointerUpEvent>(OnPointerUp);
-        coordinateRoot.RegisterCallback<PointerCancelEvent>(OnPointerCancel);
     }
 
     public void SetGraphPosition(Vector2 position)
     {
-        style.left = position.x - 6f;
-        style.top = position.y - 6f;
+        _suppressMoveCallback = true;
+        SetPosition(new Rect(position - new Vector2(6f, 6f), new Vector2(12f, 12f)));
+        _suppressMoveCallback = false;
+    }
+
+    public override void SetPosition(Rect newPos)
+    {
+        base.SetPosition(newPos);
+        if (_suppressMoveCallback) return;
+
+        point.position = newPos.center;
+        Undo.RecordObject(transition, "Move Transition Curve Point");
+        EditorUtility.SetDirty(transition);
+        _move?.Invoke(point.position);
     }
 
     public void SetPointMode(DialogueCurvePointMode mode)
@@ -165,42 +212,6 @@ public sealed class DialogueCurvePointHandle : VisualElement
         style.borderRightColor = borderColor;
         style.borderTopColor = borderColor;
         style.borderBottomColor = borderColor;
-    }
-
-    private void OnPointerDown(PointerDownEvent evt)
-    {
-        if (evt.button != 0) return;
-        _dragging = true;
-        _pointerId = evt.pointerId;
-        _beginDrag?.Invoke();
-        evt.StopPropagation();
-    }
-
-    private void OnPointerMove(PointerMoveEvent evt)
-    {
-        if (!_dragging || evt.pointerId != _pointerId) return;
-
-        var local = _coordinateRoot.worldTransform.inverse.MultiplyPoint3x4(
-            new Vector3(evt.position.x, evt.position.y, 0));
-        var position = new Vector2(local.x, local.y);
-        SetGraphPosition(position);
-        _move?.Invoke(position);
-        evt.StopPropagation();
-    }
-
-    private void OnPointerUp(PointerUpEvent evt)
-    {
-        if (!_dragging || evt.pointerId != _pointerId) return;
-        _dragging = false;
-        _endDrag?.Invoke();
-        evt.StopPropagation();
-    }
-
-    private void OnPointerCancel(PointerCancelEvent evt)
-    {
-        if (!_dragging || evt.pointerId != _pointerId) return;
-        _dragging = false;
-        _endDrag?.Invoke();
     }
 
     private void OnContextMenu(ContextualMenuPopulateEvent evt)
@@ -276,23 +287,157 @@ public sealed class DialogueTransitionPreview : VisualElement
     }
 }
 
+public sealed class DialogueStartNode : Node
+{
+    private readonly Dialogue _dialogue;
+    public readonly Port output;
+
+    public DialogueStartNode(Dialogue dialogue)
+    {
+        _dialogue = dialogue;
+        _dialogue.startOutput ??= new DialogueExecPortData { label = "Start" };
+        title = "Dialogue Start";
+        titleContainer.style.backgroundColor = new Color(0.12f, 0.48f, 0.2f, 1f);
+        viewDataKey = $"{DialogueGraphLayout.GetAssetKey(dialogue)}:start";
+        output = Port.Create<Edge>(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(DialogueExecPortData));
+        output.portName = _dialogue.startOutput.label;
+        output.userData = _dialogue.startOutput.id;
+        outputContainer.Add(output);
+        style.width = 180;
+        RefreshExpandedState();
+        RefreshPorts();
+        SetPosition(new Rect(_dialogue.startNodePosition, new Vector2(180, 80)));
+    }
+
+    public override void SetPosition(Rect newPos)
+    {
+        base.SetPosition(newPos);
+        if (_dialogue.startNodePosition == newPos.position) return;
+        Undo.RecordObject(_dialogue, "Move Dialogue Start");
+        _dialogue.startNodePosition = newPos.position;
+        EditorUtility.SetDirty(_dialogue);
+    }
+}
+
+public sealed class DialogueExitNode : Node
+{
+    private readonly Dialogue _dialogue;
+    public readonly Port input;
+
+    public DialogueExitNode(Dialogue dialogue)
+    {
+        _dialogue = dialogue;
+        _dialogue.exitInput ??= new DialogueExecPortData { label = "Exit" };
+        title = "Dialogue Exit";
+        titleContainer.style.backgroundColor = new Color(0.58f, 0.16f, 0.15f, 1f);
+        viewDataKey = $"{DialogueGraphLayout.GetAssetKey(dialogue)}:exit";
+        input = Port.Create<Edge>(Orientation.Horizontal, Direction.Input, Port.Capacity.Multi, typeof(DialogueExecPortData));
+        input.portName = _dialogue.exitInput.label;
+        input.userData = _dialogue.exitInput.id;
+        inputContainer.Add(input);
+        style.width = 180;
+        RefreshExpandedState();
+        RefreshPorts();
+        SetPosition(new Rect(_dialogue.exitNodePosition, new Vector2(180, 80)));
+    }
+
+    public override void SetPosition(Rect newPos)
+    {
+        base.SetPosition(newPos);
+        if (_dialogue.exitNodePosition == newPos.position) return;
+        Undo.RecordObject(_dialogue, "Move Dialogue Exit");
+        _dialogue.exitNodePosition = newPos.position;
+        EditorUtility.SetDirty(_dialogue);
+    }
+}
+
+public sealed class DialogueAdditionalEntryNode : Node
+{
+    private readonly Dialogue _dialogue;
+    public readonly DialogueEntryData data;
+    public readonly Port output;
+
+    public DialogueAdditionalEntryNode(Dialogue dialogue, DialogueEntryData data)
+    {
+        _dialogue = dialogue;
+        this.data = data;
+        data.output ??= new DialogueExecPortData { label = "Start" };
+        title = data.name;
+        titleContainer.style.backgroundColor = new Color(0.12f, 0.48f, 0.2f, 1f);
+        viewDataKey = $"{DialogueGraphLayout.GetAssetKey(dialogue)}:entry:{data.id}";
+        output = Port.Create<Edge>(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, typeof(DialogueExecPortData));
+        output.portName = data.output.label;
+        output.userData = data.output.id;
+        outputContainer.Add(output);
+        style.width = 180;
+        RefreshExpandedState();
+        RefreshPorts();
+        SetPosition(new Rect(data.position, new Vector2(180, 80)));
+    }
+
+    public override void SetPosition(Rect newPos)
+    {
+        base.SetPosition(newPos);
+        if (data.position == newPos.position) return;
+        Undo.RecordObject(_dialogue, "Move Dialogue Entry");
+        data.position = newPos.position;
+        EditorUtility.SetDirty(_dialogue);
+    }
+}
+
+public sealed class DialogueAdditionalExitNode : Node
+{
+    private readonly Dialogue _dialogue;
+    public readonly DialogueExitData data;
+    public readonly Port input;
+
+    public DialogueAdditionalExitNode(Dialogue dialogue, DialogueExitData data)
+    {
+        _dialogue = dialogue;
+        this.data = data;
+        data.input ??= new DialogueExecPortData { label = "Exit" };
+        title = data.name;
+        titleContainer.style.backgroundColor = new Color(0.58f, 0.16f, 0.15f, 1f);
+        viewDataKey = $"{DialogueGraphLayout.GetAssetKey(dialogue)}:exit:{data.id}";
+        input = Port.Create<Edge>(Orientation.Horizontal, Direction.Input, Port.Capacity.Multi, typeof(DialogueExecPortData));
+        input.portName = data.input.label;
+        input.userData = data.input.id;
+        inputContainer.Add(input);
+        style.width = 180;
+        RefreshExpandedState();
+        RefreshPorts();
+        SetPosition(new Rect(data.position, new Vector2(180, 80)));
+    }
+
+    public override void SetPosition(Rect newPos)
+    {
+        base.SetPosition(newPos);
+        if (data.position == newPos.position) return;
+        Undo.RecordObject(_dialogue, "Move Dialogue Exit");
+        data.position = newPos.position;
+        EditorUtility.SetDirty(_dialogue);
+    }
+}
+
 // Editor-only GraphView that projects a Dialogue asset's data into draggable nodes and edges.
 public class DialogueGraphView : GraphView
 {
     // These maps let graph operations find the backing ScriptableObject for each visual element.
     private readonly Dialogue _dialogue;
     private readonly Dictionary<DialogueData, DialogueNode> _roomNodes = new();
+    private readonly Dictionary<string, DialogueAdditionalEntryNode> _additionalEntryNodes = new();
+    private readonly Dictionary<string, DialogueAdditionalExitNode> _additionalExitNodes = new();
+    private DialogueStartNode _startNode;
+    private DialogueExitNode _exitNode;
     private readonly Dictionary<DialogueLink, List<DialogueCurvePointHandle>> _curvePointHandles = new();
     private readonly Dictionary<Edge, Label> _overlapBadges = new();
     private DialogueCurvePointHandle _selectedCurvePointHandle;
     private List<DialogueLink> _lastOverlapCycle = new();
     private int _overlapCycleIndex = -1;
-    private DialogueData _pendingTransitionSource;
-    private DialogueTransitionPreview _transitionPreview;
-    private Vector2 _previewMousePosition;
     private bool _isRebuilding;
     private bool _preservingGroupContents;
     private bool _adjustingGroupBounds;
+    private bool _movingGroup;
     private int _pointerUndoGroup = -1;
 
     public DialogueGraphView(Dialogue dialogue) : base()
@@ -309,7 +454,6 @@ public class DialogueGraphView : GraphView
         this.AddManipulator(new ContextualMenuManipulator(BuildGraphContextMenu));
         RegisterCallback<MouseDownEvent>(OnGraphMouseDown, TrickleDown.TrickleDown);
         RegisterCallback<MouseUpEvent>(OnGraphMouseUp);
-        RegisterCallback<PointerMoveEvent>(OnGraphPointerMove);
         RegisterCallback<KeyDownEvent>(OnGraphKeyDown);
         RegisterCallback<AttachToPanelEvent>(OnAttachToPanel);
         RegisterCallback<DetachFromPanelEvent>(OnDetachFromPanel);
@@ -332,6 +476,16 @@ public class DialogueGraphView : GraphView
         RebuildGraph();
     }
 
+    public override List<Port> GetCompatiblePorts(Port startPort, NodeAdapter nodeAdapter)
+    {
+        return ports
+            .Where(port => port != startPort &&
+                port.node != startPort.node &&
+                port.direction != startPort.direction &&
+                port.portType == typeof(DialogueExecPortData))
+            .ToList();
+    }
+
     private int BeginUndoGroup(string actionName)
     {
         Undo.IncrementCurrentGroup();
@@ -347,23 +501,14 @@ public class DialogueGraphView : GraphView
         var curvePointHandle = FindCurvePointHandle(evt.target as VisualElement);
         if (curvePointHandle != null)
         {
-            SelectCurvePointHandle(curvePointHandle);
+            _selectedCurvePointHandle = curvePointHandle;
+            Selection.activeObject = curvePointHandle.transition;
+                _pointerUndoGroup = BeginUndoGroup("Move Transition Curve Points");
+            foreach (var handle in selection.OfType<DialogueCurvePointHandle>().Append(curvePointHandle).Distinct())
+                    Undo.RecordObject(handle.transition, "Move Transition Curve Points");
             return;
         }
         SelectCurvePointHandle(null);
-
-        if (_pendingTransitionSource != null)
-        {
-            var source = _pendingTransitionSource;
-            _pendingTransitionSource = null;
-            RemoveTransitionPreview();
-
-            var destinationNode = FindDialogueNode(evt.target as VisualElement);
-            if (destinationNode != null && destinationNode.room != source)
-                CompleteTransition(source, destinationNode.room);
-
-            return;
-        }
 
         if (evt.clickCount >= 2 &&
             FindCurvePointHandle(evt.target as VisualElement) == null &&
@@ -380,7 +525,8 @@ public class DialogueGraphView : GraphView
         }
 
         var target = FindGraphElement(evt.target as VisualElement);
-        if (target is not (DialogueNode or DialogueGroup)) return;
+        if (target is not (DialogueNode or DialogueStartNode or DialogueExitNode or
+            DialogueAdditionalEntryNode or DialogueAdditionalExitNode or DialogueGroup)) return;
 
         _pointerUndoGroup = BeginUndoGroup("Edit Dialogue Graph");
         Undo.RecordObject(DialogueGraphLayout.instance, "Edit Dialogue Graph");
@@ -388,6 +534,10 @@ public class DialogueGraphView : GraphView
 
     private void OnGraphMouseUp(MouseUpEvent evt)
     {
+        var selectedCurvePoint = selection.OfType<DialogueCurvePointHandle>().LastOrDefault();
+        if (selectedCurvePoint != null)
+            Selection.activeObject = selectedCurvePoint.transition;
+
         var selectedTransition = selection.OfType<Edge>()
             .FirstOrDefault(edge => edge.userData is DialogueTransitionEdgeData);
         if (selectedTransition?.userData is DialogueTransitionEdgeData selectedData && selectedData.transition != null)
@@ -400,6 +550,7 @@ public class DialogueGraphView : GraphView
         }
 
         RefreshTransitionStrokeSelection();
+        RefreshCurvePointSelectionFromNodeSelection();
         RefreshTransitionEdgeAnchors();
 
         if (_pointerUndoGroup < 0) return;
@@ -411,17 +562,17 @@ public class DialogueGraphView : GraphView
         AssetDatabase.SaveAssets();
     }
 
-    private void OnGraphPointerMove(PointerMoveEvent evt)
-    {
-        if (_pendingTransitionSource != null)
-            UpdateTransitionPreview(evt.position);
-    }
-
     private void OnGraphKeyDown(KeyDownEvent evt)
     {
-        if (_selectedCurvePointHandle == null || evt.keyCode is not (KeyCode.Delete or KeyCode.Backspace)) return;
+        if (evt.keyCode is not (KeyCode.Delete or KeyCode.Backspace)) return;
 
-        DeleteCurvePoint(_selectedCurvePointHandle.transition, _selectedCurvePointHandle.point);
+        var selectedPoints = selection.OfType<DialogueCurvePointHandle>().ToList();
+        if (selectedPoints.Count == 0 && _selectedCurvePointHandle != null)
+            selectedPoints.Add(_selectedCurvePointHandle);
+        if (selectedPoints.Count == 0) return;
+
+        foreach (var handle in selectedPoints)
+            DeleteCurvePoint(handle.transition, handle.point);
         evt.StopPropagation();
     }
 
@@ -429,19 +580,33 @@ public class DialogueGraphView : GraphView
     {
         Undo.undoRedoPerformed -= OnUndoRedoPerformed;
         Undo.undoRedoPerformed += OnUndoRedoPerformed;
+        viewTransformChanged -= OnViewTransformChanged;
+        viewTransformChanged += OnViewTransformChanged;
+
+        if (DialogueGraphLayout.instance.TryGetView(_dialogue, out var position, out var scale))
+            UpdateViewTransform(position, scale);
     }
 
     private void OnDetachFromPanel(DetachFromPanelEvent evt)
     {
         Undo.undoRedoPerformed -= OnUndoRedoPerformed;
-        RemoveTransitionPreview();
+        viewTransformChanged -= OnViewTransformChanged;
+        SaveViewTransform();
         DialogueGraphLayout.instance.SaveGroups();
+    }
+
+    private void OnViewTransformChanged(GraphView graphView)
+    {
+        SaveViewTransform();
+    }
+
+    private void SaveViewTransform()
+    {
+        DialogueGraphLayout.instance.SetView(_dialogue, viewTransform.position, viewTransform.scale);
     }
 
     private void OnUndoRedoPerformed()
     {
-        _pendingTransitionSource = null;
-        RemoveTransitionPreview();
         _pointerUndoGroup = -1;
         DialogueGraphLayout.instance.SaveGroups();
         AssetDatabase.SaveAssets();
@@ -476,21 +641,58 @@ public class DialogueGraphView : GraphView
         var position = contentViewContainer.WorldToLocal(evt.mousePosition);
 
         var selectedNodes = selection.OfType<GraphElement>()
-            .Where(e => e is DialogueNode)
+            .Where(e => e is DialogueNode or DialogueStartNode or DialogueExitNode or
+                DialogueAdditionalEntryNode or DialogueAdditionalExitNode or DialogueCurvePointHandle)
             .ToList();
 
         if (selectedNodes.Count > 0)
             evt.menu.AppendAction("Group Selection", _ => CreateGroupAroundSelection(selectedNodes));
 
         evt.menu.AppendAction("Create Dialogue Data", _ => CreateDialogueDataNode(position));
+        evt.menu.AppendAction("Create Selection Node", _ => CreateDialogueSelectorNode(position));
+        evt.menu.AppendAction("Create Entry", _ => CreateAdditionalEntryNode(position));
+        evt.menu.AppendAction("Create Exit", _ => CreateAdditionalExitNode(position));
         evt.menu.AppendAction("Create Group", _ => CreateGroup("New Group", position, new Vector2(300, 200)));
     }
 
     // Creates DialogueData as a sub-asset, then registers it so the node survives graph rebuilds.
-    public void CreateDialogueDataNode(Vector2 position)
+    public void CreateDialogueDataNode(Vector2 position) => CreateRoomNode<DialogueData>("DialogueData", position, isSelectorOnly: false);
+
+    // Creates a standalone branch node that only exposes selection options, no dialogue content.
+    public void CreateDialogueSelectorNode(Vector2 position) => CreateRoomNode<DialogueSelectorData>("Selector", position, isSelectorOnly: true);
+
+    public void CreateAdditionalEntryNode(Vector2 position)
+    {
+        Undo.RecordObject(_dialogue, "Create Dialogue Entry");
+        _dialogue.additionalEntries ??= new List<DialogueEntryData>();
+        var data = new DialogueEntryData { name = $"Entry {_dialogue.additionalEntries.Count + 1}", position = position };
+        _dialogue.additionalEntries.Add(data);
+        var node = new DialogueAdditionalEntryNode(_dialogue, data);
+        node.RegisterCallback<GeometryChangedEvent>(_ => OnDialogueNodeGeometryChanged());
+        AddElement(node);
+        _additionalEntryNodes[data.id] = node;
+        EditorUtility.SetDirty(_dialogue);
+        AssetDatabase.SaveAssets();
+    }
+
+    public void CreateAdditionalExitNode(Vector2 position)
+    {
+        Undo.RecordObject(_dialogue, "Create Dialogue Exit");
+        _dialogue.additionalExits ??= new List<DialogueExitData>();
+        var data = new DialogueExitData { name = $"Exit {_dialogue.additionalExits.Count + 1}", position = position };
+        _dialogue.additionalExits.Add(data);
+        var node = new DialogueAdditionalExitNode(_dialogue, data);
+        node.RegisterCallback<GeometryChangedEvent>(_ => OnDialogueNodeGeometryChanged());
+        AddElement(node);
+        _additionalExitNodes[data.id] = node;
+        EditorUtility.SetDirty(_dialogue);
+        AssetDatabase.SaveAssets();
+    }
+
+    private void CreateRoomNode<T>(string baseName, Vector2 position, bool isSelectorOnly) where T : DialogueData
     {
         var undoGroup = BeginUndoGroup("Create Dialogue Data");
-        var data = CreateDialogueSubAsset<DialogueData>("DialogueData", "Create Dialogue Data");
+        var data = CreateDialogueSubAsset<T>(baseName, "Create Dialogue Data");
         if (data == null)
         {
             Undo.CollapseUndoOperations(undoGroup);
@@ -500,13 +702,13 @@ public class DialogueGraphView : GraphView
         // The graph is reconstructed from this array, so registering here makes the node persistent.
         Undo.RecordObject(_dialogue, "Add Dialogue Data");
         _dialogue.rooms = (_dialogue.rooms ?? System.Array.Empty<DialogueData>())
-            .Concat(new[] { data })
+            .Concat(new[] { (DialogueData)data })
             .ToArray();
         EditorUtility.SetDirty(_dialogue);
         AssetDatabase.SaveAssets();
 
         // Add the new visual directly so rebuilding does not run graph-removal callbacks.
-        var node = new DialogueNode(data, BeginTransitionSelection);
+        var node = new DialogueNode(data, RebuildGraph, RemoveExecOutputLinks, isSelectorOnly);
         node.geometryChanged = OnDialogueNodeGeometryChanged;
         AddElement(node);
         _roomNodes[data] = node;
@@ -515,80 +717,10 @@ public class DialogueGraphView : GraphView
         Undo.CollapseUndoOperations(undoGroup);
     }
 
-    // A transition is only created after the user selects a distinct destination room node.
-    private void BeginTransitionSelection(DialogueData room, Vector2 pointerPosition)
-    {
-        _pendingTransitionSource = room;
-        _previewMousePosition = pointerPosition;
-        RemoveTransitionPreview();
-        _transitionPreview = new DialogueTransitionPreview();
-        contentViewContainer.Add(_transitionPreview);
-        _transitionPreview.BringToFront();
-        UpdateTransitionPreview(pointerPosition);
-    }
-
-    private void UpdateTransitionPreview(Vector2 pointerPosition)
-    {
-        if (_pendingTransitionSource == null || _transitionPreview == null ||
-            !_roomNodes.TryGetValue(_pendingTransitionSource, out var sourceNode))
-            return;
-
-        _previewMousePosition = pointerPosition;
-        var targetWorld = new Vector3(pointerPosition.x, pointerPosition.y, 0);
-        var sourceLocal = sourceNode.GetNearestEdgePoint(targetWorld, out _);
-        var sourceWorld = sourceNode.worldTransform.MultiplyPoint3x4(
-            new Vector3(sourceLocal.x, sourceLocal.y, 0));
-        _transitionPreview.SetPoints(WorldToGraph(sourceWorld), WorldToGraph(targetWorld));
-    }
-
-    private void RemoveTransitionPreview()
-    {
-        _transitionPreview?.RemoveFromHierarchy();
-        _transitionPreview = null;
-    }
-
     private void OnDialogueNodeGeometryChanged()
     {
         RefreshTransitionEdgeAnchors();
         RefreshTransitionStrokeSelection();
-        if (_pendingTransitionSource != null)
-            UpdateTransitionPreview(_previewMousePosition);
-    }
-
-    private void CompleteTransition(DialogueData source, DialogueData destination)
-    {
-        if (source == destination ||
-            !_roomNodes.TryGetValue(source, out var sourceNode) ||
-            !_roomNodes.TryGetValue(destination, out var destinationNode))
-            return;
-
-        var undoGroup = BeginUndoGroup("Create Dialogue Transition");
-        var link = CreateDialogueSubAsset<DialogueLink>("DialogueLink", "Create Dialogue Transition");
-        if (link == null)
-        {
-            Undo.CollapseUndoOperations(undoGroup);
-            return;
-        }
-
-        Undo.RecordObject(_dialogue, "Add Dialogue Transition");
-        _dialogue.links = (_dialogue.links ?? System.Array.Empty<DialogueLink>())
-            .Concat(new[] { link })
-            .ToArray();
-
-        Undo.RecordObject(source, "Connect Dialogue Transition");
-        source.transitions = (source.transitions ?? System.Array.Empty<DialogueLink>())
-            .Concat(new[] { link })
-            .ToArray();
-        Undo.RecordObject(link, "Set Dialogue Transition Destination");
-        link.destination = destination;
-
-        AddDirectedEdge(sourceNode, destinationNode, link);
-
-        EditorUtility.SetDirty(source);
-        EditorUtility.SetDirty(link);
-        EditorUtility.SetDirty(_dialogue);
-        AssetDatabase.SaveAssets();
-        Undo.CollapseUndoOperations(undoGroup);
     }
 
     // Centralize creation so graph-created ScriptableObjects are always stored inside this Dialogue.
@@ -614,8 +746,81 @@ public class DialogueGraphView : GraphView
         return subAsset;
     }
 
+    private List<DialogueLink> GetAllDialogueLinks()
+    {
+        var links = new List<DialogueLink>();
+        var seen = new HashSet<DialogueLink>();
+        foreach (var link in _dialogue.links ?? System.Array.Empty<DialogueLink>())
+        {
+            if (link != null && seen.Add(link)) links.Add(link);
+        }
+        foreach (var room in _dialogue.rooms ?? System.Array.Empty<DialogueData>())
+        {
+            foreach (var link in room?.transitions ?? System.Array.Empty<DialogueLink>())
+            {
+                if (link != null && seen.Add(link)) links.Add(link);
+            }
+        }
+        return links;
+    }
+
+    private DialogueData FindTransitionSourceRoom(DialogueLink link)
+    {
+        if (link.source != null) return link.source;
+        return (_dialogue.rooms ?? System.Array.Empty<DialogueData>())
+            .FirstOrDefault(room => room != null && room.transitions != null && room.transitions.Contains(link));
+    }
+
+    private bool IsTransitionInsideGroup(DialogueLink link, HashSet<string> memberGuids)
+    {
+        string sourceGuid;
+        if (!string.IsNullOrEmpty(link.sourceEntryId))
+        {
+            sourceGuid = _additionalEntryNodes.TryGetValue(link.sourceEntryId, out var entryNode)
+                ? entryNode.viewDataKey
+                : null;
+        }
+        else if (link.sourceIsDialogueStart)
+        {
+            sourceGuid = _startNode?.viewDataKey;
+        }
+        else
+        {
+            var sourceRoom = FindTransitionSourceRoom(link);
+            sourceGuid = sourceRoom != null ? DialogueGraphLayout.GetAssetKey(sourceRoom) : null;
+        }
+
+        string destinationGuid;
+        if (!string.IsNullOrEmpty(link.destinationExitId))
+            destinationGuid = _additionalExitNodes.TryGetValue(link.destinationExitId, out var exitNode)
+                ? exitNode.viewDataKey
+                : null;
+        else
+            destinationGuid = link.destinationIsDialogueExit
+                ? _exitNode?.viewDataKey
+                : link.destination != null ? DialogueGraphLayout.GetAssetKey(link.destination) : null;
+        return sourceGuid != null && destinationGuid != null &&
+            memberGuids.Contains(sourceGuid) && memberGuids.Contains(destinationGuid);
+    }
+
     private void CreateGroupAroundSelection(List<GraphElement> members)
     {
+        members = members.ToList();
+        var memberGuids = members.Select(member => member.viewDataKey).ToHashSet();
+        foreach (var link in GetAllDialogueLinks())
+        {
+            if (!IsTransitionInsideGroup(link, memberGuids) ||
+                !_curvePointHandles.TryGetValue(link, out var handles))
+                continue;
+
+            foreach (var handle in handles)
+            {
+                if (members.Contains(handle)) continue;
+                members.Add(handle);
+                memberGuids.Add(handle.viewDataKey);
+            }
+        }
+
         // Expand the group's bounds around selected nodes, leaving room for its title and padding.
         const float pad = 40f;
         float minX = members.Min(m => m.GetPosition().xMin);
@@ -623,20 +828,16 @@ public class DialogueGraphView : GraphView
         float maxX = members.Max(m => m.GetPosition().xMax);
         float maxY = members.Max(m => m.GetPosition().yMax);
 
-        var memberRooms = members.OfType<DialogueNode>().Select(node => node.room).ToHashSet();
-        foreach (var sourceRoom in memberRooms)
+        foreach (var link in GetAllDialogueLinks())
         {
-            foreach (var link in sourceRoom.transitions ?? System.Array.Empty<DialogueLink>())
+            if (!IsTransitionInsideGroup(link, memberGuids)) continue;
+            foreach (var point in link.curvePoints ?? new List<DialogueCurvePoint>())
             {
-                if (link == null || link.destination == null || !memberRooms.Contains(link.destination)) continue;
-                foreach (var point in link.curvePoints ?? new List<DialogueCurvePoint>())
-                {
-                    if (point == null) continue;
-                    minX = Mathf.Min(minX, point.position.x - 8f);
-                    minY = Mathf.Min(minY, point.position.y - 8f);
-                    maxX = Mathf.Max(maxX, point.position.x + 8f);
-                    maxY = Mathf.Max(maxY, point.position.y + 8f);
-                }
+                if (point == null) continue;
+                minX = Mathf.Min(minX, point.position.x - 8f);
+                minY = Mathf.Min(minY, point.position.y - 8f);
+                maxX = Mathf.Max(maxX, point.position.x + 8f);
+                maxY = Mathf.Max(maxY, point.position.y + 8f);
             }
         }
 
@@ -651,7 +852,7 @@ public class DialogueGraphView : GraphView
         // Layout data is stored outside the Dialogue asset because groups are editor presentation state.
         var undoGroup = BeginUndoGroup("Create Dialogue Graph Group");
         var data = DialogueGraphLayout.instance.CreateGroupData(_dialogue, title, position, size);
-        var group = new DialogueGroup(data, delta => MoveGroupedTransitionPoints(data, delta));
+        var group = new DialogueGroup(data, delta => MoveGroupedTransitionPoints(data, delta), moving => _movingGroup = moving);
         AddElement(group);
         group.SetPosition(new Rect(position, size));
 
@@ -668,53 +869,43 @@ public class DialogueGraphView : GraphView
     {
         if (_isRebuilding || _adjustingGroupBounds || delta == Vector2.zero) return;
 
-        var memberRooms = _roomNodes.Values
-            .Where(node => groupData.memberAssetGuids.Contains(node.viewDataKey))
-            .Select(node => node.room)
-            .ToHashSet();
-        if (memberRooms.Count < 2) return;
-
-        var movedLinks = new HashSet<DialogueLink>();
-        foreach (var sourceRoom in memberRooms)
+        var memberGuids = groupData.memberAssetGuids.ToHashSet();
+        var group = graphElements.OfType<DialogueGroup>().FirstOrDefault(item => item.data == groupData);
+        var groupedHandles = group?.containedElements.OfType<DialogueCurvePointHandle>().ToHashSet()
+            ?? new HashSet<DialogueCurvePointHandle>();
+        foreach (var link in GetAllDialogueLinks())
         {
-            foreach (var link in sourceRoom.transitions ?? System.Array.Empty<DialogueLink>())
+            if (!IsTransitionInsideGroup(link, memberGuids) || link.curvePoints == null) continue;
+
+            Undo.RecordObject(link, "Move Grouped Transition Points");
+            foreach (var point in link.curvePoints)
             {
-                if (link == null || !memberRooms.Contains(link.destination) ||
-                    !movedLinks.Add(link) || link.curvePoints == null)
+                if (point == null) continue;
+                if (_curvePointHandles.TryGetValue(link, out var linkHandles) &&
+                    linkHandles.FirstOrDefault(handle => handle.point == point) is { } graphHandle &&
+                    groupedHandles.Contains(graphHandle))
                     continue;
 
-                Undo.RecordObject(link, "Move Grouped Transition Points");
-                foreach (var point in link.curvePoints)
+                point.position += delta;
+                if (_curvePointHandles.TryGetValue(link, out var handlesToMove))
                 {
-                    if (point == null) continue;
-                    point.position += delta;
-                    if (_curvePointHandles.TryGetValue(link, out var handles))
-                    {
-                        var handle = handles.FirstOrDefault(candidate => candidate.point == point);
-                        handle?.SetGraphPosition(point.position);
-                    }
+                    var handle = handlesToMove.FirstOrDefault(candidate => candidate.point == point);
+                    handle?.SetGraphPosition(point.position);
                 }
-
-                EditorUtility.SetDirty(link);
-                MarkTransitionStrokeDirty(link);
             }
+
+            EditorUtility.SetDirty(link);
+            MarkTransitionStrokeDirty(link);
         }
     }
 
     private void ExpandGroupsToIncludeTransition(DialogueLink link)
     {
-        if (_isRebuilding || link == null || link.destination == null || link.curvePoints == null) return;
-
-        var destinationKey = DialogueGraphLayout.GetAssetKey(link.destination);
-        var sourceKeys = (_dialogue.rooms ?? System.Array.Empty<DialogueData>())
-            .Where(room => room != null && room.transitions != null && room.transitions.Contains(link))
-            .Select(DialogueGraphLayout.GetAssetKey)
-            .ToHashSet();
+        if (_isRebuilding || _movingGroup || link == null || link.curvePoints == null) return;
 
         foreach (var groupData in DialogueGraphLayout.instance.GetGroups(_dialogue))
         {
-            if (!groupData.memberAssetGuids.Contains(destinationKey) ||
-                !sourceKeys.Any(groupData.memberAssetGuids.Contains))
+            if (!IsTransitionInsideGroup(link, groupData.memberAssetGuids.ToHashSet()))
                 continue;
 
             var group = graphElements.OfType<DialogueGroup>().FirstOrDefault(item => item.data == groupData);
@@ -737,7 +928,7 @@ public class DialogueGraphView : GraphView
             var expanded = Rect.MinMaxRect(minX, minY, maxX, maxY);
             if (expanded == current) continue;
 
-            var memberNodes = _roomNodes.Values
+            var memberNodes = graphElements.OfType<Node>()
                 .Where(node => groupData.memberAssetGuids.Contains(node.viewDataKey))
                 .ToDictionary(node => node, node => node.GetPosition());
 
@@ -760,13 +951,13 @@ public class DialogueGraphView : GraphView
     public void RebuildGraph()
     {
         // Recreate visuals from the authoritative asset arrays and saved editor layout.
-        ClearAllCurvePointHandles();
-        ClearOverlapBadges();
-        _lastOverlapCycle.Clear();
-        _overlapCycleIndex = -1;
         _isRebuilding = true;
         try
         {
+            ClearAllCurvePointHandles();
+            ClearOverlapBadges();
+            _lastOverlapCycle.Clear();
+            _overlapCycleIndex = -1;
             DeleteElements(graphElements.ToList());
         }
         finally
@@ -775,35 +966,70 @@ public class DialogueGraphView : GraphView
         }
 
         _roomNodes.Clear();
+        _additionalEntryNodes.Clear();
+        _additionalExitNodes.Clear();
 
         var rooms = (_dialogue.rooms ?? System.Array.Empty<DialogueData>()).Where(r => r != null).ToList();
+        _dialogue.startOutput ??= new DialogueExecPortData { label = "Start" };
+        _dialogue.exitInput ??= new DialogueExecPortData { label = "Exit" };
+        _startNode = new DialogueStartNode(_dialogue);
+        _exitNode = new DialogueExitNode(_dialogue);
+        _startNode.RegisterCallback<GeometryChangedEvent>(_ => OnDialogueNodeGeometryChanged());
+        _exitNode.RegisterCallback<GeometryChangedEvent>(_ => OnDialogueNodeGeometryChanged());
+        AddElement(_startNode);
+        AddElement(_exitNode);
+
+        foreach (var entry in _dialogue.additionalEntries ?? new List<DialogueEntryData>())
+        {
+            if (entry == null) continue;
+            if (string.IsNullOrEmpty(entry.id)) entry.id = System.Guid.NewGuid().ToString("N");
+            var node = new DialogueAdditionalEntryNode(_dialogue, entry);
+            node.RegisterCallback<GeometryChangedEvent>(_ => OnDialogueNodeGeometryChanged());
+            AddElement(node);
+            _additionalEntryNodes[entry.id] = node;
+        }
+
+        foreach (var exit in _dialogue.additionalExits ?? new List<DialogueExitData>())
+        {
+            if (exit == null) continue;
+            if (string.IsNullOrEmpty(exit.id)) exit.id = System.Guid.NewGuid().ToString("N");
+            var node = new DialogueAdditionalExitNode(_dialogue, exit);
+            node.RegisterCallback<GeometryChangedEvent>(_ => OnDialogueNodeGeometryChanged());
+            AddElement(node);
+            _additionalExitNodes[exit.id] = node;
+        }
+
         // First create all nodes so edges can resolve both endpoints in the second pass.
         foreach (var room in rooms)
         {
-            var node = new DialogueNode(room, BeginTransitionSelection);
+            var node = new DialogueNode(room, RebuildGraph, RemoveExecOutputLinks, room is DialogueSelectorData);
             node.geometryChanged = OnDialogueNodeGeometryChanged;
             AddElement(node);
             _roomNodes[room] = node;
         }
 
-        // Each transition asset is now represented by one edge between its source and destination.
+        // Rebuild all transitions from the serialized endpoint and pin IDs.
+        var links = (_dialogue.links ?? System.Array.Empty<DialogueLink>())
+            .Where(link => link != null)
+            .ToList();
         foreach (var room in rooms)
         {
-            if (room.transitions == null) continue;
-
-            foreach (var link in room.transitions)
+            foreach (var link in room.transitions ?? System.Array.Empty<DialogueLink>())
             {
-                if (link == null || link.destination == null) continue;
-                if (!_roomNodes.TryGetValue(link.destination, out var destinationNode)) continue;
-
-                AddDirectedEdge(_roomNodes[room], destinationNode, link);
+                if (link != null && !links.Contains(link)) links.Add(link);
             }
+        }
+
+        foreach (var link in links)
+        {
+            if (!TryResolveTransitionPorts(link, out var output, out var input)) continue;
+            AddDirectedEdge(output, input, link);
         }
 
         // Restore groups after nodes exist so their saved member GUIDs can be resolved.
         foreach (var groupData in DialogueGraphLayout.instance.GetGroups(_dialogue))
         {
-            var group = new DialogueGroup(groupData, delta => MoveGroupedTransitionPoints(groupData, delta));
+            var group = new DialogueGroup(groupData, delta => MoveGroupedTransitionPoints(groupData, delta), moving => _movingGroup = moving);
             AddElement(group);
             group.SetPosition(new Rect(groupData.position, groupData.size));
 
@@ -821,25 +1047,48 @@ public class DialogueGraphView : GraphView
         // Groups remember members by asset GUID, not by transient GraphView element instances.
         foreach (var node in _roomNodes.Values)
             if (node.viewDataKey == guid) return node;
+        foreach (var handles in _curvePointHandles.Values)
+        {
+            var handle = handles.FirstOrDefault(item => item.viewDataKey == guid);
+            if (handle != null) return handle;
+        }
+        if (_startNode != null && _startNode.viewDataKey == guid) return _startNode;
+        if (_exitNode != null && _exitNode.viewDataKey == guid) return _exitNode;
+        foreach (var node in _additionalEntryNodes.Values)
+            if (node.viewDataKey == guid) return node;
+        foreach (var node in _additionalExitNodes.Values)
+            if (node.viewDataKey == guid) return node;
         return null;
     }
 
-    // All edges flow from an output port to an input port; the arrow marks the destination.
-    private Edge AddDirectedEdge(DialogueNode source, DialogueNode destination, DialogueLink transition)
+    // The custom stroke overlays a standard edge connected directly to the selected exec pins.
+    private Edge AddDirectedEdge(Port output, Port input, DialogueLink transition)
     {
-        var outputGuide = GetTransitionGuideWorld(transition, sourceEndpoint: true, destination);
-        var inputGuide = GetTransitionGuideWorld(transition, sourceEndpoint: false, source);
-        var outputPosition = source.GetNearestEdgePoint(outputGuide, out var outputSide);
-        var inputPosition = destination.GetNearestEdgePoint(inputGuide, out var inputSide);
-        var output = source.CreateAnchorPort(outputSide, Direction.Output, outputPosition);
-        var input = destination.CreateAnchorPort(inputSide, Direction.Input, inputPosition);
         var edge = output.ConnectTo(input);
+        ConfigureTransitionEdge(edge, transition);
+        AddElement(edge);
+        edge.UpdateEdgeControl();
+        HideBuiltInBezier(edge);
+        edge.edgeControl.MarkDirtyRepaint();
+        edge.schedule.Execute(() => RefreshTransitionEdgeAnchors()).ExecuteLater(0);
+        RefreshTransitionStrokeSelection();
+        return edge;
+    }
+
+    private void ConfigureTransitionEdge(Edge edge, DialogueLink transition)
+    {
+        if (edge.userData is DialogueTransitionEdgeData existing && existing.stroke != null)
+        {
+            UpdateTransitionEndpointColors(edge, existing);
+            existing.stroke.MarkDirtyRepaint();
+            return;
+        }
+
         edge.userData = new DialogueTransitionEdgeData
         {
-            transition = transition,
-            outputSide = outputSide,
-            inputSide = inputSide
+            transition = transition
         };
+        UpdateTransitionEndpointColors(edge, (DialogueTransitionEdgeData)edge.userData);
         float lineWidth = edge.edgeControl.edgeWidth;
         var lineColor = edge.edgeControl.outputColor;
         edge.edgeControl.drawToCap = false;
@@ -852,21 +1101,17 @@ public class DialogueGraphView : GraphView
                 EditorGUIUtility.PingObject(edgeData.transition);
             });
         }));
-        AddElement(edge);
-        edge.UpdateEdgeControl();
         var transitionData = (DialogueTransitionEdgeData)edge.userData;
         transitionData.stroke = new DialogueTransitionStroke(this, edge, lineWidth, lineColor);
         edge.hierarchy.Add(transitionData.stroke);
         transitionData.stroke.BringToFront();
         CreateCurvePointHandles(transition);
-        HideBuiltInBezier(edge);
-        edge.edgeControl.MarkDirtyRepaint();
-        edge.schedule.Execute(() =>
-        {
-            RefreshTransitionEdgeAnchor(edge);
-        }).ExecuteLater(0);
-        RefreshTransitionStrokeSelection();
-        return edge;
+    }
+
+    private static void UpdateTransitionEndpointColors(Edge edge, DialogueTransitionEdgeData data)
+    {
+        data.startsAtEntry = edge.output?.node is DialogueStartNode or DialogueAdditionalEntryNode;
+        data.endsAtExit = edge.input?.node is DialogueExitNode or DialogueAdditionalExitNode;
     }
 
     public int GetTransitionOverlapCount(Edge edge, out bool isFirstOverlap)
@@ -916,50 +1161,71 @@ public class DialogueGraphView : GraphView
         return true;
     }
 
-    private Vector3 GetTransitionGuideWorld(DialogueLink transition, bool sourceEndpoint, DialogueNode fallbackNode)
+    private bool TryResolveTransitionPorts(DialogueLink link, out Port output, out Port input)
     {
-        var points = transition.curvePoints;
-        if (points != null && points.Count > 0)
+        output = null;
+        input = null;
+
+        DialogueNode sourceNode = null;
+        if (!string.IsNullOrEmpty(link.sourceEntryId))
         {
-            var point = sourceEndpoint ? points[0] : points[points.Count - 1];
-            if (point != null)
+            if (!_additionalEntryNodes.TryGetValue(link.sourceEntryId, out var entryNode)) return false;
+            output = entryNode.output;
+        }
+        else if (link.sourceIsDialogueStart)
+        {
+            if (_startNode == null) return false;
+            output = _startNode.output;
+        }
+        else
+        {
+            DialogueData sourceAsset = link.source;
+            if (sourceAsset == null)
             {
-                var position = point.position;
-                return contentViewContainer.worldTransform.MultiplyPoint3x4(
-                    new Vector3(position.x, position.y, 0));
+                sourceAsset = (_dialogue.rooms ?? System.Array.Empty<DialogueData>())
+                    .FirstOrDefault(room => room != null && room.transitions != null && room.transitions.Contains(link));
+                if (sourceAsset != null)
+                {
+                    link.source = sourceAsset;
+                    link.sourcePortId = sourceAsset.execOutput.id;
+                }
             }
+
+            if (sourceAsset == null || !_roomNodes.TryGetValue(sourceAsset, out sourceNode)) return false;
+            if (string.IsNullOrEmpty(link.sourcePortId))
+                link.sourcePortId = sourceNode.room.execOutput.id;
+            output = sourceNode.GetOutputPort(link.sourcePortId);
         }
 
-        return fallbackNode.worldBound.center;
+        if (!string.IsNullOrEmpty(link.destinationExitId))
+        {
+            if (!_additionalExitNodes.TryGetValue(link.destinationExitId, out var exitNode)) return false;
+            input = exitNode.input;
+        }
+        else if (link.destinationIsDialogueExit)
+        {
+            if (_exitNode == null) return false;
+            input = _exitNode.input;
+        }
+        else if (link.destination != null && _roomNodes.TryGetValue(link.destination, out var destinationNode))
+        {
+            if (string.IsNullOrEmpty(link.destinationPortId))
+                link.destinationPortId = destinationNode.room.execInput.id;
+            input = destinationNode.GetInputPort(link.destinationPortId);
+        }
+
+        return output != null && input != null;
     }
 
     private void RefreshTransitionEdgeAnchors()
     {
         foreach (var edge in graphElements.OfType<Edge>())
-            RefreshTransitionEdgeAnchor(edge);
-    }
-
-    private void RefreshTransitionEdgeAnchor(Edge edge)
-    {
-        if (edge.output?.node is not DialogueNode source ||
-            edge.input?.node is not DialogueNode destination ||
-            edge.userData is not DialogueTransitionEdgeData edgeData)
-            return;
-
-        var outputGuide = GetTransitionGuideWorld(edgeData.transition, sourceEndpoint: true, destination);
-        var inputGuide = GetTransitionGuideWorld(edgeData.transition, sourceEndpoint: false, source);
-        var outputPosition = source.GetNearestEdgePoint(outputGuide, out var outputSide);
-        var inputPosition = destination.GetNearestEdgePoint(inputGuide, out var inputSide);
-
-        source.PositionAnchorPort(edge.output, outputPosition);
-        destination.PositionAnchorPort(edge.input, inputPosition);
-        edgeData.outputSide = outputSide;
-        edgeData.inputSide = inputSide;
-
-        edge.UpdateEdgeControl();
-        HideBuiltInBezier(edge);
-        edgeData.stroke?.MarkDirtyRepaint();
-        edge.edgeControl.MarkDirtyRepaint();
+        {
+            edge.UpdateEdgeControl();
+            HideBuiltInBezier(edge);
+            if (edge.userData is DialogueTransitionEdgeData edgeData)
+                edgeData.stroke?.MarkDirtyRepaint();
+        }
     }
 
     private static void HideBuiltInBezier(Edge edge)
@@ -1144,7 +1410,53 @@ public class DialogueGraphView : GraphView
             }
         }
 
+        ClipRouteAtTargetNode(path, segmentRoutes, edge.input.node);
+
         return path;
+    }
+
+    private void ClipRouteAtTargetNode(List<Vector2> path, List<int> segmentRoutes, Node node)
+    {
+        if (node == null || path.Count < 2) return;
+
+        var worldBounds = node.worldBound;
+        var graphMin = WorldToGraph(new Vector3(worldBounds.xMin, worldBounds.yMin, 0));
+        var graphMax = WorldToGraph(new Vector3(worldBounds.xMax, worldBounds.yMax, 0));
+        var bounds = Rect.MinMaxRect(
+            Mathf.Min(graphMin.x, graphMax.x),
+            Mathf.Min(graphMin.y, graphMax.y),
+            Mathf.Max(graphMin.x, graphMax.x),
+            Mathf.Max(graphMin.y, graphMax.y));
+
+        for (int i = path.Count - 2; i >= 0; i--)
+        {
+            if (!bounds.Contains(path[i + 1]) || bounds.Contains(path[i])) continue;
+
+            var boundary = GetNodeBoundaryPoint(bounds, path[i + 1], path[i]);
+            path.RemoveRange(i + 1, path.Count - i - 1);
+            path.Add(boundary);
+            int firstRemovedRoute = i + 1;
+            if (firstRemovedRoute < segmentRoutes.Count)
+                segmentRoutes.RemoveRange(firstRemovedRoute, segmentRoutes.Count - firstRemovedRoute);
+            return;
+        }
+    }
+
+    private static Vector2 GetNodeBoundaryPoint(Rect bounds, Vector2 inside, Vector2 outside)
+    {
+        var direction = outside - inside;
+        float t = 1f;
+        if (direction.x > 0f)
+            t = Mathf.Min(t, (bounds.xMax - inside.x) / direction.x);
+        else if (direction.x < 0f)
+            t = Mathf.Min(t, (bounds.xMin - inside.x) / direction.x);
+
+        if (direction.y > 0f)
+            t = Mathf.Min(t, (bounds.yMax - inside.y) / direction.y);
+        else if (direction.y < 0f)
+            t = Mathf.Min(t, (bounds.yMin - inside.y) / direction.y);
+
+        return inside + direction * Mathf.Clamp01(t);
     }
 
     private Vector2 WorldToGraph(Vector3 position)
@@ -1162,39 +1474,27 @@ public class DialogueGraphView : GraphView
         foreach (var curvePoint in link.curvePoints)
         {
             if (curvePoint == null) continue;
-            int undoGroup = -1;
+            if (string.IsNullOrEmpty(curvePoint.id))
+                curvePoint.id = System.Guid.NewGuid().ToString("N");
             var point = curvePoint;
             var handle = new DialogueCurvePointHandle(
                 link,
                 point,
-                contentViewContainer,
-                () =>
-                {
-                    undoGroup = BeginUndoGroup("Move Transition Curve Point");
-                    Undo.RecordObject(link, "Move Transition Curve Point");
-                },
                 position =>
                 {
                     point.position = position;
+                    Undo.RecordObject(link, "Move Transition Curve Point");
                     EditorUtility.SetDirty(link);
                     ExpandGroupsToIncludeTransition(link);
                     MarkTransitionStrokeDirty(link);
-                },
-                () =>
-                {
-                    if (undoGroup < 0) return;
-                    RefreshTransitionEdgesForLink(link);
-                    DialogueGraphLayout.instance.SaveGroups();
-                    AssetDatabase.SaveAssets();
-                    Undo.CollapseUndoOperations(undoGroup);
-                    undoGroup = -1;
                 },
                 () => SetCurvePointMode(link, point, DialogueCurvePointMode.Linear),
                 () => SetCurvePointMode(link, point, DialogueCurvePointMode.Eased),
                 () => DeleteCurvePoint(link, point));
             handle.SetGraphPosition(point.position);
             handle.SetPointMode(point.mode);
-            contentViewContainer.Add(handle);
+            AddElement(handle);
+            handle.BringToFront();
             handles.Add(handle);
         }
 
@@ -1208,7 +1508,7 @@ public class DialogueGraphView : GraphView
         {
             if (_selectedCurvePointHandle == handle)
                 SelectCurvePointHandle(null);
-            handle.RemoveFromHierarchy();
+            RemoveElement(handle);
         }
         _curvePointHandles.Remove(link);
     }
@@ -1221,7 +1521,7 @@ public class DialogueGraphView : GraphView
             {
                 if (_selectedCurvePointHandle == handle)
                     SelectCurvePointHandle(null);
-                handle.RemoveFromHierarchy();
+                RemoveElement(handle);
             }
         }
         _curvePointHandles.Clear();
@@ -1231,8 +1531,6 @@ public class DialogueGraphView : GraphView
     {
         if (_selectedCurvePointHandle == handle) return;
         _selectedCurvePointHandle?.SetSelected(false);
-        if (handle != null)
-            ClearSelection();
         _selectedCurvePointHandle = handle;
         _selectedCurvePointHandle?.SetSelected(true);
         if (handle?.transition != null)
@@ -1288,7 +1586,8 @@ public class DialogueGraphView : GraphView
         {
             if (edge.userData is DialogueTransitionEdgeData edgeData && edgeData.transition == link)
             {
-                RefreshTransitionEdgeAnchor(edge);
+                edge.UpdateEdgeControl();
+                HideBuiltInBezier(edge);
                 edgeData.stroke?.MarkDirtyRepaint();
             }
         }
@@ -1301,7 +1600,11 @@ public class DialogueGraphView : GraphView
         foreach (var edge in graphElements.OfType<Edge>())
         {
             if (edge.userData is DialogueTransitionEdgeData edgeData && edgeData.transition == link)
-                RefreshTransitionEdgeAnchor(edge);
+            {
+                edge.UpdateEdgeControl();
+                HideBuiltInBezier(edge);
+                edgeData.stroke?.MarkDirtyRepaint();
+            }
         }
     }
 
@@ -1337,6 +1640,41 @@ public class DialogueGraphView : GraphView
             }
 
             edgeData.stroke.MarkDirtyRepaint();
+        }
+    }
+
+    private void RefreshCurvePointSelectionFromNodeSelection()
+    {
+        var selectedHandles = selection.OfType<DialogueCurvePointHandle>().ToHashSet();
+        _selectedCurvePointHandle = selectedHandles.LastOrDefault();
+        var selectedRooms = selection.OfType<DialogueNode>()
+            .Select(node => node.room)
+            .ToHashSet();
+        bool startSelected = selection.OfType<DialogueStartNode>().Any();
+        bool exitSelected = selection.OfType<DialogueExitNode>().Any();
+        var selectedEntryIds = selection.OfType<DialogueAdditionalEntryNode>().Select(node => node.data.id).ToHashSet();
+        var selectedExitIds = selection.OfType<DialogueAdditionalExitNode>().Select(node => node.data.id).ToHashSet();
+
+        foreach (var pair in _curvePointHandles)
+        {
+            var link = pair.Key;
+            DialogueData source = link.source;
+            if (source == null && !link.sourceIsDialogueStart)
+            {
+                source = (_dialogue.rooms ?? System.Array.Empty<DialogueData>())
+                    .FirstOrDefault(room => room != null && room.transitions != null && room.transitions.Contains(link));
+            }
+
+            bool sourceSelected = !string.IsNullOrEmpty(link.sourceEntryId)
+                ? selectedEntryIds.Contains(link.sourceEntryId)
+                : link.sourceIsDialogueStart ? startSelected : selectedRooms.Contains(source);
+            bool destinationSelected = !string.IsNullOrEmpty(link.destinationExitId)
+                ? selectedExitIds.Contains(link.destinationExitId)
+                : link.destinationIsDialogueExit ? exitSelected : selectedRooms.Contains(link.destination);
+            bool transitionSelected = sourceSelected && destinationSelected;
+
+            foreach (var handle in pair.Value)
+                handle.SetSelected(transitionSelected || selectedHandles.Contains(handle));
         }
     }
 
@@ -1412,12 +1750,27 @@ public class DialogueGraphView : GraphView
 
         if (change.elementsToRemove != null)
         {
+            foreach (var fixedEndpoint in change.elementsToRemove
+                .Where(element => element is DialogueStartNode { } startNode && startNode.viewDataKey.EndsWith(":start") ||
+                    element is DialogueExitNode { } exitNode && exitNode.viewDataKey.EndsWith(":exit"))
+                .ToList())
+                change.elementsToRemove.Remove(fixedEndpoint);
+
             foreach (var group in change.elementsToRemove.OfType<DialogueGroup>().ToList())
             {
                 _preservingGroupContents = true;
                 try
                 {
-                    foreach (var member in group.containedElements.ToList())
+                    var members = group.containedElements.ToHashSet();
+                    var memberNodes = members.OfType<Node>().ToHashSet();
+                    var connectedEdges = graphElements.OfType<Edge>()
+                        .Where(edge => memberNodes.Contains(edge.output?.node) || memberNodes.Contains(edge.input?.node))
+                        .ToList();
+
+                    foreach (var edge in connectedEdges)
+                        change.elementsToRemove.Remove(edge);
+
+                    foreach (var member in members)
                     {
                         change.elementsToRemove.Remove(member);
                         group.RemoveElement(member);
@@ -1436,19 +1789,18 @@ public class DialogueGraphView : GraphView
                 {
                     case Edge edge:
                         dirty |= ApplyEdge(edge, connect: false);
-                        if (edge.userData is DialogueTransitionEdgeData transitionEdge)
-                        {
-                            if (edge.output?.node is DialogueNode source)
-                                source.RemoveAnchorPort(edge.output);
-                            if (edge.input?.node is DialogueNode destination)
-                                destination.RemoveAnchorPort(edge.input);
-                        }
                         break;
                     case DialogueGroup roomGroup:
                         DialogueGraphLayout.instance.RemoveGroup(roomGroup.data);
                         break;
                     case DialogueNode roomNode:
                         dirty |= RemoveFromGraph(roomNode.room);
+                        break;
+                    case DialogueAdditionalEntryNode entryNode:
+                        dirty |= RemoveFromGraph(entryNode.data);
+                        break;
+                    case DialogueAdditionalExitNode exitNode:
+                        dirty |= RemoveFromGraph(exitNode.data);
                         break;
                 }
             }
@@ -1465,12 +1817,26 @@ public class DialogueGraphView : GraphView
 
     private bool ApplyEdge(Edge edge, bool connect)
     {
-        if (edge.output?.node is not DialogueNode sourceNode ||
-            edge.input?.node is not DialogueNode destinationNode ||
-            edge.userData is not DialogueTransitionEdgeData transitionEdge)
+        if (edge.output == null || edge.input == null ||
+            edge.output.portType != typeof(DialogueExecPortData) ||
+            edge.input.portType != typeof(DialogueExecPortData))
             return false;
 
-        var transition = transitionEdge.transition;
+        var sourceElement = edge.output.node;
+        var destinationElement = edge.input.node;
+        var sourceRoomNode = sourceElement as DialogueNode;
+        var destinationRoomNode = destinationElement as DialogueNode;
+        var sourceEntryNode = sourceElement as DialogueAdditionalEntryNode;
+        var destinationExitNode = destinationElement as DialogueAdditionalExitNode;
+        bool sourceIsStart = sourceElement is DialogueStartNode;
+        bool destinationIsExit = destinationElement is DialogueExitNode;
+        bool sourceIsEntry = sourceIsStart || sourceEntryNode != null;
+        bool destinationIsExitNode = destinationIsExit || destinationExitNode != null;
+        if ((!sourceIsEntry && sourceRoomNode == null) ||
+            (!destinationIsExitNode && destinationRoomNode == null)) return false;
+
+        var transitionData = edge.userData as DialogueTransitionEdgeData;
+        var transition = transitionData?.transition;
         if (connect)
         {
             var undoGroup = -1;
@@ -1483,7 +1849,6 @@ public class DialogueGraphView : GraphView
                     Undo.CollapseUndoOperations(undoGroup);
                     return false;
                 }
-                transitionEdge.transition = transition;
             }
 
             bool changed = false;
@@ -1496,26 +1861,55 @@ public class DialogueGraphView : GraphView
                 changed = true;
             }
 
-            var roomTransitions = sourceNode.room.transitions?.ToList() ?? new List<DialogueLink>();
-            if (!roomTransitions.Contains(transition))
+            Undo.RecordObject(transition, "Set Dialogue Transition Endpoints");
+            var newSource = sourceRoomNode != null ? sourceRoomNode.room : null;
+            var newDestination = destinationRoomNode != null ? destinationRoomNode.room : null;
+            var newSourceEntryId = sourceEntryNode?.data.id;
+            var newDestinationExitId = destinationExitNode?.data.id;
+            string newSourcePortId = GetExecPortId(edge.output);
+            string newDestinationPortId = GetExecPortId(edge.input);
+            changed |= transition.source != newSource ||
+                transition.sourceIsDialogueStart != sourceIsStart ||
+                transition.sourceEntryId != newSourceEntryId ||
+                transition.sourcePortId != newSourcePortId ||
+                transition.destination != newDestination ||
+                transition.destinationIsDialogueExit != destinationIsExit ||
+                transition.destinationExitId != newDestinationExitId ||
+                transition.destinationPortId != newDestinationPortId;
+
+            if (changed)
             {
-                Undo.RecordObject(sourceNode.room, "Connect Dialogue Transition");
-                roomTransitions.Add(transition);
-                sourceNode.room.transitions = roomTransitions.ToArray();
-                changed = true;
+                transition.source = newSource;
+                transition.sourceIsDialogueStart = sourceIsStart;
+                transition.sourceEntryId = newSourceEntryId;
+                transition.sourcePortId = newSourcePortId;
+                transition.destination = newDestination;
+                transition.destinationIsDialogueExit = destinationIsExit;
+                transition.destinationExitId = newDestinationExitId;
+                transition.destinationPortId = newDestinationPortId;
             }
 
-            if (transition.destination != destinationNode.room)
+            if (sourceRoomNode != null)
             {
-                Undo.RecordObject(transition, "Set Dialogue Transition Destination");
-                transition.destination = destinationNode.room;
-                changed = true;
+                var roomTransitions = sourceRoomNode.room.transitions?.ToList() ?? new List<DialogueLink>();
+                if (!roomTransitions.Contains(transition))
+                {
+                    Undo.RecordObject(sourceRoomNode.room, "Connect Dialogue Transition");
+                    roomTransitions.Add(transition);
+                    sourceRoomNode.room.transitions = roomTransitions.ToArray();
+                    EditorUtility.SetDirty(sourceRoomNode.room);
+                }
             }
+
+            transitionData ??= new DialogueTransitionEdgeData();
+            transitionData.transition = transition;
+            edge.userData = transitionData;
+            ConfigureTransitionEdge(edge, transition);
 
             if (changed)
             {
                 EditorUtility.SetDirty(_dialogue);
-                EditorUtility.SetDirty(sourceNode.room);
+                if (sourceRoomNode != null) EditorUtility.SetDirty(sourceRoomNode.room);
                 EditorUtility.SetDirty(transition);
                 AssetDatabase.SaveAssets();
             }
@@ -1525,32 +1919,27 @@ public class DialogueGraphView : GraphView
             return changed;
         }
 
-        if (transition == null || sourceNode.room.transitions == null ||
-            !sourceNode.room.transitions.Contains(transition))
-            return false;
+        if (transition == null) return false;
 
-        Undo.RecordObject(sourceNode.room, "Delete Dialogue Transition");
-        sourceNode.room.transitions = sourceNode.room.transitions
+        Undo.RecordObject(_dialogue, "Delete Dialogue Transition");
+        _dialogue.links = (_dialogue.links ?? System.Array.Empty<DialogueLink>())
             .Where(link => link != transition)
             .ToArray();
-
-        bool stillUsed = (_dialogue.rooms ?? System.Array.Empty<DialogueData>())
-            .Where(room => room != null && room != sourceNode.room)
-            .Any(room => room.transitions != null && room.transitions.Contains(transition));
-        if (!stillUsed)
+        foreach (var room in _dialogue.rooms ?? System.Array.Empty<DialogueData>())
         {
-            Undo.RecordObject(_dialogue, "Delete Dialogue Transition");
-            _dialogue.links = (_dialogue.links ?? System.Array.Empty<DialogueLink>())
-                .Where(link => link != transition)
-                .ToArray();
-            EditorUtility.SetDirty(_dialogue);
-            DestroyDialogueSubAsset(transition);
+            if (room == null || room.transitions == null || !room.transitions.Contains(transition)) continue;
+            Undo.RecordObject(room, "Remove Dialogue Transition Reference");
+            room.transitions = room.transitions.Where(link => link != transition).ToArray();
+            EditorUtility.SetDirty(room);
         }
 
-        EditorUtility.SetDirty(sourceNode.room);
+        EditorUtility.SetDirty(_dialogue);
+        DestroyDialogueSubAsset(transition);
         AssetDatabase.SaveAssets();
         return true;
     }
+
+    private static string GetExecPortId(Port port) => port.userData as string;
 
     private void OnElementsAddedToGroup(Group group, IEnumerable<GraphElement> elements)
     {
@@ -1677,6 +2066,30 @@ public class DialogueGraphView : GraphView
         return true;
     }
 
+    private bool RemoveFromGraph(DialogueEntryData entry)
+    {
+        foreach (var link in GetAllDialogueLinks().Where(link => link.sourceEntryId == entry.id).ToList())
+            RemoveFromGraph(link);
+        Undo.RecordObject(_dialogue, "Remove Dialogue Entry");
+        _dialogue.additionalEntries = (_dialogue.additionalEntries ?? new List<DialogueEntryData>())
+            .Where(item => item != entry).ToList();
+        _additionalEntryNodes.Remove(entry.id);
+        EditorUtility.SetDirty(_dialogue);
+        return true;
+    }
+
+    private bool RemoveFromGraph(DialogueExitData exit)
+    {
+        foreach (var link in GetAllDialogueLinks().Where(link => link.destinationExitId == exit.id).ToList())
+            RemoveFromGraph(link);
+        Undo.RecordObject(_dialogue, "Remove Dialogue Exit");
+        _dialogue.additionalExits = (_dialogue.additionalExits ?? new List<DialogueExitData>())
+            .Where(item => item != exit).ToList();
+        _additionalExitNodes.Remove(exit.id);
+        EditorUtility.SetDirty(_dialogue);
+        return true;
+    }
+
     public void AddExistingRoom(DialogueData room)
     {
         if (room == null || _roomNodes.ContainsKey(room)) return;
@@ -1703,26 +2116,41 @@ public class DialogueGraphView : GraphView
         _dialogue.rooms = list.ToArray();
         EditorUtility.SetDirty(_dialogue);
 
-        var node = new DialogueNode(room, BeginTransitionSelection);
-        node.geometryChanged = OnDialogueNodeGeometryChanged;
-        AddElement(node);
-        _roomNodes[room] = node;
+        RebuildGraph();
+    }
 
-        foreach (var link in room.transitions ?? System.Array.Empty<DialogueLink>())
+    private void RemoveExecOutputLinks(DialogueData source, string portId)
+    {
+        if (source == null || string.IsNullOrEmpty(portId)) return;
+
+        var links = (_dialogue.links ?? System.Array.Empty<DialogueLink>())
+            .Where(link => link != null && link.source == source && link.sourcePortId == portId)
+            .ToList();
+        foreach (var link in source.transitions ?? System.Array.Empty<DialogueLink>())
         {
-            if (link != null && link.destination != null && _roomNodes.TryGetValue(link.destination, out var destinationNode))
-                AddDirectedEdge(node, destinationNode, link);
+            if (link != null && link.sourcePortId == portId && !links.Contains(link))
+                links.Add(link);
+        }
+        if (links.Count == 0) return;
+
+        Undo.RecordObject(_dialogue, "Remove Selection Output Transitions");
+        Undo.RecordObject(source, "Remove Selection Output Transitions");
+        _dialogue.links = (_dialogue.links ?? System.Array.Empty<DialogueLink>())
+            .Where(link => !links.Contains(link))
+            .ToArray();
+        source.transitions = (source.transitions ?? System.Array.Empty<DialogueLink>())
+            .Where(link => !links.Contains(link))
+            .ToArray();
+
+        foreach (var link in links)
+        {
+            EditorUtility.SetDirty(link);
+            DestroyDialogueSubAsset(link);
         }
 
-        foreach (var sourceRoom in _dialogue.rooms ?? System.Array.Empty<DialogueData>())
-        {
-            if (sourceRoom == null || sourceRoom == room || sourceRoom.transitions == null) continue;
-            foreach (var link in sourceRoom.transitions)
-            {
-                if (link != null && link.destination == room && _roomNodes.TryGetValue(sourceRoom, out var sourceNode))
-                    AddDirectedEdge(sourceNode, node, link);
-            }
-        }
+        EditorUtility.SetDirty(source);
+        EditorUtility.SetDirty(_dialogue);
+        AssetDatabase.SaveAssets();
     }
 
     private void AddLink(DialogueLink link)
@@ -1733,12 +2161,6 @@ public class DialogueGraphView : GraphView
         _dialogue.links = list.ToArray();
         EditorUtility.SetDirty(_dialogue);
 
-        foreach (var room in _dialogue.rooms ?? System.Array.Empty<DialogueData>())
-        {
-            if (room != null && room.transitions != null && room.transitions.Contains(link) &&
-                link.destination != null && _roomNodes.TryGetValue(room, out var roomNode) &&
-                _roomNodes.TryGetValue(link.destination, out var destinationNode))
-                AddDirectedEdge(roomNode, destinationNode, link);
-        }
+        RebuildGraph();
     }
 }

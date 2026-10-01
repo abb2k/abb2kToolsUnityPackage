@@ -27,8 +27,17 @@ public class DialogueGraphLayout : ScriptableSingleton<DialogueGraphLayout>
         public List<string> memberAssetGuids = new();
     }
 
+    [System.Serializable]
+    public class ViewData
+    {
+        public string graphGuid;
+        public Vector3 position;
+        public Vector3 scale = Vector3.one;
+    }
+
     [SerializeField] private List<Entry> entries = new();
     [SerializeField] private List<GroupData> groups = new();
+    [SerializeField] private List<ViewData> views = new();
 
     // Return the saved position, or origin for assets that have not been laid out yet.
     public Vector2 GetPosition(Object asset)
@@ -74,6 +83,36 @@ public class DialogueGraphLayout : ScriptableSingleton<DialogueGraphLayout>
         // Filter so each Dialogue graph restores only its own groups.
         var graphGuid = GetGuid(graphAsset);
         return groups.FindAll(g => g.graphGuid == graphGuid);
+    }
+
+    public bool TryGetView(Object graphAsset, out Vector3 position, out Vector3 scale)
+    {
+        var graphGuid = GetGuid(graphAsset);
+        var view = views.Find(item => item.graphGuid == graphGuid);
+        if (view == null)
+        {
+            position = Vector3.zero;
+            scale = Vector3.one;
+            return false;
+        }
+
+        position = view.position;
+        scale = view.scale;
+        return true;
+    }
+
+    public void SetView(Object graphAsset, Vector3 position, Vector3 scale)
+    {
+        var graphGuid = GetGuid(graphAsset);
+        var view = views.Find(item => item.graphGuid == graphGuid);
+        if (view != null && view.position == position && view.scale == scale) return;
+
+        view ??= new ViewData { graphGuid = graphGuid };
+        if (!views.Contains(view))
+            views.Add(view);
+        view.position = position;
+        view.scale = scale;
+        MarkDirty();
     }
 
     public GroupData CreateGroupData(Object graphAsset, string title, Vector2 position, Vector2 size)

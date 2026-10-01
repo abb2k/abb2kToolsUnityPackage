@@ -10,6 +10,10 @@ public class DialogueGraphWindow : EditorWindow
     // Serialized so Unity can restore the selected graph when the editor window is reopened.
     [SerializeField] private Dialogue _target;
     private DialogueGraphView _graphView;
+    private DialogueVariableWindow _variablesWindow;
+    private bool _showVariablesWindow;
+    private Vector2 _variablesPosition = new(12, 48);
+    private Vector2 _variablesSize = new(300, 340);
 
     [MenuItem("Abb2kTools/Dialogue Graph")]
     public static void Open()
@@ -68,10 +72,15 @@ public class DialogueGraphWindow : EditorWindow
         }
 
         _graphView = new DialogueGraphView(_target) { name = "Dialogue Graph" };
-        _graphView.StretchToParentSize();
-        rootVisualElement.Add(_graphView);
+        _graphView.style.flexGrow = 1;
 
         var toolbar = new Toolbar();
+        toolbar.Add(new ToolbarButton(ToggleVariablesWindow) { text = "Variables" });
+        toolbar.Add(new ToolbarButton(() => _graphView.CreateAdditionalEntryNode(
+            _graphView.contentViewContainer.WorldToLocal(_graphView.worldBound.center))) { text = "New Entry" });
+        toolbar.Add(new ToolbarButton(() => _graphView.CreateAdditionalExitNode(
+            _graphView.contentViewContainer.WorldToLocal(_graphView.worldBound.center) + new Vector2(220, 0))) { text = "New Exit" });
+
         // The toolbar creates a DialogueData sub-asset and places its node near the canvas center.
         toolbar.Add(new ToolbarButton(() =>
         {
@@ -96,6 +105,44 @@ public class DialogueGraphWindow : EditorWindow
             addLinkField.value = null;
         }) { text = "Add Link" });
 
+        rootVisualElement.style.flexDirection = FlexDirection.Column;
         rootVisualElement.Add(toolbar);
+        rootVisualElement.Add(_graphView);
+        if (_showVariablesWindow)
+            CreateVariablesWindow();
+    }
+
+    private void ToggleVariablesWindow()
+    {
+        if (_variablesWindow != null)
+        {
+            CloseVariablesWindow();
+            return;
+        }
+
+        _showVariablesWindow = true;
+        CreateVariablesWindow();
+    }
+
+    private void CreateVariablesWindow()
+    {
+        _variablesWindow = new DialogueVariableWindow(
+            _target,
+            rootVisualElement,
+            _variablesPosition,
+            _variablesSize,
+            position => _variablesPosition = position,
+            size => _variablesSize = size,
+            CloseVariablesWindow);
+        rootVisualElement.Add(_variablesWindow);
+        _variablesWindow.BringToFront();
+    }
+
+    private void CloseVariablesWindow()
+    {
+        if (_variablesWindow != null)
+            rootVisualElement.Remove(_variablesWindow);
+        _variablesWindow = null;
+        _showVariablesWindow = false;
     }
 }

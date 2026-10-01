@@ -2,6 +2,7 @@ using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEditor.UIElements;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -17,38 +18,47 @@ public enum DialogueNodeSide
 public class DialogueNode : Node
 {
     public readonly DialogueData room;
-    private readonly System.Action<DialogueData, Vector2> _createTransition;
-    private readonly VisualElement _anchorLayer = new();
+    private readonly System.Action _graphChanged;
+    private readonly System.Action<DialogueData, string> _removeOutputLinks;
+    private readonly bool _isSelectorOnly;
+    private readonly Dictionary<Port, string> _outputPortIds = new();
+    private readonly VisualElement _selectionOptionsContainer = new();
+    public Port execInput;
+    public Port execOutput;
     public System.Action geometryChanged;
 
-    public DialogueNode(DialogueData room, System.Action<DialogueData, Vector2> createTransition)
+    public DialogueNode(
+        DialogueData room,
+        System.Action graphChanged,
+        System.Action<DialogueData, string> removeOutputLinks,
+        bool isSelectorOnly = false)
     {
         // Keep the asset reference so graph interactions can update or select the real object.
         this.room = room;
-        _createTransition = createTransition;
+        _graphChanged = graphChanged;
+        _removeOutputLinks = removeOutputLinks;
+        _isSelectorOnly = isSelectorOnly;
         RegisterCallback<GeometryChangedEvent>(_ => geometryChanged?.Invoke());
         title = room.name;
         // Include local file ID because multiple graph nodes can share the Dialogue asset file.
         viewDataKey = DialogueGraphLayout.GetAssetKey(room);
 
-        // Keep invisible per-edge ports in node-local coordinates on an overlay layer.
-        _anchorLayer.name = "transition-anchor-layer";
-        ConfigureAnchorLayer(_anchorLayer);
-        hierarchy.Add(_anchorLayer);
-
-        // Show the backing asset in the node without allowing edits through this display field.
-        var objectField = new ObjectField
+        if (!isSelectorOnly)
         {
-            objectType = typeof(DialogueData),
-            value = room,
-            allowSceneObjects = false
-        };
+            // Show the backing asset in the node without allowing edits through this display field.
+            var objectField = new ObjectField
+            {
+                objectType = typeof(DialogueData),
+                value = room,
+                allowSceneObjects = false
+            };
 
-        objectField.style.width = 190;
-        objectField.style.height = 30;
+            objectField.style.width = 190;
+            objectField.style.height = 30;
 
-        objectField.SetEnabled(false);
-        mainContainer.Add(objectField);
+            objectField.SetEnabled(false);
+            mainContainer.Add(objectField);
+        }
 
         var nameField = new TextField("Name")
         {
@@ -74,6 +84,18 @@ public class DialogueNode : Node
         });
         mainContainer.Add(nameField);
 
+        if (!isSelectorOnly)
+        {
+            var selectionToggle = new Toggle("Selection") { value = room.hasSelection };
+            selectionToggle.RegisterValueChangedCallback(evt => SetSelectionEnabled(evt.newValue));
+            mainContainer.Add(selectionToggle);
+        }
+
+        _selectionOptionsContainer.style.flexDirection = FlexDirection.Column;
+        mainContainer.Add(_selectionOptionsContainer);
+        RefreshSelectionOptions();
+        RebuildExecPorts();
+
         // Extension point: add dialogue text, speaker, timing, and other editing controls here.
         this.style.width = 200;
         this.style.minHeight = 100;
@@ -91,124 +113,150 @@ public class DialogueNode : Node
         DialogueGraphLayout.instance.SetPosition(room, newPos.position);
     }
 
-    public Vector2 GetNearestEdgePoint(DialogueNode other, out DialogueNodeSide side)
-        => GetNearestEdgePoint(other.worldBound.center, out side);
+    public Port GetInputPort(string id) => execInput != null && execInput.userData as string == id ? execInput : null;
 
-    public Vector2 GetNearestEdgePoint(Vector3 targetWorld, out DialogueNodeSide side)
+    public Port GetOutputPort(string id)
     {
-        var target = GetWorldPointLocal(targetWorld);
-        Vector2 left = GetPointOnSide(targetWorld, DialogueNodeSide.Left);
-        Vector2 right = GetPointOnSide(targetWorld, DialogueNodeSide.Right);
-        Vector2 top = GetPointOnSide(targetWorld, DialogueNodeSide.Top);
-        Vector2 bottom = GetPointOnSide(targetWorld, DialogueNodeSide.Bottom);
-
-        side = DialogueNodeSide.Left;
-        var closest = left;
-        float closestDistance = (target - left).sqrMagnitude;
-
-        ConsiderPoint(right, DialogueNodeSide.Right, target, ref side, ref closest, ref closestDistance);
-        ConsiderPoint(top, DialogueNodeSide.Top, target, ref side, ref closest, ref closestDistance);
-        ConsiderPoint(bottom, DialogueNodeSide.Bottom, target, ref side, ref closest, ref closestDistance);
-        return closest;
+        if (execOutput != null && (string)execOutput.userData == id) return execOutput;
+        return _outputPortIds.FirstOrDefault(pair => pair.Value == id).Key;
     }
 
-    public Vector2 GetPointOnSide(Vector3 targetWorld, DialogueNodeSide side)
+    public string GetPortId(Port port)
     {
-        var bounds = GetLocalBounds();
-        var target = GetWorldPointLocal(targetWorld);
-        float horizontalInset = Mathf.Min(24f, bounds.width * 0.25f);
-        float verticalInset = Mathf.Min(24f, bounds.height * 0.25f);
-        float minX = bounds.xMin + horizontalInset;
-        float maxX = bounds.xMax - horizontalInset;
-        float minY = bounds.yMin + verticalInset;
-        float maxY = bounds.yMax - verticalInset;
+        if (port == execInput || port == execOutput) return port.userData as string;
+        return _outputPortIds.TryGetValue(port, out var id) ? id : null;
+    }
 
-        return side switch
+    private void RebuildExecPorts()
+    {
+        room.execInput ??= new DialogueExecPortData { label = "In" };
+        room.execOutput ??= new DialogueExecPortData { label = "Exec" };
+        room.selectionOptions ??= new List<DialogueSelectionOptionData>();
+
+        inputContainer.Clear();
+        outputContainer.Clear();
+        _outputPortIds.Clear();
+
+        execInput = CreateExecPort(Direction.Input, room.execInput);
+        inputContainer.Add(execInput);
+        execOutput = CreateExecPort(Direction.Output, room.execOutput);
+        execOutput.visible = !room.hasSelection;
+        outputContainer.Add(execOutput);
+
+        if (!room.hasSelection) return;
+
+        foreach (var option in room.selectionOptions)
         {
-            DialogueNodeSide.Left => new Vector2(bounds.xMin, Mathf.Clamp(target.y, minY, maxY)),
-            DialogueNodeSide.Right => new Vector2(bounds.xMax, Mathf.Clamp(target.y, minY, maxY)),
-            DialogueNodeSide.Top => new Vector2(Mathf.Clamp(target.x, minX, maxX), bounds.yMin),
-            DialogueNodeSide.Bottom => new Vector2(Mathf.Clamp(target.x, minX, maxX), bounds.yMax),
-            _ => bounds.center
-        };
+            if (option == null) continue;
+            if (string.IsNullOrEmpty(option.id)) option.id = System.Guid.NewGuid().ToString("N");
+            var optionPort = CreateExecPort(Direction.Output, new DialogueExecPortData
+            {
+                id = option.id,
+                label = option.text
+            });
+            outputContainer.Add(optionPort);
+            _outputPortIds[optionPort] = option.id;
+        }
+
+        RefreshPorts();
     }
 
-    private Rect GetLocalBounds()
+    private static Port CreateExecPort(Direction direction, DialogueExecPortData pin)
     {
-        float width = layout.width > 0 ? layout.width : Mathf.Max(1, resolvedStyle.width);
-        float height = layout.height > 0 ? layout.height : Mathf.Max(1, resolvedStyle.height);
-        return new Rect(0, 0, width, height);
-    }
-
-    private Vector2 GetWorldPointLocal(Vector3 worldPoint)
-    {
-        var local = worldTransform.inverse.MultiplyPoint3x4(worldPoint);
-        return new Vector2(local.x, local.y);
-    }
-
-    public Port CreateAnchorPort(DialogueNodeSide side, Direction direction, Vector2 localPosition)
-    {
-        var orientation = side is DialogueNodeSide.Left or DialogueNodeSide.Right
-            ? Orientation.Horizontal
-            : Orientation.Vertical;
-        var port = Port.Create<Edge>(orientation, direction, Port.Capacity.Single, typeof(DialogueData));
-        port.portName = string.Empty;
-        port.pickingMode = PickingMode.Ignore;
-        port.style.position = Position.Absolute;
-        port.style.width = 10;
-        port.style.height = 10;
-        port.style.opacity = 0;
-        PositionAnchorPort(port, localPosition);
-        _anchorLayer.Add(port);
+        var port = Port.Create<Edge>(Orientation.Horizontal, direction, Port.Capacity.Multi, typeof(DialogueExecPortData));
+        port.portName = pin.label;
+        port.userData = pin.id;
         return port;
     }
 
-    public void PositionAnchorPort(Port port, Vector2 localPosition)
+    private void RefreshSelectionOptions()
     {
-        const float halfPortSize = 5f;
-        port.style.left = localPosition.x - halfPortSize;
-        port.style.top = localPosition.y - halfPortSize;
+        _selectionOptionsContainer.Clear();
+        if (!room.hasSelection) return;
+
+        var addOptionButton = new Button(AddSelectionOption) { text = "+ Option" };
+        _selectionOptionsContainer.Add(addOptionButton);
+
+        foreach (var option in room.selectionOptions ?? new List<DialogueSelectionOptionData>())
+        {
+            if (option == null) continue;
+            var row = new VisualElement { style = { flexDirection = FlexDirection.Row } };
+            var optionField = new TextField { value = option.text, isDelayed = true };
+            optionField.style.flexGrow = 1;
+            optionField.RegisterValueChangedCallback(evt =>
+            {
+                if (option.text == evt.newValue) return;
+                Undo.RecordObject(room, "Rename Dialogue Selection Option");
+                option.text = evt.newValue;
+                RebuildExecPorts();
+                EditorUtility.SetDirty(room);
+                AssetDatabase.SaveAssets();
+                _graphChanged?.Invoke();
+            });
+            row.Add(optionField);
+            row.Add(new Button(() => RemoveSelectionOption(option)) { text = "-" });
+            _selectionOptionsContainer.Add(row);
+        }
     }
 
-    public void RemoveAnchorPort(Port port)
+    private void AddSelectionOption()
     {
-        port.DisconnectAll();
-        port.RemoveFromHierarchy();
+        Undo.RecordObject(room, "Add Dialogue Selection Option");
+        room.selectionOptions ??= new List<DialogueSelectionOptionData>();
+        room.selectionOptions.Add(new DialogueSelectionOptionData());
+        EditorUtility.SetDirty(room);
+        AssetDatabase.SaveAssets();
+        RefreshSelectionOptions();
+        RebuildExecPorts();
+        _graphChanged?.Invoke();
     }
 
-    private static void ConsiderPoint(
-        Vector2 candidate,
-        DialogueNodeSide candidateSide,
-        Vector2 target,
-        ref DialogueNodeSide closestSide,
-        ref Vector2 closest,
-        ref float closestDistance)
+    private void RemoveSelectionOption(DialogueSelectionOptionData option)
     {
-        float distance = (target - candidate).sqrMagnitude;
-        if (distance >= closestDistance) return;
-
-        closestSide = candidateSide;
-        closest = candidate;
-        closestDistance = distance;
+        if (room.selectionOptions == null || !room.selectionOptions.Contains(option)) return;
+        Undo.IncrementCurrentGroup();
+        int undoGroup = Undo.GetCurrentGroup();
+        Undo.SetCurrentGroupName("Remove Dialogue Selection Option");
+        _removeOutputLinks?.Invoke(room, option.id);
+        Undo.RecordObject(room, "Remove Dialogue Selection Option");
+        room.selectionOptions.Remove(option);
+        EditorUtility.SetDirty(room);
+        AssetDatabase.SaveAssets();
+        RefreshSelectionOptions();
+        RebuildExecPorts();
+        _graphChanged?.Invoke();
+        Undo.CollapseUndoOperations(undoGroup);
     }
 
-    private static void ConfigureAnchorLayer(VisualElement container)
+    public void SetSelectionEnabled(bool enabled)
     {
-        container.style.position = Position.Absolute;
-        container.style.left = 0;
-        container.style.right = 0;
-        container.style.top = 0;
-        container.style.bottom = 0;
-        container.pickingMode = PickingMode.Ignore;
+        if (room.hasSelection == enabled) return;
+        Undo.IncrementCurrentGroup();
+        int undoGroup = Undo.GetCurrentGroup();
+        Undo.SetCurrentGroupName("Toggle Dialogue Selection");
+        if (!enabled)
+        {
+            foreach (var option in room.selectionOptions ?? new List<DialogueSelectionOptionData>())
+            {
+                if (option != null)
+                    _removeOutputLinks?.Invoke(room, option.id);
+            }
+        }
+        Undo.RecordObject(room, "Toggle Dialogue Selection");
+        room.hasSelection = enabled;
+        if (enabled && (room.selectionOptions == null || room.selectionOptions.Count == 0))
+            room.selectionOptions = new List<DialogueSelectionOptionData> { new() };
+        RefreshSelectionOptions();
+        RebuildExecPorts();
+        EditorUtility.SetDirty(room);
+        AssetDatabase.SaveAssets();
+        _graphChanged?.Invoke();
+        Undo.CollapseUndoOperations(undoGroup);
     }
 
     public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
     {
         base.BuildContextualMenu(evt);
-        // Let the owning graph create and connect a transition from this room node.
-        var pointerPosition = evt.mousePosition;
-        evt.menu.AppendAction("Create Transition", _ => _createTransition?.Invoke(room, pointerPosition));
-
         // Ping the asset in Unity's Project window for quick navigation.
         evt.menu.AppendAction("Select Asset", _ =>
         {

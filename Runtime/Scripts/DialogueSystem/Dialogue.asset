@@ -1,5 +1,30 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-911766750457524288
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
+  m_Name: DialogueLink
+  m_EditorClassIdentifier: abb2kTools::DialogueLink
+  source: {fileID: 0}
+  sourcePortId: ba5d56018bca4d5e8795e134a6c4dee2
+  destination: {fileID: 828632634047372874}
+  destinationPortId: 9c4e221271734bd1bd1fa971007008f6
+  sourceIsDialogueStart: 1
+  destinationIsDialogueExit: 0
+  sourceEntryId: 
+  destinationExitId: 
+  curvePoints: []
+  conditions: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12,26 +37,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8e7c5f39fa3b4af438f4f67582db93cd, type: 3}
   m_Name: Dialogue
   m_EditorClassIdentifier: abb2kTools::Dialogue
+  startOutput:
+    id: ba5d56018bca4d5e8795e134a6c4dee2
+    label: Start
+  exitInput:
+    id: ea43f7fbf2a6468b9ff054c2dfe0b5c9
+    label: Exit
+  startNodePosition: {x: 59.999992, y: -1931.2001}
+  exitNodePosition: {x: 815.19995, y: -1931.2001}
   rooms:
-  - {fileID: 9199349424795495897}
-  - {fileID: 3943881754016118574}
+  - {fileID: 828632634047372874}
+  - {fileID: 8155140342156625513}
   links:
-  - {fileID: 3584106898065401704}
---- !u!114 &3584106898065401704
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
-  m_Name: DialogueLink (1)
-  m_EditorClassIdentifier: abb2kTools::DialogueLink
-  destination: {fileID: 3943881754016118574}
-  curvePoints: []
---- !u!114 &3943881754016118574
+  - {fileID: 7773871075266668816}
+  - {fileID: -911766750457524288}
+  - {fileID: 3567065090060966319}
+  additionalEntries: []
+  additionalExits: []
+  variables: []
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &828632634047372874
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -43,8 +70,69 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
   m_Name: DialogueData
   m_EditorClassIdentifier: abb2kTools::DialogueData
-  transitions: []
---- !u!114 &9199349424795495897
+  execInput:
+    id: 9c4e221271734bd1bd1fa971007008f6
+    label: In
+  execOutput:
+    id: 1b1bc5e42e77475096cc937c386de25d
+    label: Out
+  hasSelection: 0
+  selectionOptions:
+  - id: 9b494884fc1a4a4a9731b36c0c606c79
+    text: Option
+  transitions:
+  - {fileID: 7773871075266668816}
+--- !u!114 &3567065090060966319
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
+  m_Name: DialogueLink (2)
+  m_EditorClassIdentifier: abb2kTools::DialogueLink
+  source: {fileID: 8155140342156625513}
+  sourcePortId: cdaccee4188e4d819c347e279ded6e04
+  destination: {fileID: 0}
+  destinationPortId: ea43f7fbf2a6468b9ff054c2dfe0b5c9
+  sourceIsDialogueStart: 0
+  destinationIsDialogueExit: 1
+  sourceEntryId: 
+  destinationExitId: 
+  curvePoints: []
+  conditions: []
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &7773871075266668816
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
+  m_Name: DialogueLink (1)
+  m_EditorClassIdentifier: abb2kTools::DialogueLink
+  source: {fileID: 828632634047372874}
+  sourcePortId: 1b1bc5e42e77475096cc937c386de25d
+  destination: {fileID: 8155140342156625513}
+  destinationPortId: b304740cb85a462ca787e644c1b6fcd3
+  sourceIsDialogueStart: 0
+  destinationIsDialogueExit: 0
+  sourceEntryId: 
+  destinationExitId: 
+  curvePoints: []
+  conditions: []
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &8155140342156625513
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -54,7 +142,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
-  m_Name: silly
+  m_Name: DialogueData (1)
   m_EditorClassIdentifier: abb2kTools::DialogueData
+  execInput:
+    id: b304740cb85a462ca787e644c1b6fcd3
+    label: In
+  execOutput:
+    id: cdaccee4188e4d819c347e279ded6e04
+    label: Out
+  hasSelection: 0
+  selectionOptions:
+  - id: f74c07b53ad941d7a5791a2244173d6d
+    text: Option
   transitions:
-  - {fileID: 3584106898065401704}
+  - {fileID: 3567065090060966319}
