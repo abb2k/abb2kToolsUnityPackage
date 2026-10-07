@@ -12,6 +12,7 @@ public sealed class DialogueRunner
     private readonly Dictionary<string, object> _variables = new();
 
     public DialogueData CurrentNode { get; private set; }
+    public object CurrentContent => CurrentNode?.ResolveContent(ResolveVariable);
     public bool IsExited { get; private set; }
 
     public event Action<DialogueData> NodeEntered;
@@ -70,6 +71,17 @@ public sealed class DialogueRunner
 
         _variables[definition.id] = value;
         VariableChanged?.Invoke(definition.name, value);
+    }
+
+    public object GetOptionContent(string optionId)
+    {
+        var option = CurrentNode?.selectionOptions?.FirstOrDefault(item => item != null && item.id == optionId);
+        return option?.ResolveContent(ResolveVariable);
+    }
+
+    private object ResolveVariable(string variableId)
+    {
+        return _variables.TryGetValue(variableId, out var value) ? value : null;
     }
 
     private bool TryFindVariable(string nameOrId, out DialogueExposedVariable definition)

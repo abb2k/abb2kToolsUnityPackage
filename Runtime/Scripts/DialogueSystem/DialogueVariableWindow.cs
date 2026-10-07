@@ -21,7 +21,8 @@ public sealed class DialogueVariableWindow : VisualElement
         Vector2 size,
         Action<Vector2> positionChanged,
         Action<Vector2> sizeChanged,
-        Action close)
+        Action close,
+        Action<bool> variablesChanged)
     {
         _host = host;
         _positionChanged = positionChanged;
@@ -52,7 +53,7 @@ public sealed class DialogueVariableWindow : VisualElement
         header.RegisterCallback<MouseUpEvent>(OnPointerUp);
         Add(header);
 
-        var board = new DialogueVariableBoard(dialogue);
+        var board = new DialogueVariableBoard(dialogue, variablesChanged);
         board.style.flexGrow = 1;
         board.style.minHeight = 0;
         Add(board);

@@ -16,10 +16,12 @@ public sealed class DialogueVariableBoard : ScrollView
     private static Type[] _cachedEnumTypes;
     private static int _cachedAssemblyCount = -1;
     private readonly Dialogue _dialogue;
+    private readonly Action<bool> _variablesChanged;
 
-    public DialogueVariableBoard(Dialogue dialogue)
+    public DialogueVariableBoard(Dialogue dialogue, Action<bool> variablesChanged = null)
     {
         _dialogue = dialogue;
+        _variablesChanged = variablesChanged;
         style.flexDirection = FlexDirection.Column;
         Refresh();
     }
@@ -77,7 +79,8 @@ public sealed class DialogueVariableBoard : ScrollView
         var typeField = new EnumField("Type", variable.type);
         typeField.RegisterValueChangedCallback(evt =>
         {
-            Modify("Change Dialogue Variable Type", () => variable.type = (DialogueVariableType)evt.newValue);
+            Modify("Change Dialogue Variable Type", () => variable.type = (DialogueVariableType)evt.newValue,
+                rebuildVariableNodes: true);
             Refresh();
         });
         container.Add(typeField);
@@ -723,7 +726,7 @@ public sealed class DialogueVariableBoard : ScrollView
                 else if (typeof(UnityEngine.Object).IsAssignableFrom(type) &&
                     variable.objectReferenceValue != null && !type.IsInstanceOfType(variable.objectReferenceValue))
                     variable.objectReferenceValue = null;
-            });
+            }, rebuildVariableNodes: true);
             Refresh();
         }));
         return button;
@@ -743,6 +746,7 @@ public sealed class DialogueVariableBoard : ScrollView
         private string _search = string.Empty;
         private Vector2 _scrollPosition;
         private NamespaceNode _visibleNamespaceRoot;
+        private bool _focusSearchOnOpen = true;
 
         public DialogueTypePickerPopup(Type[] types, Action<Type> selectType)
         {
@@ -755,7 +759,13 @@ public sealed class DialogueVariableBoard : ScrollView
 
         public override void OnGUI(Rect rect)
         {
+            GUI.SetNextControlName("DialogueVariableTypeSearch");
             var search = EditorGUILayout.TextField("Search", _search);
+            if (_focusSearchOnOpen)
+            {
+                EditorGUI.FocusTextInControl("DialogueVariableTypeSearch");
+                _focusSearchOnOpen = false;
+            }
             if (!string.Equals(search, _search, StringComparison.Ordinal))
             {
                 _search = search;
@@ -897,7 +907,7 @@ public sealed class DialogueVariableBoard : ScrollView
                                     (!type.IsAbstract || typeof(UnityEngine.Object).IsAssignableFrom(type)) &&
                                     !type.ContainsGenericParameters &&
                                     (typeof(UnityEngine.Object).IsAssignableFrom(type)
-                                            ? type.Assembly != typeof(UnityEngine.Object).Assembly
+                                ? type != typeof(UnityEngine.Object)
                                             : type.IsDefined(typeof(SerializableAttribute), inherit: false)))
             .OrderBy(type => type.FullName)
             .ToArray();
@@ -1007,15 +1017,16 @@ public sealed class DialogueVariableBoard : ScrollView
 
     private void RemoveVariable(DialogueExposedVariable variable)
     {
-        Modify("Remove Dialogue Variable", () => _dialogue.variables.Remove(variable));
+        Modify("Remove Dialogue Variable", () => _dialogue.variables.Remove(variable), rebuildVariableNodes: true);
         Refresh();
     }
 
-    private void Modify(string undoName, Action change)
+    private void Modify(string undoName, Action change, bool rebuildVariableNodes = false)
     {
         Undo.RecordObject(_dialogue, undoName);
         change();
         EditorUtility.SetDirty(_dialogue);
         AssetDatabase.SaveAssets();
+        _variablesChanged?.Invoke(rebuildVariableNodes);
     }
 }

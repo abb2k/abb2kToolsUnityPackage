@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
@@ -14,6 +15,79 @@ public class DialogueTransitionEdgeData
     public DialogueNodeSide outputSide;
     public DialogueNodeSide inputSide;
     public DialogueTransitionStroke stroke;
+}
+
+public sealed class DialogueVariableNode : Node
+{
+    private readonly Dialogue _dialogue;
+    private readonly Label _typeLabel;
+    private readonly Label _valueLabel;
+    public readonly string nodeId;
+    public readonly DialogueExposedVariable variable;
+    public readonly Port output;
+    public string VariableId => variable?.id;
+
+    public DialogueVariableNode(Dialogue dialogue, string nodeId, DialogueExposedVariable exposedVariable)
+    {
+        _dialogue = dialogue;
+        this.nodeId = nodeId;
+        variable = exposedVariable;
+        title = variable?.name ?? "Missing Variable";
+        viewDataKey = DialogueGraphLayout.GetVariableNodeKey(dialogue, nodeId);
+        capabilities = Capabilities.Selectable | Capabilities.Movable | Capabilities.Deletable | Capabilities.Groupable;
+
+        var valueType = variable?.GetValueType() ?? typeof(object);
+        output = Port.Create<Edge>(Orientation.Horizontal, Direction.Output, Port.Capacity.Multi, valueType);
+        output.portName = "Out";
+        output.userData = variable?.id;
+        outputContainer.Add(output);
+        _typeLabel = new Label();
+        _valueLabel = new Label { style = { whiteSpace = WhiteSpace.Normal, maxWidth = 220 } };
+        extensionContainer.Add(_typeLabel);
+        extensionContainer.Add(_valueLabel);
+        RefreshVariableDisplay();
+        RefreshExpandedState();
+        RefreshPorts();
+    }
+
+    public void RefreshVariableDisplay()
+    {
+        title = variable?.name ?? "Missing Variable";
+        _typeLabel.text = variable?.GetValueType()?.Name ?? "Unknown Type";
+        _valueLabel.text = GetValueSummary(variable);
+    }
+
+    private static string GetValueSummary(DialogueExposedVariable exposedVariable)
+    {
+        if (exposedVariable == null) return string.Empty;
+        object value;
+        try { value = exposedVariable.CreateValue(); }
+        catch { return "(Invalid value)"; }
+        if (value == null) return "null";
+        if (value is UnityEngine.Object unityObject)
+            return unityObject != null ? unityObject.name : "None";
+        if (value is string text) return string.IsNullOrEmpty(text) ? "\"\"" : text;
+        if (value is System.IFormattable formattable)
+            return formattable.ToString(null, CultureInfo.InvariantCulture);
+
+        try
+        {
+            var json = JsonUtility.ToJson(value);
+            return json.Length > 100 ? json.Substring(0, 97) + "..." : json;
+        }
+        catch
+        {
+            var fallback = value.ToString();
+            return fallback.Length > 100 ? fallback.Substring(0, 97) + "..." : fallback;
+        }
+    }
+
+    public override void SetPosition(Rect newPos)
+    {
+        base.SetPosition(newPos);
+        if (_dialogue != null && variable != null)
+            DialogueGraphLayout.instance.SetVariableNodePosition(_dialogue, nodeId, newPos.position);
+    }
 }
 
 public sealed class DialogueTransitionStroke : VisualElement
@@ -425,6 +499,7 @@ public class DialogueGraphView : GraphView
     // These maps let graph operations find the backing ScriptableObject for each visual element.
     private readonly Dialogue _dialogue;
     private readonly Dictionary<DialogueData, DialogueNode> _roomNodes = new();
+    private readonly Dictionary<string, DialogueVariableNode> _variableNodesByNodeId = new();
     private readonly Dictionary<string, DialogueAdditionalEntryNode> _additionalEntryNodes = new();
     private readonly Dictionary<string, DialogueAdditionalExitNode> _additionalExitNodes = new();
     private DialogueStartNode _startNode;
@@ -445,7 +520,7 @@ public class DialogueGraphView : GraphView
         _dialogue = dialogue;
 
         // GraphView's built-in manipulators provide zooming, panning, selection, and box selection.
-        SetupZoom(ContentZoomer.DefaultMinScale, ContentZoomer.DefaultMaxScale);
+        SetupZoom(ContentZoomer.DefaultMinScale, 12f);
 
         this.AddManipulator(new ContentDragger());
         this.AddManipulator(new SelectionDragger());
@@ -479,11 +554,47 @@ public class DialogueGraphView : GraphView
     public override List<Port> GetCompatiblePorts(Port startPort, NodeAdapter nodeAdapter)
     {
         return ports
-            .Where(port => port != startPort &&
-                port.node != startPort.node &&
-                port.direction != startPort.direction &&
-                port.portType == typeof(DialogueExecPortData))
+            .Where(port =>
+            {
+                if (port == startPort || port.node == startPort.node || port.direction == startPort.direction)
+                    return false;
+
+                if (port.portType == typeof(DialogueExecPortData) &&
+                    startPort.portType == typeof(DialogueExecPortData))
+                    return true;
+
+                var output = startPort.direction == Direction.Output ? startPort : port;
+                var input = startPort.direction == Direction.Input ? startPort : port;
+                return output.node is DialogueVariableNode variableNode &&
+                    input.node is DialogueNode &&
+                    IsVariableCompatible(input.portType, variableNode.variable);
+            })
             .ToList();
+    }
+
+    public void RefreshVariableNodes(bool rebuildNodePorts)
+    {
+        if (rebuildNodePorts)
+        {
+            RebuildGraph();
+            return;
+        }
+
+        foreach (var node in _variableNodesByNodeId.Values)
+            node.RefreshVariableDisplay();
+    }
+
+    private static bool IsVariableCompatible(System.Type fieldType, DialogueExposedVariable variable)
+    {
+        if (fieldType == null || variable == null) return false;
+        fieldType = System.Nullable.GetUnderlyingType(fieldType) ?? fieldType;
+        var variableType = variable.GetValueType();
+        if (variableType != null && fieldType.IsAssignableFrom(variableType)) return true;
+        if (!typeof(UnityEngine.Object).IsAssignableFrom(fieldType) ||
+            variable.type != DialogueVariableType.ObjectReference) return false;
+
+        var currentObject = variable.objectReferenceValue;
+        return currentObject == null || fieldType.IsInstanceOfType(currentObject);
     }
 
     private int BeginUndoGroup(string actionName)
@@ -637,6 +748,18 @@ public class DialogueGraphView : GraphView
 
     private void BuildGraphContextMenu(ContextualMenuPopulateEvent evt)
     {
+        var target = evt.target as VisualElement;
+        while (target != null)
+        {
+            if (target is Port port && port.node is DialogueNode roomNode &&
+                port.userData is DialogueContentInputPortData inputData)
+            {
+                evt.menu.AppendAction("Un-expose Field", _ => roomNode.UnexposeInputParameter(inputData));
+                return;
+            }
+            target = target.parent;
+        }
+
         // Convert the mouse's world position to graph-content coordinates for placement.
         var position = contentViewContainer.WorldToLocal(evt.mousePosition);
 
@@ -652,11 +775,28 @@ public class DialogueGraphView : GraphView
         evt.menu.AppendAction("Create Selection Node", _ => CreateDialogueSelectorNode(position));
         evt.menu.AppendAction("Create Entry", _ => CreateAdditionalEntryNode(position));
         evt.menu.AppendAction("Create Exit", _ => CreateAdditionalExitNode(position));
+        foreach (var variable in (_dialogue.variables ?? new List<DialogueExposedVariable>())
+            .Where(item => item != null && !string.IsNullOrEmpty(item.id)))
+        {
+            var capturedVariable = variable;
+            var nodeName = string.IsNullOrEmpty(variable.name) ? "Unnamed" : variable.name;
+            evt.menu.AppendAction($"Create Exposed Variable Node/{nodeName}",
+                _ => CreateVariableNode(capturedVariable, position));
+        }
         evt.menu.AppendAction("Create Group", _ => CreateGroup("New Group", position, new Vector2(300, 200)));
     }
 
+    private void CreateVariableNode(DialogueExposedVariable variable, Vector2 position)
+    {
+        if (variable == null || string.IsNullOrEmpty(variable.id)) return;
+
+        DialogueGraphLayout.instance.AddVariableNode(_dialogue, variable.id, position);
+        RebuildGraph();
+        AssetDatabase.SaveAssets();
+    }
+
     // Creates DialogueData as a sub-asset, then registers it so the node survives graph rebuilds.
-    public void CreateDialogueDataNode(Vector2 position) => CreateRoomNode<DialogueData>("DialogueData", position, isSelectorOnly: false);
+    public void CreateDialogueDataNode(Vector2 position) => CreateRoomNode<DialogueData>("Dialogue", position, isSelectorOnly: false);
 
     // Creates a standalone branch node that only exposes selection options, no dialogue content.
     public void CreateDialogueSelectorNode(Vector2 position) => CreateRoomNode<DialogueSelectorData>("Selector", position, isSelectorOnly: true);
@@ -951,6 +1091,9 @@ public class DialogueGraphView : GraphView
     public void RebuildGraph()
     {
         // Recreate visuals from the authoritative asset arrays and saved editor layout.
+        var selectedOptionIds = _roomNodes
+            .Where(pair => !string.IsNullOrEmpty(pair.Value.SelectedSelectionOptionId))
+            .ToDictionary(pair => pair.Key, pair => pair.Value.SelectedSelectionOptionId);
         _isRebuilding = true;
         try
         {
@@ -966,6 +1109,7 @@ public class DialogueGraphView : GraphView
         }
 
         _roomNodes.Clear();
+        _variableNodesByNodeId.Clear();
         _additionalEntryNodes.Clear();
         _additionalExitNodes.Clear();
 
@@ -999,13 +1143,37 @@ public class DialogueGraphView : GraphView
             _additionalExitNodes[exit.id] = node;
         }
 
+        foreach (var variableNodeEntry in DialogueGraphLayout.instance.GetVariableNodes(_dialogue))
+        {
+            var variable = (_dialogue.variables ?? new List<DialogueExposedVariable>())
+                .FirstOrDefault(item => item != null && item.id == variableNodeEntry.variableId);
+            if (variable == null) continue;
+            var node = new DialogueVariableNode(_dialogue, variableNodeEntry.nodeId, variable);
+            AddElement(node);
+            node.SetPosition(new Rect(variableNodeEntry.position, Vector2.zero));
+            _variableNodesByNodeId[variableNodeEntry.nodeId] = node;
+        }
+
         // First create all nodes so edges can resolve both endpoints in the second pass.
         foreach (var room in rooms)
         {
             var node = new DialogueNode(room, RebuildGraph, RemoveExecOutputLinks, room is DialogueSelectorData);
+            if (selectedOptionIds.TryGetValue(room, out var selectedOptionId))
+                node.RestoreSelectedSelectionOption(selectedOptionId);
             node.geometryChanged = OnDialogueNodeGeometryChanged;
             AddElement(node);
             _roomNodes[room] = node;
+        }
+
+        foreach (var room in rooms)
+        {
+            var roomNode = _roomNodes[room];
+            AddVariableEdgesForContent(roomNode, room.dialogueContent, null);
+            foreach (var option in room.selectionOptions ?? new List<DialogueSelectionOptionData>())
+            {
+                if (option != null)
+                    AddVariableEdgesForContent(roomNode, option.dialogueContent, option.id);
+            }
         }
 
         // Rebuild all transitions from the serialized endpoint and pin IDs.
@@ -1073,6 +1241,35 @@ public class DialogueGraphView : GraphView
         edge.schedule.Execute(() => RefreshTransitionEdgeAnchors()).ExecuteLater(0);
         RefreshTransitionStrokeSelection();
         return edge;
+    }
+
+    private Edge AddVariableEdge(Port output, Port input)
+    {
+        var edge = output.ConnectTo(input);
+        AddElement(edge);
+        RefreshVariableEdge(edge);
+        edge.schedule.Execute(() => RefreshVariableEdge(edge)).ExecuteLater(0);
+        return edge;
+    }
+
+    private void AddVariableEdgesForContent(
+        DialogueNode roomNode,
+        DialogueContentValue content,
+        string optionId)
+    {
+        foreach (var binding in content?.fieldBindings ?? new List<DialogueContentFieldBinding>())
+        {
+            if (binding == null || string.IsNullOrEmpty(binding.variableId)) continue;
+            DialogueVariableNode variableNode = null;
+            if (!string.IsNullOrEmpty(binding.variableNodeId))
+                _variableNodesByNodeId.TryGetValue(binding.variableNodeId, out variableNode);
+            else
+                variableNode = _variableNodesByNodeId.Values.FirstOrDefault(node =>
+                    node.variable.id == binding.variableId);
+            if (variableNode == null) continue;
+            var input = roomNode.GetInputParameterPort(optionId, binding.fieldPath);
+            if (input != null) AddVariableEdge(variableNode.output, input);
+        }
     }
 
     private void ConfigureTransitionEdge(Edge edge, DialogueLink transition)
@@ -1222,10 +1419,30 @@ public class DialogueGraphView : GraphView
         foreach (var edge in graphElements.OfType<Edge>())
         {
             edge.UpdateEdgeControl();
-            HideBuiltInBezier(edge);
             if (edge.userData is DialogueTransitionEdgeData edgeData)
+            {
+                HideBuiltInBezier(edge);
                 edgeData.stroke?.MarkDirtyRepaint();
+            }
+            else if (edge.output?.node is DialogueVariableNode)
+            {
+                RefreshVariableEdge(edge);
+            }
         }
+    }
+
+    private static void RefreshVariableEdge(Edge edge)
+    {
+        if (edge?.output == null || edge.input == null || edge.edgeControl == null) return;
+        edge.UpdateEdgeControl();
+        edge.visible = true;
+        edge.pickingMode = PickingMode.Position;
+        edge.edgeControl.visible = true;
+        edge.edgeControl.pickingMode = PickingMode.Position;
+        edge.edgeControl.style.opacity = 1;
+        edge.edgeControl.outputColor = edge.output.portColor;
+        edge.edgeControl.inputColor = edge.input.portColor;
+        edge.edgeControl.MarkDirtyRepaint();
     }
 
     private static void HideBuiltInBezier(Edge edge)
@@ -1802,6 +2019,32 @@ public class DialogueGraphView : GraphView
                     case DialogueAdditionalExitNode exitNode:
                         dirty |= RemoveFromGraph(exitNode.data);
                         break;
+                    case DialogueVariableNode variableNode:
+                        foreach (var room in _dialogue.rooms ?? System.Array.Empty<DialogueData>())
+                        {
+                            var contents = new List<DialogueContentValue>();
+                            if (room?.dialogueContent != null) contents.Add(room.dialogueContent);
+                            foreach (var option in room?.selectionOptions ?? new List<DialogueSelectionOptionData>())
+                                if (option?.dialogueContent != null) contents.Add(option.dialogueContent);
+                            var connectedBindings = contents
+                                .SelectMany(content => content.fieldBindings ?? new List<DialogueContentFieldBinding>())
+                                .Where(binding => binding != null &&
+                                    (binding.variableNodeId == variableNode.nodeId ||
+                                     string.IsNullOrEmpty(binding.variableNodeId) &&
+                                     binding.variableId == variableNode.VariableId))
+                                .ToList();
+                            if (connectedBindings == null || connectedBindings.Count == 0) continue;
+                            Undo.RecordObject(room, "Disconnect Exposed Dialogue Variable");
+                            foreach (var binding in connectedBindings)
+                            {
+                                binding.variableId = string.Empty;
+                                binding.variableNodeId = string.Empty;
+                            }
+                            EditorUtility.SetDirty(room);
+                        }
+                        DialogueGraphLayout.instance.RemoveVariableNode(_dialogue, variableNode.nodeId);
+                        dirty = true;
+                        break;
                 }
             }
         }
@@ -1820,7 +2063,7 @@ public class DialogueGraphView : GraphView
         if (edge.output == null || edge.input == null ||
             edge.output.portType != typeof(DialogueExecPortData) ||
             edge.input.portType != typeof(DialogueExecPortData))
-            return false;
+            return ApplyVariableEdge(edge, connect);
 
         var sourceElement = edge.output.node;
         var destinationElement = edge.input.node;
@@ -1935,6 +2178,40 @@ public class DialogueGraphView : GraphView
 
         EditorUtility.SetDirty(_dialogue);
         DestroyDialogueSubAsset(transition);
+        AssetDatabase.SaveAssets();
+        return true;
+    }
+
+    private bool ApplyVariableEdge(Edge edge, bool connect)
+    {
+        var variableNode = edge.output?.node as DialogueVariableNode;
+        var roomNode = edge.input?.node as DialogueNode;
+        var portData = edge.input?.userData as DialogueContentInputPortData;
+        var fieldPath = portData?.fieldPath;
+        var content = portData?.optionId == null
+            ? roomNode?.room?.dialogueContent
+            : roomNode?.room?.selectionOptions?.FirstOrDefault(option =>
+                option != null && option.id == portData.optionId)?.dialogueContent;
+        var bindings = content?.fieldBindings;
+        if (variableNode?.variable == null || roomNode?.room == null ||
+            string.IsNullOrEmpty(fieldPath) || bindings == null ||
+            !IsVariableCompatible(edge.input.portType, variableNode.variable))
+            return false;
+
+        var binding = bindings.FirstOrDefault(item => item != null && item.fieldPath == fieldPath);
+        if (binding == null) return false;
+        string nextVariableId = connect ? variableNode.variable.id : string.Empty;
+        string nextNodeId = connect ? variableNode.nodeId : string.Empty;
+        if (connect && binding.variableId == nextVariableId && binding.variableNodeId == nextNodeId)
+            return false;
+        if (!connect && (binding.variableId != variableNode.variable.id ||
+            !string.IsNullOrEmpty(binding.variableNodeId) && binding.variableNodeId != variableNode.nodeId))
+            return false;
+
+        Undo.RecordObject(roomNode.room, connect ? "Connect Exposed Dialogue Variable" : "Disconnect Exposed Dialogue Variable");
+        binding.variableId = nextVariableId;
+        binding.variableNodeId = nextNodeId;
+        EditorUtility.SetDirty(roomNode.room);
         AssetDatabase.SaveAssets();
         return true;
     }

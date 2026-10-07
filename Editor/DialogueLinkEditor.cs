@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -10,6 +11,63 @@ using UnityEngine;
 [CustomEditor(typeof(DialogueLink))]
 public sealed class DialogueLinkEditor : Editor
 {
+    private static readonly Dictionary<int, Dialogue> DialogueByRoomCache = new();
+
+    private sealed class PresetFieldContext
+    {
+        public bool presetOnly;
+        public object rootValue;
+        public object presetValue;
+        public SerializedProperty localFieldOverrides;
+        public SerializedProperty serializedValue;
+        public SerializedProperty fieldBindings;
+        public Action inputPortsChanged;
+    }
+
+    [Serializable]
+    private sealed class ClipboardCollection
+    {
+        public List<string> values = new();
+    }
+
+    internal static Dialogue FindDialogueForTarget(UnityEngine.Object target)
+    {
+        if (target is Dialogue dialogue) return dialogue;
+        if (target is not DialogueData room) return null;
+
+        int instanceId = room.GetInstanceID();
+        if (DialogueByRoomCache.TryGetValue(instanceId, out var cachedDialogue))
+        {
+            if (cachedDialogue != null && cachedDialogue.rooms != null && cachedDialogue.rooms.Contains(room))
+                return cachedDialogue;
+            DialogueByRoomCache.Remove(instanceId);
+        }
+
+        string assetPath = AssetDatabase.GetAssetPath(room);
+        if (!string.IsNullOrEmpty(assetPath))
+        {
+            var sameAssetDialogue = AssetDatabase.LoadAllAssetsAtPath(assetPath)
+                .OfType<Dialogue>()
+                .FirstOrDefault(candidate => candidate.rooms != null && candidate.rooms.Contains(room));
+            if (sameAssetDialogue != null)
+            {
+                DialogueByRoomCache[instanceId] = sameAssetDialogue;
+                return sameAssetDialogue;
+            }
+        }
+
+        foreach (string guid in AssetDatabase.FindAssets("t:Dialogue"))
+        {
+            string dialoguePath = AssetDatabase.GUIDToAssetPath(guid);
+            var candidate = AssetDatabase.LoadAssetAtPath<Dialogue>(dialoguePath);
+            if (candidate?.rooms == null || !candidate.rooms.Contains(room)) continue;
+            DialogueByRoomCache[instanceId] = candidate;
+            return candidate;
+        }
+
+        return null;
+    }
+
     public override void OnInspectorGUI()
     {
         MigrateLegacyConditions();
@@ -175,7 +233,8 @@ public sealed class DialogueLinkEditor : Editor
         var type = GetVariableSourceType(variable);
         if (type == null) return false;
         if (variable.type == DialogueVariableType.Custom)
-            return !type.IsValueType && type != typeof(string);
+            return !type.IsValueType && type != typeof(string) &&
+                type.Assembly != typeof(UnityEngine.Object).Assembly;
         return variable.type == DialogueVariableType.ObjectReference && variable.objectReferenceValue != null &&
             variable.objectReferenceValue.GetType().Assembly != typeof(UnityEngine.Object).Assembly;
     }
@@ -296,7 +355,16 @@ public sealed class DialogueLinkEditor : Editor
             : EditorGUILayout.Popup("Comparison", selectedIndex, labels)];
     }
 
-    private static bool DrawTypedValue(SerializedProperty serializedValue, Type valueType, string label, bool compact = false)
+    internal static bool DrawTypedValue(
+        SerializedProperty serializedValue,
+        Type valueType,
+        string label,
+        bool compact = false,
+        SerializedProperty fieldBindings = null,
+        bool presetOnly = false,
+        SerializedProperty localFieldOverrides = null,
+        object presetValue = null,
+        Action inputPortsChanged = null)
     {
         if (valueType == null) return false;
         valueType = Nullable.GetUnderlyingType(valueType) ?? valueType;
@@ -358,7 +426,9 @@ public sealed class DialogueLinkEditor : Editor
                 break;
             }
             case DialogueVariableType.Custom:
-                customValueChanged = DrawCustomValue(serializedValue, valueType, label);
+                customValueChanged = DrawCustomValue(
+                    serializedValue, valueType, label, fieldBindings,
+                    presetOnly, localFieldOverrides, presetValue, inputPortsChanged);
                 break;
             default:
                 var fieldName = GetValueFieldName(dialogueType);
@@ -461,7 +531,15 @@ public sealed class DialogueLinkEditor : Editor
         property.stringValue = singleCharacter && value.Length > 1 ? value.Substring(0, 1) : value;
     }
 
-    private static bool DrawCustomValue(SerializedProperty serializedValue, Type valueType, string label)
+    private static bool DrawCustomValue(
+        SerializedProperty serializedValue,
+        Type valueType,
+        string label,
+        SerializedProperty fieldBindings = null,
+        bool presetOnly = false,
+        SerializedProperty localFieldOverrides = null,
+        object presetValue = null,
+        Action inputPortsChanged = null)
     {
         if (typeof(UnityEngine.Object).IsAssignableFrom(valueType))
         {
@@ -481,7 +559,7 @@ public sealed class DialogueLinkEditor : Editor
             return EditorGUI.EndChangeCheck();
         }
 
-        if (!valueType.IsValueType)
+        if (!valueType.IsValueType && fieldBindings == null && !presetOnly)
         {
             var managedValue = serializedValue.FindPropertyRelative("customManagedValue");
             EditorGUI.BeginChangeCheck();
@@ -503,7 +581,39 @@ public sealed class DialogueLinkEditor : Editor
 
         var customJson = serializedValue.FindPropertyRelative("customJson");
         object customValue;
-        try
+        var managedValueProperty = serializedValue.FindPropertyRelative("customManagedValue");
+        bool restoreSerializedReferences = true;
+        if (!valueType.IsValueType && managedValueProperty.managedReferenceValue != null)
+        {
+            var existingManagedValue = managedValueProperty.managedReferenceValue;
+            if (existingManagedValue.GetType() == valueType)
+            {
+                var objectReferences = CollectObjectReferences(existingManagedValue, valueType, string.Empty, 0);
+                try
+                {
+                    customValue = JsonUtility.FromJson(JsonUtility.ToJson(existingManagedValue), valueType);
+                }
+                catch
+                {
+                    customValue = null;
+                }
+
+                if (customValue != null)
+                {
+                    foreach (var reference in objectReferences)
+                        RestoreObjectReference(customValue, reference.Key.Split('.'), 0, reference.Value);
+                    restoreSerializedReferences = false;
+                }
+                else
+                    customValue = existingManagedValue;
+            }
+            else
+                customValue = null;
+        }
+        else
+            customValue = null;
+
+        if (customValue == null) try
         {
             customValue = string.IsNullOrEmpty(customJson.stringValue)
                 ? Activator.CreateInstance(valueType)
@@ -516,20 +626,36 @@ public sealed class DialogueLinkEditor : Editor
         customValue ??= Activator.CreateInstance(valueType);
 
         var references = serializedValue.FindPropertyRelative("customObjectReferences");
-        for (int i = 0; i < references.arraySize; i++)
+        if (restoreSerializedReferences)
         {
-            var reference = references.GetArrayElementAtIndex(i);
-            RestoreObjectReference(customValue,
-                reference.FindPropertyRelative("fieldPath").stringValue.Split('.'), 0,
-                reference.FindPropertyRelative("value").objectReferenceValue);
+            for (int i = 0; i < references.arraySize; i++)
+            {
+                var reference = references.GetArrayElementAtIndex(i);
+                RestoreObjectReference(customValue,
+                    reference.FindPropertyRelative("fieldPath").stringValue.Split('.'), 0,
+                    reference.FindPropertyRelative("value").objectReferenceValue);
+            }
         }
 
         EditorGUILayout.LabelField($"{label} ({valueType.Name})", EditorStyles.boldLabel);
-        var serializedReferences = new Dictionary<string, UnityEngine.Object>();
+        var serializedReferences = CollectObjectReferences(customValue, valueType, string.Empty, 0);
         bool changed = false;
-        DrawSerializableFields(customValue, valueType, string.Empty, 0, serializedReferences, ref changed);
+        var presetContext = new PresetFieldContext
+        {
+            presetOnly = presetOnly,
+            rootValue = customValue,
+            presetValue = presetValue,
+            localFieldOverrides = localFieldOverrides,
+            serializedValue = serializedValue,
+            fieldBindings = fieldBindings,
+            inputPortsChanged = inputPortsChanged
+        };
+        DrawSerializableFields(customValue, valueType, string.Empty, 0, serializedReferences,
+            fieldBindings, ref changed, presetContext);
         if (!changed) return false;
 
+        if (!valueType.IsValueType)
+            managedValueProperty.managedReferenceValue = customValue;
         customJson.stringValue = JsonUtility.ToJson(customValue, true);
         references.arraySize = serializedReferences.Count;
         int referenceIndex = 0;
@@ -548,16 +674,29 @@ public sealed class DialogueLinkEditor : Editor
         string path,
         int depth,
         Dictionary<string, UnityEngine.Object> references,
-        ref bool changed)
+        SerializedProperty fieldBindings,
+        ref bool changed,
+        PresetFieldContext presetContext,
+        bool revealAll = false,
+        string inheritedPresetPath = null)
     {
         if (value == null || depth >= 5) return;
         foreach (var field in GetSerializableFields(valueType))
         {
+            bool isPresetOverride = field.IsDefined(typeof(DialoguePresetOverrideAttribute), true);
+            if (presetContext?.presetOnly == true && !revealAll && !isPresetOverride &&
+                !HasPresetOverrideDescendant(field.FieldType, 0))
+                continue;
+
             var fieldPath = string.IsNullOrEmpty(path) ? field.Name : $"{path}.{field.Name}";
+            var presetOwnerPath = inheritedPresetPath ?? (isPresetOverride ? fieldPath : null);
             var currentValue = field.GetValue(value);
+            if (IsPresetFieldLocked(presetContext, presetOwnerPath))
+                currentValue = GetValueAtPath(presetContext.presetValue, fieldPath);
             bool fieldChanged = false;
             var updatedValue = DrawSerializableField(field.Name, field.FieldType, currentValue,
-                fieldPath, depth, references, ref fieldChanged);
+                fieldPath, depth, references, field, fieldBindings, ref fieldChanged,
+                presetContext, presetOwnerPath, revealAll || isPresetOverride);
             if (fieldChanged) changed = true;
             if (fieldChanged || !Equals(currentValue, updatedValue))
                 field.SetValue(value, updatedValue);
@@ -571,29 +710,169 @@ public sealed class DialogueLinkEditor : Editor
         string path,
         int depth,
         Dictionary<string, UnityEngine.Object> references,
-        ref bool changed)
+        FieldInfo fieldInfo,
+        SerializedProperty fieldBindings,
+        ref bool changed,
+        PresetFieldContext presetContext,
+        string presetOwnerPath,
+        bool revealAll)
     {
-        if (typeof(UnityEngine.Object).IsAssignableFrom(type))
+        if (TryGetCollectionElementType(type, out var elementType))
         {
-            var currentObject = currentValue as UnityEngine.Object;
-            var updatedObject = EditorGUILayout.ObjectField(label, currentObject, type, false);
-            if (updatedObject != null) references[path] = updatedObject;
-            if (updatedObject != currentObject) changed = true;
-            return updatedObject;
+            int count = currentValue is IList list ? list.Count : 0;
+            EditorGUILayout.LabelField($"{label} ({count})", EditorStyles.boldLabel);
+            HandlePresetFieldContextMenu(GUILayoutUtility.GetLastRect(), presetContext, path, presetOwnerPath, currentValue, type);
+            if (IsFieldBound(fieldBindings, path)) return currentValue;
+            return DrawSerializableCollection(label, type, elementType, currentValue, path, depth,
+                references, fieldBindings, ref changed,
+                presetContext, presetOwnerPath, revealAll);
         }
 
-        EditorGUI.BeginChangeCheck();
+        if (IsNestedSerializableType(type, depth))
+        {
+            EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
+            HandlePresetFieldContextMenu(GUILayoutUtility.GetLastRect(), presetContext, path, presetOwnerPath, currentValue, type);
+            if (IsFieldBound(fieldBindings, path)) return currentValue;
+
+            object nestedValue = currentValue;
+            if (nestedValue == null)
+            {
+                try { nestedValue = Activator.CreateInstance(type, nonPublic: true); }
+                catch { return null; }
+            }
+            using (new EditorGUI.DisabledScope(IsPresetFieldLocked(presetContext, presetOwnerPath)))
+                DrawSerializableFields(nestedValue, type, path, depth + 1, references,
+                    fieldBindings, ref changed, presetContext,
+                    revealAll, presetOwnerPath);
+            return nestedValue;
+        }
+
+        foreach (var space in fieldInfo?.GetCustomAttributes<SpaceAttribute>() ?? Array.Empty<SpaceAttribute>())
+            GUILayout.Space(space.height);
+        foreach (var header in fieldInfo?.GetCustomAttributes<HeaderAttribute>() ?? Array.Empty<HeaderAttribute>())
+            EditorGUILayout.LabelField(header.header, EditorStyles.boldLabel);
+
+        var tooltip = fieldInfo?.GetCustomAttribute<TooltipAttribute>()?.tooltip;
+        var fieldLabel = new GUIContent(label, tooltip);
         object result = currentValue;
+        var textArea = fieldInfo?.GetCustomAttribute<TextAreaAttribute>();
+        var multiline = fieldInfo?.GetCustomAttribute<MultilineAttribute>();
+        if (type == typeof(string) && (textArea != null || multiline != null))
+        {
+            EditorGUILayout.LabelField(fieldLabel);
+            Rect fieldRect;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(IsFieldBound(fieldBindings, path) || IsPresetFieldLocked(presetContext, presetOwnerPath)))
+                {
+                    EditorGUI.BeginChangeCheck();
+                    if (textArea != null)
+                        result = EditorGUILayout.TextArea(currentValue as string ?? string.Empty,
+                            GUILayout.MinHeight(EditorGUIUtility.singleLineHeight * textArea.minLines),
+                            GUILayout.MaxHeight(EditorGUIUtility.singleLineHeight * textArea.maxLines));
+                    else
+                        result = EditorGUILayout.TextArea(currentValue as string ?? string.Empty,
+                            GUILayout.MinHeight(EditorGUIUtility.singleLineHeight * multiline.lines));
+                    if (EditorGUI.EndChangeCheck()) changed = true;
+                }
+                fieldRect = GUILayoutUtility.GetLastRect();
+            }
+            HandlePresetFieldContextMenu(fieldRect, presetContext, path, presetOwnerPath, result, type);
+        }
+        else
+        {
+            Rect fieldRect;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(IsFieldBound(fieldBindings, path) || IsPresetFieldLocked(presetContext, presetOwnerPath)))
+                {
+                    if (typeof(UnityEngine.Object).IsAssignableFrom(type))
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        result = EditorGUILayout.ObjectField(fieldLabel, currentValue as UnityEngine.Object, type, false);
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            changed = true;
+                            if (result is UnityEngine.Object objectReference && objectReference != null)
+                                references[path] = objectReference;
+                            else
+                                references.Remove(path);
+                        }
+                    }
+                    else
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        DrawSimpleSerializableField(fieldLabel, type, currentValue, fieldInfo, ref result);
+                        if (EditorGUI.EndChangeCheck()) changed = true;
+                    }
+                }
+                fieldRect = GUILayoutUtility.GetLastRect();
+            }
+            HandlePresetFieldContextMenu(fieldRect, presetContext, path, presetOwnerPath, result, type);
+        }
+
+        return result;
+    }
+
+    private static bool IsNestedSerializableType(Type type, int depth)
+    {
+        if (!type.IsSerializable || depth >= 4 || type == typeof(string) || type.IsPrimitive || type.IsEnum ||
+            typeof(UnityEngine.Object).IsAssignableFrom(type) || TryGetCollectionElementType(type, out _))
+            return false;
+        return type != typeof(decimal) && type != typeof(Vector2) && type != typeof(Vector2Int) &&
+            type != typeof(Vector3) && type != typeof(Vector3Int) && type != typeof(Vector4) &&
+            type != typeof(Quaternion) && type != typeof(Color) && type != typeof(Color32) &&
+            type != typeof(Rect) && type != typeof(RectInt) && type != typeof(Bounds) &&
+            type != typeof(BoundsInt) && type != typeof(Matrix4x4) && type != typeof(LayerMask) &&
+            type != typeof(AnimationCurve) && type != typeof(Gradient);
+    }
+
+    private static void DrawSimpleSerializableField(
+        GUIContent label,
+        Type type,
+        object currentValue,
+        FieldInfo fieldInfo,
+        ref object result)
+    {
         if (type == typeof(bool)) result = EditorGUILayout.Toggle(label, currentValue != null && (bool)currentValue);
-        else if (type == typeof(string)) result = EditorGUILayout.TextField(label, currentValue as string ?? string.Empty);
+        else if (type == typeof(string))
+        {
+            var multiline = fieldInfo?.GetCustomAttribute<MultilineAttribute>();
+            result = fieldInfo?.IsDefined(typeof(DelayedAttribute), true) == true
+                ? EditorGUILayout.DelayedTextField(label, currentValue as string ?? string.Empty)
+                : multiline != null
+                    ? EditorGUILayout.TextArea(currentValue as string ?? string.Empty,
+                        GUILayout.MinHeight(EditorGUIUtility.singleLineHeight * multiline.lines))
+                    : EditorGUILayout.TextField(label, currentValue as string ?? string.Empty);
+        }
         else if (type == typeof(char))
         {
-            string text = EditorGUILayout.TextField(label, currentValue?.ToString() ?? string.Empty);
+            string text = fieldInfo?.IsDefined(typeof(DelayedAttribute), true) == true
+                ? EditorGUILayout.DelayedTextField(label, currentValue?.ToString() ?? string.Empty)
+                : EditorGUILayout.TextField(label, currentValue?.ToString() ?? string.Empty);
             result = text.Length == 0 ? '\0' : text[0];
         }
-        else if (type == typeof(int)) result = EditorGUILayout.IntField(label, currentValue == null ? 0 : (int)currentValue);
+        else if (type == typeof(int))
+        {
+            var range = fieldInfo?.GetCustomAttribute<RangeAttribute>();
+            int value = currentValue == null ? 0 : (int)currentValue;
+            result = range != null
+                ? EditorGUILayout.IntSlider(label, value, Mathf.RoundToInt(range.min), Mathf.RoundToInt(range.max))
+                : fieldInfo?.IsDefined(typeof(DelayedAttribute), true) == true
+                    ? EditorGUILayout.DelayedIntField(label, value)
+                    : EditorGUILayout.IntField(label, value);
+        }
+        else if (type == typeof(float))
+        {
+            var range = fieldInfo?.GetCustomAttribute<RangeAttribute>();
+            float value = currentValue == null ? 0f : (float)currentValue;
+            result = range != null
+                ? EditorGUILayout.Slider(label, value, range.min, range.max)
+                : EditorGUILayout.FloatField(label, value);
+            if (fieldInfo?.GetCustomAttribute<MinAttribute>() is MinAttribute min)
+                result = Mathf.Max(min.min, (float)result);
+        }
         else if (type == typeof(long)) result = EditorGUILayout.LongField(label, currentValue == null ? 0L : (long)currentValue);
-        else if (type == typeof(float)) result = EditorGUILayout.FloatField(label, currentValue == null ? 0f : (float)currentValue);
         else if (type == typeof(double)) result = EditorGUILayout.DoubleField(label, currentValue == null ? 0d : (double)currentValue);
         else if (type == typeof(decimal))
         {
@@ -616,8 +895,7 @@ public sealed class DialogueLinkEditor : Editor
             if (ulong.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unsignedValue))
                 result = Convert.ChangeType(unsignedValue, type, CultureInfo.InvariantCulture);
         }
-        else if (type.IsEnum)
-            result = EditorGUILayout.EnumPopup(label, (Enum)(currentValue ?? Enum.ToObject(type, 0)));
+        else if (type.IsEnum) result = EditorGUILayout.EnumPopup(label, (Enum)(currentValue ?? Enum.ToObject(type, 0)));
         else if (type == typeof(Vector2)) result = EditorGUILayout.Vector2Field(label, currentValue == null ? default : (Vector2)currentValue);
         else if (type == typeof(Vector2Int)) result = EditorGUILayout.Vector2IntField(label, currentValue == null ? default : (Vector2Int)currentValue);
         else if (type == typeof(Vector3)) result = EditorGUILayout.Vector3Field(label, currentValue == null ? default : (Vector3)currentValue);
@@ -637,20 +915,116 @@ public sealed class DialogueLinkEditor : Editor
         else if (type == typeof(BoundsInt)) result = EditorGUILayout.BoundsIntField(label, currentValue == null ? default : (BoundsInt)currentValue);
         else if (type == typeof(AnimationCurve)) result = EditorGUILayout.CurveField(label, currentValue as AnimationCurve);
         else if (type == typeof(Gradient)) result = EditorGUILayout.GradientField(label, currentValue as Gradient ?? new Gradient());
-        else if (type.IsSerializable && depth < 4)
-        {
-            if (result == null)
-            {
-                try { result = Activator.CreateInstance(type); }
-                catch { EditorGUILayout.LabelField(label, $"({type.Name})"); }
-            }
-            if (result == null) return null;
-            DrawSerializableFields(result, type, path, depth + 1, references, ref changed);
-        }
-        else
-            EditorGUILayout.LabelField(label, currentValue?.ToString() ?? $"({type.Name})");
+        else EditorGUILayout.LabelField(label, currentValue?.ToString() ?? $"({type.Name})");
+    }
 
-        if (EditorGUI.EndChangeCheck()) changed = true;
+    private static bool TryGetCollectionElementType(Type type, out Type elementType)
+    {
+        if (type.IsArray)
+        {
+            elementType = type.GetElementType();
+            return true;
+        }
+
+        if (type.IsGenericType && typeof(IList).IsAssignableFrom(type))
+        {
+            elementType = type.GetGenericArguments()[0];
+            return true;
+        }
+
+        elementType = null;
+        return false;
+    }
+
+    private static object DrawSerializableCollection(
+        string label,
+        Type collectionType,
+        Type elementType,
+        object currentValue,
+        string path,
+        int depth,
+        Dictionary<string, UnityEngine.Object> references,
+        SerializedProperty fieldBindings,
+        ref bool changed,
+        PresetFieldContext presetContext,
+        string presetOwnerPath,
+        bool revealAll)
+    {
+        var values = new List<object>();
+        if (currentValue is IList currentList)
+            foreach (var item in currentList) values.Add(item);
+
+        EditorGUILayout.LabelField($"{label} ({values.Count})", EditorStyles.boldLabel);
+        HandlePresetFieldContextMenu(GUILayoutUtility.GetLastRect(), presetContext, path, presetOwnerPath, currentValue, collectionType);
+
+        EditorGUI.indentLevel++;
+        bool collectionChanged = false;
+        using (new EditorGUI.DisabledScope(IsPresetFieldLocked(presetContext, presetOwnerPath)))
+        {
+            for (int i = 0; i < values.Count; i++)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    bool itemChanged = false;
+                    var updated = DrawSerializableField($"Element {i}", elementType, values[i],
+                        $"{path}.{i}", depth + 1, references, null, fieldBindings,
+                        ref itemChanged, presetContext, presetOwnerPath, revealAll);
+                    if (!Equals(updated, values[i]))
+                    {
+                        values[i] = updated;
+                        itemChanged = true;
+                    }
+                    collectionChanged |= itemChanged;
+
+                    bool canChangeCollection = presetContext?.presetOnly != true || revealAll;
+                    using (new EditorGUI.DisabledScope(!canChangeCollection))
+                    {
+                        if (GUILayout.Button("-", GUILayout.Width(22)))
+                        {
+                            values.RemoveAt(i--);
+                            collectionChanged = true;
+                        }
+                    }
+                }
+            }
+
+            bool canAddCollectionElement = presetContext?.presetOnly != true || revealAll;
+            using (new EditorGUI.DisabledScope(!canAddCollectionElement))
+            {
+                if (GUILayout.Button("+ Element"))
+                {
+                    object newValue = null;
+                    if (elementType.IsValueType)
+                        newValue = Activator.CreateInstance(elementType);
+                    else if (!elementType.IsAbstract && !elementType.IsInterface)
+                    {
+                        try { newValue = Activator.CreateInstance(elementType, nonPublic: true); }
+                        catch { }
+                    }
+                    values.Add(newValue);
+                    collectionChanged = true;
+                }
+            }
+        }
+        EditorGUI.indentLevel--;
+
+        if (!collectionChanged) return currentValue;
+        changed = true;
+        if (collectionType.IsArray)
+        {
+            var array = Array.CreateInstance(elementType, values.Count);
+            for (int i = 0; i < values.Count; i++) array.SetValue(values[i], i);
+            return array;
+        }
+
+        IList result = currentValue as IList;
+        if (result == null)
+        {
+            try { result = (IList)Activator.CreateInstance(collectionType); }
+            catch { return currentValue; }
+        }
+        result.Clear();
+        foreach (var item in values) result.Add(item);
         return result;
     }
 
@@ -662,9 +1036,570 @@ public sealed class DialogueLinkEditor : Editor
                 (field.IsPublic || field.IsDefined(typeof(SerializeField), true)));
     }
 
+    private static bool HasPresetOverrideDescendant(Type type, int depth)
+    {
+        if (type == null || depth >= 5 || type == typeof(string) || type.IsPrimitive || type.IsEnum ||
+            typeof(UnityEngine.Object).IsAssignableFrom(type))
+            return false;
+
+        if (TryGetCollectionElementType(type, out var elementType))
+            return HasPresetOverrideDescendant(elementType, depth + 1);
+
+        foreach (var field in GetSerializableFields(type))
+        {
+            if (field.IsDefined(typeof(DialoguePresetOverrideAttribute), true) ||
+                HasPresetOverrideDescendant(field.FieldType, depth + 1))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsPresetFieldLocked(PresetFieldContext context, string path)
+    {
+        if (context?.presetOnly != false || context.presetValue == null ||
+            context.localFieldOverrides == null || string.IsNullOrEmpty(path))
+            return false;
+
+        for (int i = 0; i < context.localFieldOverrides.arraySize; i++)
+        {
+            if (context.localFieldOverrides.GetArrayElementAtIndex(i).stringValue == path)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsFieldBound(SerializedProperty bindings, string fieldPath)
+    {
+        if (bindings == null) return false;
+        for (int i = 0; i < bindings.arraySize; i++)
+        {
+            var binding = bindings.GetArrayElementAtIndex(i);
+            if (binding.FindPropertyRelative("fieldPath").stringValue == fieldPath &&
+                !string.IsNullOrEmpty(binding.FindPropertyRelative("variableId").stringValue))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static void HandlePresetFieldContextMenu(
+        Rect rect,
+        PresetFieldContext context,
+        string fieldPath,
+        string presetOwnerPath,
+        object fieldValue,
+        Type fieldType)
+    {
+        var currentEvent = Event.current;
+        bool isRightClick = currentEvent.type == EventType.ContextClick ||
+            currentEvent.type == EventType.MouseDown && currentEvent.button == 1;
+        if (!isRightClick || !rect.Contains(currentEvent.mousePosition))
+            return;
+
+        var menu = new GenericMenu();
+        var clipboardValue = GetClipboardValue(fieldValue);
+        menu.AddItem(new GUIContent("Copy Value"), false,
+            () => EditorGUIUtility.systemCopyBuffer = clipboardValue);
+
+        var clipboardText = EditorGUIUtility.systemCopyBuffer;
+        bool canPaste = TryParseClipboardValue(clipboardText, fieldType, out _);
+        if (canPaste)
+        {
+            var targetObject = context?.serializedValue?.serializedObject.targetObject;
+            var valuePropertyPath = context?.serializedValue?.propertyPath;
+            var overridesPropertyPath = context?.localFieldOverrides?.propertyPath;
+            var bindingsPropertyPath = context?.fieldBindings?.propertyPath;
+            var presetValue = context?.presetValue;
+            menu.AddItem(new GUIContent("Paste Value"), false,
+                () => PasteFieldValue(targetObject, valuePropertyPath, overridesPropertyPath,
+                    bindingsPropertyPath, presetValue, fieldPath, presetOwnerPath, fieldType, clipboardText));
+        }
+        else
+            menu.AddDisabledItem(new GUIContent("Paste Value"));
+
+        if (context?.fieldBindings != null && !string.IsNullOrEmpty(fieldPath))
+        {
+            bool isExposed = Enumerable.Range(0, context.fieldBindings.arraySize)
+                .Any(index => context.fieldBindings.GetArrayElementAtIndex(index)
+                    .FindPropertyRelative("fieldPath").stringValue == fieldPath);
+            var targetObject = context.serializedValue?.serializedObject.targetObject;
+            var bindingsPropertyPath = context.fieldBindings.propertyPath;
+            var inputPortsChanged = context.inputPortsChanged;
+            menu.AddItem(new GUIContent(isExposed ? "Hide Input" : "Expose as Input"), false,
+                () => SetFieldInputExposed(targetObject, bindingsPropertyPath, fieldPath,
+                    !isExposed, inputPortsChanged));
+        }
+
+        bool canTogglePresetField = context?.presetOnly == false && context.presetValue != null &&
+            context.localFieldOverrides != null && !string.IsNullOrEmpty(presetOwnerPath);
+        if (canTogglePresetField)
+        {
+            bool isLocal = !IsPresetFieldLocked(context, presetOwnerPath);
+            var targetObject = context.serializedValue.serializedObject.targetObject;
+            var valuePropertyPath = context.serializedValue.propertyPath;
+            var overridesPropertyPath = context.localFieldOverrides.propertyPath;
+            var presetValue = context.presetValue;
+            if (isLocal)
+                menu.AddItem(new GUIContent("Use Character Preset"), false,
+                    () => SetPresetFieldLocal(targetObject, valuePropertyPath, overridesPropertyPath,
+                        presetValue, presetOwnerPath, false));
+            else
+                menu.AddItem(new GUIContent("Edit Locally"), false,
+                    () => SetPresetFieldLocal(targetObject, valuePropertyPath, overridesPropertyPath,
+                        presetValue, presetOwnerPath, true));
+        }
+
+        menu.ShowAsContext();
+        currentEvent.Use();
+    }
+
+    private static void SetFieldInputExposed(
+        UnityEngine.Object targetObject,
+        string bindingsPropertyPath,
+        string fieldPath,
+        bool exposed,
+        Action inputPortsChanged)
+    {
+        if (targetObject == null) return;
+        var serializedObject = new SerializedObject(targetObject);
+        serializedObject.Update();
+        var bindings = serializedObject.FindProperty(bindingsPropertyPath);
+        if (bindings == null) return;
+        Undo.RecordObject(targetObject, exposed ? "Expose Dialogue Input" : "Hide Dialogue Input");
+
+        int existingIndex = -1;
+        for (int i = bindings.arraySize - 1; i >= 0; i--)
+        {
+            if (bindings.GetArrayElementAtIndex(i).FindPropertyRelative("fieldPath").stringValue != fieldPath)
+                continue;
+            if (existingIndex < 0) existingIndex = i;
+            else bindings.DeleteArrayElementAtIndex(i);
+        }
+
+        if (exposed && existingIndex < 0)
+        {
+            var binding = bindings.GetArrayElementAtIndex(bindings.arraySize++);
+            binding.FindPropertyRelative("fieldPath").stringValue = fieldPath;
+            binding.FindPropertyRelative("variableId").stringValue = string.Empty;
+        }
+        else if (!exposed && existingIndex >= 0)
+        {
+            bindings.DeleteArrayElementAtIndex(existingIndex);
+        }
+
+        serializedObject.ApplyModifiedProperties();
+        EditorUtility.SetDirty(targetObject);
+        inputPortsChanged?.Invoke();
+    }
+
+    private static string GetClipboardValue(object value)
+    {
+        if (value == null) return string.Empty;
+        if (value is UnityEngine.Object unityObject)
+        {
+            if (unityObject == null) return string.Empty;
+            var assetPath = AssetDatabase.GetAssetPath(unityObject);
+            return string.IsNullOrEmpty(assetPath) ? unityObject.name : assetPath;
+        }
+
+        if (value is string text) return text;
+        if (value is IList collection)
+        {
+            var clipboardCollection = new ClipboardCollection();
+            foreach (var item in collection)
+                clipboardCollection.values.Add(GetClipboardValue(item));
+            return JsonUtility.ToJson(clipboardCollection, true);
+        }
+        if (value is Enum) return value.ToString();
+        if ((value.GetType().IsPrimitive || value is decimal) && value is IFormattable)
+            return ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture);
+
+        try { return JsonUtility.ToJson(value, true); }
+        catch { return value.ToString(); }
+    }
+
+    private static bool TryParseClipboardValue(string text, Type type, out object value)
+    {
+        value = null;
+        if (type == null) return false;
+        type = Nullable.GetUnderlyingType(type) ?? type;
+
+        if (type == typeof(string))
+        {
+            value = text;
+            return true;
+        }
+        if (typeof(UnityEngine.Object).IsAssignableFrom(type))
+        {
+            if (string.IsNullOrEmpty(text)) return true;
+            value = AssetDatabase.LoadAssetAtPath(text, type);
+            return value != null;
+        }
+        if (type.IsEnum)
+        {
+            try
+            {
+                value = Enum.Parse(type, text, ignoreCase: true);
+                return true;
+            }
+            catch { return false; }
+        }
+        if (type == typeof(bool) && bool.TryParse(text, out var booleanValue))
+        {
+            value = booleanValue;
+            return true;
+        }
+        if (type == typeof(char) && text.Length == 1)
+        {
+            value = text[0];
+            return true;
+        }
+        if (type == typeof(decimal) && decimal.TryParse(text, NumberStyles.Number,
+            CultureInfo.InvariantCulture, out var decimalValue))
+        {
+            value = decimalValue;
+            return true;
+        }
+        if (type.IsPrimitive)
+        {
+            try
+            {
+                value = Convert.ChangeType(text, type, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch { return false; }
+        }
+        if (TryGetCollectionElementType(type, out var elementType))
+        {
+            ClipboardCollection clipboardCollection;
+            try { clipboardCollection = JsonUtility.FromJson<ClipboardCollection>(text); }
+            catch { return false; }
+            if (clipboardCollection?.values == null) return false;
+
+            var items = new List<object>();
+            foreach (var itemText in clipboardCollection.values)
+            {
+                if (!TryParseClipboardValue(itemText, elementType, out var item)) return false;
+                items.Add(item);
+            }
+
+            if (type.IsArray)
+            {
+                var array = Array.CreateInstance(elementType, items.Count);
+                for (int i = 0; i < items.Count; i++) array.SetValue(items[i], i);
+                value = array;
+                return true;
+            }
+
+            if (type.IsAbstract || type.IsInterface) return false;
+            try
+            {
+                var collection = (IList)Activator.CreateInstance(type);
+                foreach (var item in items) collection.Add(item);
+                value = collection;
+                return true;
+            }
+            catch { return false; }
+        }
+
+        try
+        {
+            value = JsonUtility.FromJson(text, type);
+            return value != null;
+        }
+        catch { return false; }
+    }
+
+    private static void PasteFieldValue(
+        UnityEngine.Object targetObject,
+        string valuePropertyPath,
+        string overridesPropertyPath,
+        string bindingsPropertyPath,
+        object presetValue,
+        string fieldPath,
+        string presetOwnerPath,
+        Type fieldType,
+        string clipboardText)
+    {
+        if (targetObject == null || !TryParseClipboardValue(clipboardText, fieldType, out var pastedValue)) return;
+
+        var serializedObject = new SerializedObject(targetObject);
+        serializedObject.Update();
+        var serializedValue = serializedObject.FindProperty(valuePropertyPath);
+        if (serializedValue == null) return;
+
+        var rootValue = CloneCustomValue(LoadCustomValue(serializedValue));
+        if (rootValue == null || !SetValueAtPath(rootValue, fieldPath, pastedValue)) return;
+
+        Undo.RecordObject(targetObject, "Paste Dialogue Content Field");
+        var localFieldOverrides = string.IsNullOrEmpty(overridesPropertyPath)
+            ? null
+            : serializedObject.FindProperty(overridesPropertyPath);
+        if (presetValue != null && !string.IsNullOrEmpty(presetOwnerPath) && localFieldOverrides != null)
+        {
+            bool alreadyLocal = Enumerable.Range(0, localFieldOverrides.arraySize)
+                .Any(index => localFieldOverrides.GetArrayElementAtIndex(index).stringValue == presetOwnerPath);
+            if (!alreadyLocal)
+                localFieldOverrides.GetArrayElementAtIndex(localFieldOverrides.arraySize++).stringValue = presetOwnerPath;
+        }
+
+        if (!string.IsNullOrEmpty(bindingsPropertyPath))
+        {
+            var bindings = serializedObject.FindProperty(bindingsPropertyPath);
+            if (bindings != null)
+            {
+                for (int i = bindings.arraySize - 1; i >= 0; i--)
+                {
+                    if (bindings.GetArrayElementAtIndex(i).FindPropertyRelative("fieldPath").stringValue == fieldPath)
+                        bindings.DeleteArrayElementAtIndex(i);
+                }
+            }
+        }
+
+        PersistCustomValue(serializedValue, rootValue);
+    }
+
+    private static object CloneCustomValue(object source)
+    {
+        if (source == null) return null;
+        var type = source.GetType();
+        var objectReferences = CollectObjectReferences(source, type, string.Empty, 0);
+        object clone;
+        try { clone = JsonUtility.FromJson(JsonUtility.ToJson(source), type); }
+        catch { return null; }
+        if (clone == null) return null;
+
+        foreach (var reference in objectReferences)
+            RestoreObjectReference(clone, reference.Key.Split('.'), 0, reference.Value);
+        return clone;
+    }
+
+    private static void SetPresetFieldLocal(
+        UnityEngine.Object targetObject,
+        string valuePropertyPath,
+        string overridesPropertyPath,
+        object presetValue,
+        string path,
+        bool isLocal)
+    {
+        if (targetObject == null) return;
+
+        var serializedObject = new SerializedObject(targetObject);
+        serializedObject.Update();
+        var serializedValue = serializedObject.FindProperty(valuePropertyPath);
+        var localFieldOverrides = serializedObject.FindProperty(overridesPropertyPath);
+        if (serializedValue == null || localFieldOverrides == null) return;
+
+        Undo.RecordObject(targetObject,
+            isLocal ? "Edit Dialogue Field Locally" : "Use Character Preset Field");
+
+        int existingIndex = -1;
+        for (int i = 0; i < localFieldOverrides.arraySize; i++)
+        {
+            if (localFieldOverrides.GetArrayElementAtIndex(i).stringValue == path)
+            {
+                existingIndex = i;
+                break;
+            }
+        }
+
+        if (isLocal && existingIndex < 0)
+            localFieldOverrides.GetArrayElementAtIndex(localFieldOverrides.arraySize++).stringValue = path;
+        else if (!isLocal && existingIndex >= 0)
+            localFieldOverrides.DeleteArrayElementAtIndex(existingIndex);
+
+        if (!isLocal)
+        {
+            serializedObject.ApplyModifiedProperties();
+            EditorUtility.SetDirty(targetObject);
+            return;
+        }
+
+        var rootValue = LoadCustomValue(serializedValue);
+        var presetFieldValue = GetValueAtPath(presetValue, path);
+        if (rootValue == null || !SetValueAtPath(rootValue, path, presetFieldValue)) return;
+        PersistCustomValue(serializedValue, rootValue);
+    }
+
+    private static object LoadCustomValue(SerializedProperty serializedValue)
+    {
+        var typeName = serializedValue.FindPropertyRelative("customTypeName")?.stringValue;
+        var type = string.IsNullOrEmpty(typeName) ? null : Type.GetType(typeName);
+        if (type == null) return null;
+
+        var managedValue = serializedValue.FindPropertyRelative("customManagedValue");
+        object value = managedValue?.managedReferenceValue;
+        if (value == null || value.GetType() != type)
+        {
+            var customJson = serializedValue.FindPropertyRelative("customJson")?.stringValue;
+            try
+            {
+                value = string.IsNullOrEmpty(customJson)
+                    ? Activator.CreateInstance(type, nonPublic: true)
+                    : JsonUtility.FromJson(customJson, type);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        var references = serializedValue.FindPropertyRelative("customObjectReferences");
+        if (references != null)
+        {
+            for (int i = 0; i < references.arraySize; i++)
+            {
+                var reference = references.GetArrayElementAtIndex(i);
+                RestoreObjectReference(value,
+                    reference.FindPropertyRelative("fieldPath").stringValue.Split('.'), 0,
+                    reference.FindPropertyRelative("value").objectReferenceValue);
+            }
+        }
+
+        return value;
+    }
+
+    private static object GetValueAtPath(object value, string path)
+    {
+        foreach (var segment in path.Split('.'))
+        {
+            if (value == null) return null;
+            if (value is IList collection && int.TryParse(segment, out int index) &&
+                index >= 0 && index < collection.Count)
+            {
+                value = collection[index];
+                continue;
+            }
+
+            var field = value.GetType().GetField(segment,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (field == null) return null;
+            value = field.GetValue(value);
+        }
+
+        return value;
+    }
+
+    private static bool SetValueAtPath(object target, string path, object value)
+    {
+        return SetValueAtPath(target, path.Split('.'), 0, value);
+    }
+
+    private static bool SetValueAtPath(object target, string[] segments, int index, object value)
+    {
+        if (target == null || index >= segments.Length) return false;
+        if (target is IList collection && int.TryParse(segments[index], out int itemIndex) &&
+            itemIndex >= 0 && itemIndex < collection.Count)
+        {
+            if (index == segments.Length - 1)
+            {
+                collection[itemIndex] = value;
+                return true;
+            }
+
+            var item = collection[itemIndex];
+            if (!SetValueAtPath(item, segments, index + 1, value)) return false;
+            if (item != null && item.GetType().IsValueType)
+                collection[itemIndex] = item;
+            return true;
+        }
+
+        var field = target.GetType().GetField(segments[index],
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (field == null) return false;
+        if (index == segments.Length - 1)
+        {
+            field.SetValue(target, value);
+            return true;
+        }
+
+        var nested = field.GetValue(target);
+        if (!SetValueAtPath(nested, segments, index + 1, value)) return false;
+        if (nested != null && nested.GetType().IsValueType)
+            field.SetValue(target, nested);
+        return true;
+    }
+
+    private static void PersistCustomValue(SerializedProperty serializedValue, object value)
+    {
+        var managedValue = serializedValue.FindPropertyRelative("customManagedValue");
+        if (managedValue != null && !value.GetType().IsValueType)
+            managedValue.managedReferenceValue = value;
+
+        var customJson = serializedValue.FindPropertyRelative("customJson");
+        if (customJson != null)
+            customJson.stringValue = JsonUtility.ToJson(value, true);
+
+        var referencesProperty = serializedValue.FindPropertyRelative("customObjectReferences");
+        var references = CollectObjectReferences(value, value.GetType(), string.Empty, 0);
+        referencesProperty.arraySize = references.Count;
+        int index = 0;
+        foreach (var pair in references)
+        {
+            var reference = referencesProperty.GetArrayElementAtIndex(index++);
+            reference.FindPropertyRelative("fieldPath").stringValue = pair.Key;
+            reference.FindPropertyRelative("value").objectReferenceValue = pair.Value;
+        }
+
+        var serializedObject = serializedValue.serializedObject;
+        serializedObject.ApplyModifiedProperties();
+        if (serializedObject.targetObject != null)
+            EditorUtility.SetDirty(serializedObject.targetObject);
+    }
+
+    private static Dictionary<string, UnityEngine.Object> CollectObjectReferences(
+        object value,
+        Type type,
+        string path,
+        int depth)
+    {
+        var references = new Dictionary<string, UnityEngine.Object>();
+        CollectObjectReferences(value, type, path, depth, references);
+        return references;
+    }
+
+    private static void CollectObjectReferences(
+        object value,
+        Type type,
+        string path,
+        int depth,
+        Dictionary<string, UnityEngine.Object> references)
+    {
+        if (value == null || type == null || depth >= 8) return;
+        if (value is UnityEngine.Object unityObject)
+        {
+            if (unityObject != null) references[path] = unityObject;
+            return;
+        }
+
+        if (value is IList list && TryGetCollectionElementType(type, out var elementType))
+        {
+            for (int i = 0; i < list.Count; i++)
+                CollectObjectReferences(list[i], elementType, $"{path}.{i}", depth + 1, references);
+            return;
+        }
+
+        foreach (var field in GetSerializableFields(type))
+        {
+            var fieldPath = string.IsNullOrEmpty(path) ? field.Name : $"{path}.{field.Name}";
+            CollectObjectReferences(field.GetValue(value), field.FieldType, fieldPath, depth + 1, references);
+        }
+    }
+
     private static object RestoreObjectReference(object target, string[] path, int index, UnityEngine.Object value)
     {
         if (target == null || index >= path.Length) return target;
+        if (target is IList collection && int.TryParse(path[index], out int itemIndex) &&
+            itemIndex >= 0 && itemIndex < collection.Count)
+        {
+            if (index == path.Length - 1)
+                collection[itemIndex] = value;
+            else
+                collection[itemIndex] = RestoreObjectReference(collection[itemIndex], path, index + 1, value);
+            return target;
+        }
         var field = target.GetType().GetField(path[index], BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         if (field == null) return target;
         if (index == path.Length - 1)

@@ -133,7 +133,8 @@ public class DialogueGraphWindow : EditorWindow
             _variablesSize,
             position => _variablesPosition = position,
             size => _variablesSize = size,
-            CloseVariablesWindow);
+            CloseVariablesWindow,
+            rebuildNodePorts => _graphView?.RefreshVariableNodes(rebuildNodePorts));
         rootVisualElement.Add(_variablesWindow);
         _variablesWindow.BringToFront();
     }

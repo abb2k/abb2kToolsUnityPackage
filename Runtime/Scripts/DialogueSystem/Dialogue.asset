@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-911766750457524288
+--- !u!114 &-1251619228736636439
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -10,13 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
-  m_Name: DialogueLink
+  m_Name: DialogueLink (2)
   m_EditorClassIdentifier: abb2kTools::DialogueLink
-  source: {fileID: 0}
-  sourcePortId: ba5d56018bca4d5e8795e134a6c4dee2
-  destination: {fileID: 828632634047372874}
-  destinationPortId: 9c4e221271734bd1bd1fa971007008f6
-  sourceIsDialogueStart: 1
+  source: {fileID: -1048518213132877886}
+  sourcePortId: 17d14bc37b164da6814f540d00767bc6
+  destination: {fileID: 6928802345670257356}
+  destinationPortId: c9dac4ba42f4448a95d9ca8b0c18e10e
+  sourceIsDialogueStart: 0
   destinationIsDialogueExit: 0
   sourceEntryId: 
   destinationExitId: 
@@ -25,6 +25,1178 @@ MonoBehaviour:
   references:
     version: 2
     RefIds: []
+--- !u!114 &-1063090024299816612
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
+  m_Name: hi :3
+  m_EditorClassIdentifier: abb2kTools::DialogueData
+  execInput:
+    id: 9748cafb2786474d8b2f62706dd1d00d
+    label: In
+  execOutput:
+    id: 04a969a0c37f40cc821580da2250bf5a
+    label: Out
+  hasSelection: 1
+  selectionOptions:
+  - id: bba1469c3bb24ce3bafaab25a589fedb
+    text: Option
+    dialogueContent:
+      value:
+        id: 934c2c705a7d4f1f98bd41372cc70c9b
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506968
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  - id: 9d5f4e34c4a446eead3d70856c24b35e
+    text: Option
+    dialogueContent:
+      value:
+        id: ec3aaa47e46e46339bb8394dcc484403
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506969
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  - id: 0ddc297b87214b59818bedca895d1dab
+    text: Option
+    dialogueContent:
+      value:
+        id: 627286ed65c64d37b4dfae3e0f3d1140
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506918
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  - id: a07b35a207be488f8de1aa65ccdfda9e
+    text: Option
+    dialogueContent:
+      value:
+        id: 914a3993db8e4795bd542d3891165ad3
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506970
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  - id: 22cd835333ab432d9956aeda9eb4daf4
+    text: Option
+    dialogueContent:
+      value:
+        id: e814fbcea7a64d9a887c622f3f36c7b1
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506971
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  - id: 96c9e5da758946b8a5b364592004e5e9
+    text: Option
+    dialogueContent:
+      value:
+        id: 36802c6debfb4e4c836b43efaa9c2bc4
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506972
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  dialogueContent:
+    value:
+      id: 56626a9d7f214fc78942040d5b01e76d
+      name: New Variable
+      type: 32
+      boolValue: 0
+      byteValue: 0
+      sbyteValue: 0
+      shortValue: 0
+      ushortValue: 0
+      intValue: 0
+      uintValue: 0
+      longValue: 0
+      ulongValue: 0
+      floatValue: 0
+      doubleValue: 0
+      decimalValue: 0
+      charValue: a
+      stringValue: 
+      vector2Value: {x: 0, y: 0}
+      vector2IntValue: {x: 0, y: 0}
+      vector3Value: {x: 0, y: 0, z: 0}
+      vector3IntValue: {x: 0, y: 0, z: 0}
+      vector4Value: {x: 0, y: 0, z: 0, w: 0}
+      quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+      colorValue: {r: 1, g: 1, b: 1, a: 1}
+      color32Value:
+        serializedVersion: 2
+        rgba: 4294967295
+      rectValue:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      rectIntValue:
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      boundsValue:
+        m_Center: {x: 0, y: 0, z: 0}
+        m_Extent: {x: 0, y: 0, z: 0}
+      boundsIntValue:
+        m_Position: {x: 0, y: 0, z: 0}
+        m_Size: {x: 0, y: 0, z: 0}
+      matrix4x4Value:
+        e00: 1
+        e01: 0
+        e02: 0
+        e03: 0
+        e10: 0
+        e11: 1
+        e12: 0
+        e13: 0
+        e20: 0
+        e21: 0
+        e22: 1
+        e23: 0
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      layerMaskValue:
+        serializedVersion: 2
+        m_Bits: 0
+      animationCurveValue:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 0
+          inSlope: 0
+          outSlope: 1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 1
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      gradientValue:
+        serializedVersion: 2
+        key0: {r: 1, g: 1, b: 1, a: 1}
+        key1: {r: 1, g: 1, b: 1, a: 1}
+        key2: {r: 0, g: 0, b: 0, a: 0}
+        key3: {r: 0, g: 0, b: 0, a: 0}
+        key4: {r: 0, g: 0, b: 0, a: 0}
+        key5: {r: 0, g: 0, b: 0, a: 0}
+        key6: {r: 0, g: 0, b: 0, a: 0}
+        key7: {r: 0, g: 0, b: 0, a: 0}
+        ctime0: 0
+        ctime1: 65535
+        ctime2: 0
+        ctime3: 0
+        ctime4: 0
+        ctime5: 0
+        ctime6: 0
+        ctime7: 0
+        atime0: 0
+        atime1: 65535
+        atime2: 0
+        atime3: 0
+        atime4: 0
+        atime5: 0
+        atime6: 0
+        atime7: 0
+        m_Mode: 0
+        m_ColorSpace: -1
+        m_NumColorKeys: 2
+        m_NumAlphaKeys: 2
+      customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+        PublicKeyToken=null
+      customManagedValue:
+        rid: 5018619772361506967
+      enumValue: 0
+      objectReferenceValue: {fileID: 0}
+      customObjectReferences: []
+      customJson: "{\n    \"name\": \"evil shmolik\",\n    \"text\": \"\",\n    \"characterIcon\":
+        {\n        \"instanceID\": 0\n    }\n}"
+    fieldBindings: []
+    localPresetFieldOverrides: []
+    characterPreset: {fileID: 11400000, guid: a25f5a1799724af4fa7a13f2550977b7, type: 2}
+    characterPresetVariant: {fileID: -5201217594765518526, guid: a25f5a1799724af4fa7a13f2550977b7, type: 2}
+  graphNodeSize: {x: 725, y: 950}
+  graphNodeSizeWasUserSpecified: 1
+  transitions:
+  - {fileID: 6392350329416795885}
+  - {fileID: 6820304230699123418}
+  references:
+    version: 2
+    RefIds:
+    - rid: 5018619772361506918
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+    - rid: 5018619772361506967
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: evil shmolik
+        text: 
+        characterIcon: {fileID: 0}
+    - rid: 5018619772361506968
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+    - rid: 5018619772361506969
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+    - rid: 5018619772361506970
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+    - rid: 5018619772361506971
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+    - rid: 5018619772361506972
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+--- !u!114 &-1048518213132877886
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
+  m_Name: Dialogue (1)
+  m_EditorClassIdentifier: abb2kTools::DialogueData
+  execInput:
+    id: abfb69429b094ed88fe98a798e68636d
+    label: In
+  execOutput:
+    id: 17d14bc37b164da6814f540d00767bc6
+    label: Out
+  hasSelection: 0
+  selectionOptions: []
+  dialogueContent:
+    value:
+      id: d2ddef5e587c4f27bc3174be433260cd
+      name: New Variable
+      type: 32
+      boolValue: 0
+      byteValue: 0
+      sbyteValue: 0
+      shortValue: 0
+      ushortValue: 0
+      intValue: 0
+      uintValue: 0
+      longValue: 0
+      ulongValue: 0
+      floatValue: 0
+      doubleValue: 0
+      decimalValue: 0
+      charValue: a
+      stringValue: 
+      vector2Value: {x: 0, y: 0}
+      vector2IntValue: {x: 0, y: 0}
+      vector3Value: {x: 0, y: 0, z: 0}
+      vector3IntValue: {x: 0, y: 0, z: 0}
+      vector4Value: {x: 0, y: 0, z: 0, w: 0}
+      quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+      colorValue: {r: 1, g: 1, b: 1, a: 1}
+      color32Value:
+        serializedVersion: 2
+        rgba: 4294967295
+      rectValue:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      rectIntValue:
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      boundsValue:
+        m_Center: {x: 0, y: 0, z: 0}
+        m_Extent: {x: 0, y: 0, z: 0}
+      boundsIntValue:
+        m_Position: {x: 0, y: 0, z: 0}
+        m_Size: {x: 0, y: 0, z: 0}
+      matrix4x4Value:
+        e00: 1
+        e01: 0
+        e02: 0
+        e03: 0
+        e10: 0
+        e11: 1
+        e12: 0
+        e13: 0
+        e20: 0
+        e21: 0
+        e22: 1
+        e23: 0
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      layerMaskValue:
+        serializedVersion: 2
+        m_Bits: 0
+      animationCurveValue:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 0
+          inSlope: 0
+          outSlope: 1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 1
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      gradientValue:
+        serializedVersion: 2
+        key0: {r: 1, g: 1, b: 1, a: 1}
+        key1: {r: 1, g: 1, b: 1, a: 1}
+        key2: {r: 0, g: 0, b: 0, a: 0}
+        key3: {r: 0, g: 0, b: 0, a: 0}
+        key4: {r: 0, g: 0, b: 0, a: 0}
+        key5: {r: 0, g: 0, b: 0, a: 0}
+        key6: {r: 0, g: 0, b: 0, a: 0}
+        key7: {r: 0, g: 0, b: 0, a: 0}
+        ctime0: 0
+        ctime1: 65535
+        ctime2: 0
+        ctime3: 0
+        ctime4: 0
+        ctime5: 0
+        ctime6: 0
+        ctime7: 0
+        atime0: 0
+        atime1: 65535
+        atime2: 0
+        atime3: 0
+        atime4: 0
+        atime5: 0
+        atime6: 0
+        atime7: 0
+        m_Mode: 0
+        m_ColorSpace: -1
+        m_NumColorKeys: 2
+        m_NumAlphaKeys: 2
+      customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+        PublicKeyToken=null
+      customManagedValue:
+        rid: 5018619772361506817
+      enumValue: 0
+      objectReferenceValue: {fileID: 0}
+      customObjectReferences: []
+      customJson: '{}'
+    fieldBindings: []
+    localPresetFieldOverrides: []
+    characterPreset: {fileID: 11400000, guid: a25f5a1799724af4fa7a13f2550977b7, type: 2}
+    characterPresetVariant: {fileID: 0}
+  graphNodeSize: {x: 725, y: 575}
+  graphNodeSizeWasUserSpecified: 1
+  transitions:
+  - {fileID: -1251619228736636439}
+  references:
+    version: 2
+    RefIds:
+    - rid: 5018619772361506817
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -38,51 +1210,289 @@ MonoBehaviour:
   m_Name: Dialogue
   m_EditorClassIdentifier: abb2kTools::Dialogue
   startOutput:
-    id: ba5d56018bca4d5e8795e134a6c4dee2
+    id: 26ec7039e7bd42d6bf758ffcd6a7858f
     label: Start
   exitInput:
-    id: ea43f7fbf2a6468b9ff054c2dfe0b5c9
+    id: e2d423fffd0c42da8451ee0a2b9c089e
     label: Exit
-  startNodePosition: {x: 59.999992, y: -1931.2001}
-  exitNodePosition: {x: 815.19995, y: -1931.2001}
+  startNodePosition: {x: -647.31, y: 406.40005}
+  exitNodePosition: {x: 2310.1035, y: 406.40002}
   rooms:
-  - {fileID: 828632634047372874}
-  - {fileID: 8155140342156625513}
+  - {fileID: -1063090024299816612}
+  - {fileID: -1048518213132877886}
+  - {fileID: 6928802345670257356}
   links:
-  - {fileID: 7773871075266668816}
-  - {fileID: -911766750457524288}
-  - {fileID: 3567065090060966319}
+  - {fileID: 8981396459998791493}
+  - {fileID: 6392350329416795885}
+  - {fileID: -1251619228736636439}
+  - {fileID: 5207765174554383846}
+  - {fileID: 7285846752807788494}
+  - {fileID: 6820304230699123418}
   additionalEntries: []
-  additionalExits: []
-  variables: []
+  additionalExits:
+  - id: 07c98665e12848fca719e7d34252d552
+    name: Exit 1
+    input:
+      id: cc6e460dfb6b4ab6afccea03e669b025
+      label: Exit
+    position: {x: 649.0333, y: 1064}
+  variables:
+  - id: d770e84983ea497fa1be5e5de85ea1b0
+    name: meow
+    type: 5
+    boolValue: 0
+    byteValue: 0
+    sbyteValue: 0
+    shortValue: 0
+    ushortValue: 0
+    intValue: 0
+    uintValue: 0
+    longValue: 0
+    ulongValue: 0
+    floatValue: 0
+    doubleValue: 0
+    decimalValue: 0
+    charValue: a
+    stringValue: 
+    vector2Value: {x: 0, y: 0}
+    vector2IntValue: {x: 0, y: 0}
+    vector3Value: {x: 0, y: 0, z: 0}
+    vector3IntValue: {x: 0, y: 0, z: 0}
+    vector4Value: {x: 0, y: 0, z: 0, w: 0}
+    quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+    colorValue: {r: 1, g: 1, b: 1, a: 1}
+    color32Value:
+      serializedVersion: 2
+      rgba: 4294967295
+    rectValue:
+      serializedVersion: 2
+      x: 0
+      y: 0
+      width: 0
+      height: 0
+    rectIntValue:
+      x: 0
+      y: 0
+      width: 0
+      height: 0
+    boundsValue:
+      m_Center: {x: 0, y: 0, z: 0}
+      m_Extent: {x: 0, y: 0, z: 0}
+    boundsIntValue:
+      m_Position: {x: 0, y: 0, z: 0}
+      m_Size: {x: 0, y: 0, z: 0}
+    matrix4x4Value:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    layerMaskValue:
+      serializedVersion: 2
+      m_Bits: 0
+    animationCurveValue:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    gradientValue:
+      serializedVersion: 2
+      key0: {r: 1, g: 1, b: 1, a: 1}
+      key1: {r: 1, g: 1, b: 1, a: 1}
+      key2: {r: 0, g: 0, b: 0, a: 0}
+      key3: {r: 0, g: 0, b: 0, a: 0}
+      key4: {r: 0, g: 0, b: 0, a: 0}
+      key5: {r: 0, g: 0, b: 0, a: 0}
+      key6: {r: 0, g: 0, b: 0, a: 0}
+      key7: {r: 0, g: 0, b: 0, a: 0}
+      ctime0: 0
+      ctime1: 65535
+      ctime2: 0
+      ctime3: 0
+      ctime4: 0
+      ctime5: 0
+      ctime6: 0
+      ctime7: 0
+      atime0: 0
+      atime1: 65535
+      atime2: 0
+      atime3: 0
+      atime4: 0
+      atime5: 0
+      atime6: 0
+      atime7: 0
+      m_Mode: 0
+      m_ColorSpace: -1
+      m_NumColorKeys: 2
+      m_NumAlphaKeys: 2
+    customTypeName: 
+    customManagedValue:
+      rid: -2
+    enumValue: 0
+    objectReferenceValue: {fileID: 0}
+    customObjectReferences: []
+    customJson: '{}'
+  - id: 62d5c45e23784376ab10265924aff0c3
+    name: New Variable
+    type: 32
+    boolValue: 0
+    byteValue: 0
+    sbyteValue: 0
+    shortValue: 0
+    ushortValue: 0
+    intValue: 0
+    uintValue: 0
+    longValue: 0
+    ulongValue: 0
+    floatValue: 0
+    doubleValue: 0
+    decimalValue: 0
+    charValue: a
+    stringValue: 
+    vector2Value: {x: 0, y: 0}
+    vector2IntValue: {x: 0, y: 0}
+    vector3Value: {x: 0, y: 0, z: 0}
+    vector3IntValue: {x: 0, y: 0, z: 0}
+    vector4Value: {x: 0, y: 0, z: 0, w: 0}
+    quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+    colorValue: {r: 1, g: 1, b: 1, a: 1}
+    color32Value:
+      serializedVersion: 2
+      rgba: 4294967295
+    rectValue:
+      serializedVersion: 2
+      x: 0
+      y: 0
+      width: 0
+      height: 0
+    rectIntValue:
+      x: 0
+      y: 0
+      width: 0
+      height: 0
+    boundsValue:
+      m_Center: {x: 0, y: 0, z: 0}
+      m_Extent: {x: 0, y: 0, z: 0}
+    boundsIntValue:
+      m_Position: {x: 0, y: 0, z: 0}
+      m_Size: {x: 0, y: 0, z: 0}
+    matrix4x4Value:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    layerMaskValue:
+      serializedVersion: 2
+      m_Bits: 0
+    animationCurveValue:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    gradientValue:
+      serializedVersion: 2
+      key0: {r: 1, g: 1, b: 1, a: 1}
+      key1: {r: 1, g: 1, b: 1, a: 1}
+      key2: {r: 0, g: 0, b: 0, a: 0}
+      key3: {r: 0, g: 0, b: 0, a: 0}
+      key4: {r: 0, g: 0, b: 0, a: 0}
+      key5: {r: 0, g: 0, b: 0, a: 0}
+      key6: {r: 0, g: 0, b: 0, a: 0}
+      key7: {r: 0, g: 0, b: 0, a: 0}
+      ctime0: 0
+      ctime1: 65535
+      ctime2: 0
+      ctime3: 0
+      ctime4: 0
+      ctime5: 0
+      ctime6: 0
+      ctime7: 0
+      atime0: 0
+      atime1: 65535
+      atime2: 0
+      atime3: 0
+      atime4: 0
+      atime5: 0
+      atime6: 0
+      atime7: 0
+      m_Mode: 0
+      m_ColorSpace: -1
+      m_NumColorKeys: 2
+      m_NumAlphaKeys: 2
+    customTypeName: 
+    customManagedValue:
+      rid: -2
+    enumValue: 0
+    objectReferenceValue: {fileID: 0}
+    customObjectReferences: []
+    customJson: '{}'
   references:
     version: 2
-    RefIds: []
---- !u!114 &828632634047372874
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
-  m_Name: DialogueData
-  m_EditorClassIdentifier: abb2kTools::DialogueData
-  execInput:
-    id: 9c4e221271734bd1bd1fa971007008f6
-    label: In
-  execOutput:
-    id: 1b1bc5e42e77475096cc937c386de25d
-    label: Out
-  hasSelection: 0
-  selectionOptions:
-  - id: 9b494884fc1a4a4a9731b36c0c606c79
-    text: Option
-  transitions:
-  - {fileID: 7773871075266668816}
---- !u!114 &3567065090060966319
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+--- !u!114 &5207765174554383846
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -92,12 +1502,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
-  m_Name: DialogueLink (2)
+  m_Name: DialogueLink (3)
   m_EditorClassIdentifier: abb2kTools::DialogueLink
-  source: {fileID: 8155140342156625513}
-  sourcePortId: cdaccee4188e4d819c347e279ded6e04
+  source: {fileID: 6928802345670257356}
+  sourcePortId: a2b95506ec8347489dbe95230ebe740f
   destination: {fileID: 0}
-  destinationPortId: ea43f7fbf2a6468b9ff054c2dfe0b5c9
+  destinationPortId: e2d423fffd0c42da8451ee0a2b9c089e
   sourceIsDialogueStart: 0
   destinationIsDialogueExit: 1
   sourceEntryId: 
@@ -107,7 +1517,7 @@ MonoBehaviour:
   references:
     version: 2
     RefIds: []
---- !u!114 &7773871075266668816
+--- !u!114 &6392350329416795885
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -119,10 +1529,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
   m_Name: DialogueLink (1)
   m_EditorClassIdentifier: abb2kTools::DialogueLink
-  source: {fileID: 828632634047372874}
-  sourcePortId: 1b1bc5e42e77475096cc937c386de25d
-  destination: {fileID: 8155140342156625513}
-  destinationPortId: b304740cb85a462ca787e644c1b6fcd3
+  source: {fileID: -1063090024299816612}
+  sourcePortId: 04a969a0c37f40cc821580da2250bf5a
+  destination: {fileID: -1048518213132877886}
+  destinationPortId: abfb69429b094ed88fe98a798e68636d
   sourceIsDialogueStart: 0
   destinationIsDialogueExit: 0
   sourceEntryId: 
@@ -132,7 +1542,7 @@ MonoBehaviour:
   references:
     version: 2
     RefIds: []
---- !u!114 &8155140342156625513
+--- !u!114 &6820304230699123418
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -141,18 +1551,630 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 150c42c8030012246bbfcc72cf31bcff, type: 3}
-  m_Name: DialogueData (1)
-  m_EditorClassIdentifier: abb2kTools::DialogueData
+  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
+  m_Name: DialogueLink (5)
+  m_EditorClassIdentifier: abb2kTools::DialogueLink
+  source: {fileID: -1063090024299816612}
+  sourcePortId: 96c9e5da758946b8a5b364592004e5e9
+  destination: {fileID: 0}
+  destinationPortId: cc6e460dfb6b4ab6afccea03e669b025
+  sourceIsDialogueStart: 0
+  destinationIsDialogueExit: 0
+  sourceEntryId: 
+  destinationExitId: 07c98665e12848fca719e7d34252d552
+  curvePoints: []
+  conditions: []
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &6928802345670257356
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: Selector
+  m_EditorClassIdentifier: abb2kTools::DialogueSelectorData
   execInput:
-    id: b304740cb85a462ca787e644c1b6fcd3
+    id: c9dac4ba42f4448a95d9ca8b0c18e10e
     label: In
   execOutput:
-    id: cdaccee4188e4d819c347e279ded6e04
+    id: 4c010f6d3ef54fa1b420b8187de2df6f
     label: Out
-  hasSelection: 0
+  hasSelection: 1
   selectionOptions:
-  - id: f74c07b53ad941d7a5791a2244173d6d
+  - id: a2b95506ec8347489dbe95230ebe740f
     text: Option
+    dialogueContent:
+      value:
+        id: 880b75dd152c4464b75189c7af1fde7f
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506818
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  - id: 4735d3066d634bd6b944672b51a40769
+    text: Option
+    dialogueContent:
+      value:
+        id: a51c365c42fb422ea1b7795a47faa1dc
+        name: New Variable
+        type: 32
+        boolValue: 0
+        byteValue: 0
+        sbyteValue: 0
+        shortValue: 0
+        ushortValue: 0
+        intValue: 0
+        uintValue: 0
+        longValue: 0
+        ulongValue: 0
+        floatValue: 0
+        doubleValue: 0
+        decimalValue: 0
+        charValue: a
+        stringValue: 
+        vector2Value: {x: 0, y: 0}
+        vector2IntValue: {x: 0, y: 0}
+        vector3Value: {x: 0, y: 0, z: 0}
+        vector3IntValue: {x: 0, y: 0, z: 0}
+        vector4Value: {x: 0, y: 0, z: 0, w: 0}
+        quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+        colorValue: {r: 1, g: 1, b: 1, a: 1}
+        color32Value:
+          serializedVersion: 2
+          rgba: 4294967295
+        rectValue:
+          serializedVersion: 2
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        rectIntValue:
+          x: 0
+          y: 0
+          width: 0
+          height: 0
+        boundsValue:
+          m_Center: {x: 0, y: 0, z: 0}
+          m_Extent: {x: 0, y: 0, z: 0}
+        boundsIntValue:
+          m_Position: {x: 0, y: 0, z: 0}
+          m_Size: {x: 0, y: 0, z: 0}
+        matrix4x4Value:
+          e00: 1
+          e01: 0
+          e02: 0
+          e03: 0
+          e10: 0
+          e11: 1
+          e12: 0
+          e13: 0
+          e20: 0
+          e21: 0
+          e22: 1
+          e23: 0
+          e30: 0
+          e31: 0
+          e32: 0
+          e33: 1
+        layerMaskValue:
+          serializedVersion: 2
+          m_Bits: 0
+        animationCurveValue:
+          serializedVersion: 2
+          m_Curve:
+          - serializedVersion: 3
+            time: 0
+            value: 0
+            inSlope: 0
+            outSlope: 1
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          - serializedVersion: 3
+            time: 1
+            value: 1
+            inSlope: 1
+            outSlope: 0
+            tangentMode: 0
+            weightedMode: 0
+            inWeight: 0
+            outWeight: 0
+          m_PreInfinity: 2
+          m_PostInfinity: 2
+          m_RotationOrder: 4
+        gradientValue:
+          serializedVersion: 2
+          key0: {r: 1, g: 1, b: 1, a: 1}
+          key1: {r: 1, g: 1, b: 1, a: 1}
+          key2: {r: 0, g: 0, b: 0, a: 0}
+          key3: {r: 0, g: 0, b: 0, a: 0}
+          key4: {r: 0, g: 0, b: 0, a: 0}
+          key5: {r: 0, g: 0, b: 0, a: 0}
+          key6: {r: 0, g: 0, b: 0, a: 0}
+          key7: {r: 0, g: 0, b: 0, a: 0}
+          ctime0: 0
+          ctime1: 65535
+          ctime2: 0
+          ctime3: 0
+          ctime4: 0
+          ctime5: 0
+          ctime6: 0
+          ctime7: 0
+          atime0: 0
+          atime1: 65535
+          atime2: 0
+          atime3: 0
+          atime4: 0
+          atime5: 0
+          atime6: 0
+          atime7: 0
+          m_Mode: 0
+          m_ColorSpace: -1
+          m_NumColorKeys: 2
+          m_NumAlphaKeys: 2
+        customTypeName: DefaultDialogueContent, abb2kTools, Version=0.0.0.0, Culture=neutral,
+          PublicKeyToken=null
+        customManagedValue:
+          rid: 5018619772361506819
+        enumValue: 0
+        objectReferenceValue: {fileID: 0}
+        customObjectReferences: []
+        customJson: '{}'
+      fieldBindings: []
+      localPresetFieldOverrides: []
+      characterPreset: {fileID: 0}
+      characterPresetVariant: {fileID: 0}
+  dialogueContent:
+    value:
+      id: 1bcd7bd144a94efeaf8e4171292e71c0
+      name: New Variable
+      type: 32
+      boolValue: 0
+      byteValue: 0
+      sbyteValue: 0
+      shortValue: 0
+      ushortValue: 0
+      intValue: 0
+      uintValue: 0
+      longValue: 0
+      ulongValue: 0
+      floatValue: 0
+      doubleValue: 0
+      decimalValue: 0
+      charValue: a
+      stringValue: 
+      vector2Value: {x: 0, y: 0}
+      vector2IntValue: {x: 0, y: 0}
+      vector3Value: {x: 0, y: 0, z: 0}
+      vector3IntValue: {x: 0, y: 0, z: 0}
+      vector4Value: {x: 0, y: 0, z: 0, w: 0}
+      quaternionValue: {x: 0, y: 0, z: 0, w: 1}
+      colorValue: {r: 1, g: 1, b: 1, a: 1}
+      color32Value:
+        serializedVersion: 2
+        rgba: 4294967295
+      rectValue:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      rectIntValue:
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      boundsValue:
+        m_Center: {x: 0, y: 0, z: 0}
+        m_Extent: {x: 0, y: 0, z: 0}
+      boundsIntValue:
+        m_Position: {x: 0, y: 0, z: 0}
+        m_Size: {x: 0, y: 0, z: 0}
+      matrix4x4Value:
+        e00: 1
+        e01: 0
+        e02: 0
+        e03: 0
+        e10: 0
+        e11: 1
+        e12: 0
+        e13: 0
+        e20: 0
+        e21: 0
+        e22: 1
+        e23: 0
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 1
+      layerMaskValue:
+        serializedVersion: 2
+        m_Bits: 0
+      animationCurveValue:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 0
+          inSlope: 0
+          outSlope: 1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 1
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      gradientValue:
+        serializedVersion: 2
+        key0: {r: 1, g: 1, b: 1, a: 1}
+        key1: {r: 1, g: 1, b: 1, a: 1}
+        key2: {r: 0, g: 0, b: 0, a: 0}
+        key3: {r: 0, g: 0, b: 0, a: 0}
+        key4: {r: 0, g: 0, b: 0, a: 0}
+        key5: {r: 0, g: 0, b: 0, a: 0}
+        key6: {r: 0, g: 0, b: 0, a: 0}
+        key7: {r: 0, g: 0, b: 0, a: 0}
+        ctime0: 0
+        ctime1: 65535
+        ctime2: 0
+        ctime3: 0
+        ctime4: 0
+        ctime5: 0
+        ctime6: 0
+        ctime7: 0
+        atime0: 0
+        atime1: 65535
+        atime2: 0
+        atime3: 0
+        atime4: 0
+        atime5: 0
+        atime6: 0
+        atime7: 0
+        m_Mode: 0
+        m_ColorSpace: -1
+        m_NumColorKeys: 2
+        m_NumAlphaKeys: 2
+      customTypeName: 
+      customManagedValue:
+        rid: -2
+      enumValue: 0
+      objectReferenceValue: {fileID: 0}
+      customObjectReferences: []
+      customJson: '{}'
+    fieldBindings: []
+    localPresetFieldOverrides: []
+    characterPreset: {fileID: 0}
+    characterPresetVariant: {fileID: 0}
+  graphNodeSize: {x: 575, y: 525}
+  graphNodeSizeWasUserSpecified: 1
   transitions:
-  - {fileID: 3567065090060966319}
+  - {fileID: 5207765174554383846}
+  - {fileID: 7285846752807788494}
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 5018619772361506818
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+    - rid: 5018619772361506819
+      type: {class: DefaultDialogueContent, ns: , asm: abb2kTools}
+      data:
+        name: 
+        text: 
+        characterIcon: {fileID: 0}
+--- !u!114 &7285846752807788494
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
+  m_Name: DialogueLink (4)
+  m_EditorClassIdentifier: abb2kTools::DialogueLink
+  source: {fileID: 6928802345670257356}
+  sourcePortId: 4735d3066d634bd6b944672b51a40769
+  destination: {fileID: 0}
+  destinationPortId: 4e1e767c2bac4d40a95addf8c7e3a6fe
+  sourceIsDialogueStart: 0
+  destinationIsDialogueExit: 0
+  sourceEntryId: 
+  destinationExitId: 
+  curvePoints: []
+  conditions: []
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &8981396459998791493
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42f0cec2179b8749a5876e39d340a6f, type: 3}
+  m_Name: DialogueLink
+  m_EditorClassIdentifier: abb2kTools::DialogueLink
+  source: {fileID: 0}
+  sourcePortId: 26ec7039e7bd42d6bf758ffcd6a7858f
+  destination: {fileID: -1063090024299816612}
+  destinationPortId: 9748cafb2786474d8b2f62706dd1d00d
+  sourceIsDialogueStart: 1
+  destinationIsDialogueExit: 0
+  sourceEntryId: 
+  destinationExitId: 
+  curvePoints: []
+  conditions:
+  - variableId: d770e84983ea497fa1be5e5de85ea1b0
+    valueSource: 0
+    methodSignature: System.String ToString()
+    methodArguments: []
+    methodObjectArguments: []
+    comparison: 0
+    expectedValue: 
+    expectedObject: {fileID: 0}
+    useTypedValues: 1
+    typedExpectedValue:
+      id: 
+      name: 
+      type: 5
+      boolValue: 0
+      byteValue: 0
+      sbyteValue: 0
+      shortValue: 0
+      ushortValue: 0
+      intValue: 0
+      uintValue: 0
+      longValue: 0
+      ulongValue: 0
+      floatValue: 0
+      doubleValue: 0
+      decimalValue: 
+      charValue: 
+      stringValue: 
+      vector2Value: {x: 0, y: 0}
+      vector2IntValue: {x: 0, y: 0}
+      vector3Value: {x: 0, y: 0, z: 0}
+      vector3IntValue: {x: 0, y: 0, z: 0}
+      vector4Value: {x: 0, y: 0, z: 0, w: 0}
+      quaternionValue: {x: 0, y: 0, z: 0, w: 0}
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      color32Value:
+        serializedVersion: 2
+        rgba: 0
+      rectValue:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      rectIntValue:
+        x: 0
+        y: 0
+        width: 0
+        height: 0
+      boundsValue:
+        m_Center: {x: 0, y: 0, z: 0}
+        m_Extent: {x: 0, y: 0, z: 0}
+      boundsIntValue:
+        m_Position: {x: 0, y: 0, z: 0}
+        m_Size: {x: 0, y: 0, z: 0}
+      matrix4x4Value:
+        e00: 0
+        e01: 0
+        e02: 0
+        e03: 0
+        e10: 0
+        e11: 0
+        e12: 0
+        e13: 0
+        e20: 0
+        e21: 0
+        e22: 0
+        e23: 0
+        e30: 0
+        e31: 0
+        e32: 0
+        e33: 0
+      layerMaskValue:
+        serializedVersion: 2
+        m_Bits: 0
+      animationCurveValue:
+        serializedVersion: 2
+        m_Curve: []
+        m_PreInfinity: 0
+        m_PostInfinity: 0
+        m_RotationOrder: 0
+      gradientValue:
+        serializedVersion: 2
+        key0: {r: 0, g: 0, b: 0, a: 0}
+        key1: {r: 0, g: 0, b: 0, a: 0}
+        key2: {r: 0, g: 0, b: 0, a: 0}
+        key3: {r: 0, g: 0, b: 0, a: 0}
+        key4: {r: 0, g: 0, b: 0, a: 0}
+        key5: {r: 0, g: 0, b: 0, a: 0}
+        key6: {r: 0, g: 0, b: 0, a: 0}
+        key7: {r: 0, g: 0, b: 0, a: 0}
+        ctime0: 0
+        ctime1: 65535
+        ctime2: 0
+        ctime3: 0
+        ctime4: 0
+        ctime5: 0
+        ctime6: 0
+        ctime7: 0
+        atime0: 0
+        atime1: 65535
+        atime2: 0
+        atime3: 0
+        atime4: 0
+        atime5: 0
+        atime6: 0
+        atime7: 0
+        m_Mode: 0
+        m_ColorSpace: 0
+        m_NumColorKeys: 2
+        m_NumAlphaKeys: 2
+      customTypeName: 
+      customManagedValue:
+        rid: -2
+      enumValue: 0
+      objectReferenceValue: {fileID: 0}
+      customObjectReferences: []
+      customJson: 
+    typedMethodArguments: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }

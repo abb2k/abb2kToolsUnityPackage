@@ -13,6 +13,8 @@ public class DialogueGraphLayout : ScriptableSingleton<DialogueGraphLayout>
     {
         public string guid;
         public Vector2 position;
+        public Vector2 size;
+        public bool sizeWasUserSpecified;
     }
 
     // Groups belong to a graph asset and keep members by their asset GUIDs.
@@ -35,9 +37,19 @@ public class DialogueGraphLayout : ScriptableSingleton<DialogueGraphLayout>
         public Vector3 scale = Vector3.one;
     }
 
+    [System.Serializable]
+    public class VariableNodeEntry
+    {
+        public string graphKey;
+        public string nodeId;
+        public string variableId;
+        public Vector2 position;
+    }
+
     [SerializeField] private List<Entry> entries = new();
     [SerializeField] private List<GroupData> groups = new();
     [SerializeField] private List<ViewData> views = new();
+    [SerializeField] private List<VariableNodeEntry> variableNodes = new();
 
     // Return the saved position, or origin for assets that have not been laid out yet.
     public Vector2 GetPosition(Object asset)
@@ -56,6 +68,53 @@ public class DialogueGraphLayout : ScriptableSingleton<DialogueGraphLayout>
         entry ??= GetOrCreateEntry(asset);
         entry.position = position;
         MarkDirty();
+    }
+
+    public Vector2 GetSize(Object asset)
+    {
+        var entry = FindEntry(asset);
+        return entry != null && entry.size.x > 0 && entry.size.y > 0
+            ? entry.size
+            : new Vector2(380, 260);
+    }
+
+    public bool TryGetUserSpecifiedSize(Object asset, out Vector2 size)
+    {
+        var entry = FindEntry(asset);
+        if (entry != null && entry.sizeWasUserSpecified && entry.size.x > 0 && entry.size.y > 0)
+        {
+            size = entry.size;
+            return true;
+        }
+
+        size = default;
+        return false;
+    }
+
+    public bool TryGetSavedSize(Object asset, out Vector2 size)
+    {
+        var entry = FindEntry(asset);
+        if (entry != null && entry.size.x > 0 && entry.size.y > 0)
+        {
+            size = entry.size;
+            return true;
+        }
+
+        size = default;
+        return false;
+    }
+
+    public void SetSize(Object asset, Vector2 size)
+    {
+        var entry = FindEntry(asset);
+        if (entry != null && entry.size == size && entry.sizeWasUserSpecified) return;
+
+        Undo.RecordObject(this, "Resize Dialogue Graph Node");
+        entry ??= GetOrCreateEntry(asset);
+        entry.size = size;
+        entry.sizeWasUserSpecified = true;
+        MarkDirty();
+        Save(true);
     }
 
     private Entry FindEntry(Object asset)
@@ -148,6 +207,70 @@ public class DialogueGraphLayout : ScriptableSingleton<DialogueGraphLayout>
     {
         MarkDirty();
         Save(true);
+    }
+
+    public List<VariableNodeEntry> GetVariableNodes(Object graphAsset)
+    {
+        var graphKey = GetAssetKey(graphAsset);
+        bool updatedIds = false;
+        foreach (var node in variableNodes)
+        {
+            if (node.graphKey != graphKey || !string.IsNullOrEmpty(node.nodeId)) continue;
+            node.nodeId = System.Guid.NewGuid().ToString("N");
+            updatedIds = true;
+        }
+
+        if (updatedIds)
+        {
+            MarkDirty();
+            Save(true);
+        }
+
+        return variableNodes.FindAll(node => node.graphKey == graphKey);
+    }
+
+    public string AddVariableNode(Object graphAsset, string variableId, Vector2 position)
+    {
+        var nodeId = System.Guid.NewGuid().ToString("N");
+        Undo.RecordObject(this, "Create Exposed Variable Node");
+        variableNodes.Add(new VariableNodeEntry
+        {
+            graphKey = GetAssetKey(graphAsset),
+            nodeId = nodeId,
+            variableId = variableId,
+            position = position
+        });
+        MarkDirty();
+        Save(true);
+        return nodeId;
+    }
+
+    public void SetVariableNodePosition(Object graphAsset, string nodeId, Vector2 position)
+    {
+        var node = FindVariableNode(graphAsset, nodeId);
+        if (node == null || node.position == position) return;
+        Undo.RecordObject(this, "Move Exposed Variable Node");
+        node.position = position;
+        MarkDirty();
+    }
+
+    public void RemoveVariableNode(Object graphAsset, string nodeId)
+    {
+        var node = FindVariableNode(graphAsset, nodeId);
+        if (node == null) return;
+        Undo.RecordObject(this, "Delete Exposed Variable Node");
+        variableNodes.Remove(node);
+        MarkDirty();
+        Save(true);
+    }
+
+    public static string GetVariableNodeKey(Object graphAsset, string nodeId) =>
+        $"variable:{GetAssetKey(graphAsset)}:{nodeId}";
+
+    private VariableNodeEntry FindVariableNode(Object graphAsset, string nodeId)
+    {
+        var graphKey = GetAssetKey(graphAsset);
+        return variableNodes.Find(node => node.graphKey == graphKey && node.nodeId == nodeId);
     }
 
     public void MarkDirty() => EditorUtility.SetDirty(this);
