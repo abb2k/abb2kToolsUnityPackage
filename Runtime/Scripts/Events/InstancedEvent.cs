@@ -70,7 +70,49 @@ namespace Abb2kTools.Events
     {
 #if UNITY_EDITOR
         private const string PrefKeyPrefix = "Abb2kTools.InstancedEventPersistence.";
-        private static readonly Dictionary<string, InstancedEventPersistenceEntry> cache = LoadCacheFromEditorPrefs();
+        private static readonly Dictionary<string, InstancedEventPersistenceEntry> cache = new(StringComparer.Ordinal);
+        private static readonly HashSet<InstancedEventBaseOpaque> pendingSaveEvents = new();
+        private static bool saveScheduled;
+
+        public static void ScheduleSave(InstancedEventBaseOpaque eventInstance)
+        {
+            if (eventInstance == null) return;
+
+            pendingSaveEvents.Add(eventInstance);
+            if (saveScheduled) return;
+
+            saveScheduled = true;
+            EditorApplication.delayCall += FlushPendingSaves;
+            AssemblyReloadEvents.beforeAssemblyReload += FlushPendingSaves;
+        }
+
+        public static void CancelScheduledSaves()
+        {
+            EditorApplication.delayCall -= FlushPendingSaves;
+            AssemblyReloadEvents.beforeAssemblyReload -= FlushPendingSaves;
+            saveScheduled = false;
+            pendingSaveEvents.Clear();
+        }
+
+        private static void FlushPendingSaves()
+        {
+            EditorApplication.delayCall -= FlushPendingSaves;
+            AssemblyReloadEvents.beforeAssemblyReload -= FlushPendingSaves;
+            saveScheduled = false;
+
+            if (Application.isPlaying || pendingSaveEvents.Count == 0)
+            {
+                pendingSaveEvents.Clear();
+                return;
+            }
+
+            var eventsToSave = new List<InstancedEventBaseOpaque>(pendingSaveEvents);
+            pendingSaveEvents.Clear();
+            foreach (var eventInstance in eventsToSave)
+            {
+                eventInstance?.SaveToPersistenceImmediately();
+            }
+        }
 
         public static void SaveEventState(Type eventType, IEnumerable<InstancedEventListenerPersistedState> listeners)
         {
@@ -94,7 +136,6 @@ namespace Abb2kTools.Events
             if (eventType == null) return null;
 
             var key = eventType.FullName ?? eventType.Name;
-            EnsureCacheLoaded();
             if (cache.TryGetValue(key, out var cached))
             {
                 return cached;
@@ -139,75 +180,33 @@ namespace Abb2kTools.Events
             var indexKey = "Abb2kTools.InstancedEventPersistence.Index"; 
             var current = PlayerPrefs.GetString(indexKey, string.Empty);
             var entries = new List<string>(current.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries));
+            bool changed;
 
             if (remove)
             {
-                entries.RemoveAll(entry => string.Equals(entry, prefKey, StringComparison.Ordinal));
+                changed = entries.RemoveAll(entry => string.Equals(entry, prefKey, StringComparison.Ordinal)) > 0;
             }
             else if (!entries.Exists(entry => string.Equals(entry, prefKey, StringComparison.Ordinal)))
             {
                 entries.Add(prefKey);
+                changed = true;
             }
+            else
+            {
+                changed = false;
+            }
+
+            if (!changed) return;
 
             PlayerPrefs.SetString(indexKey, string.Join("|", entries));
             PlayerPrefs.Save();
         }
 
-        private static Dictionary<string, InstancedEventPersistenceEntry> LoadCacheFromEditorPrefs()
-        {
-            var loaded = new Dictionary<string, InstancedEventPersistenceEntry>(StringComparer.Ordinal);
-
-            var allPrefs = new List<string>();
-            foreach (var prefKey in PlayerPrefs.GetString("Abb2kTools.InstancedEventPersistence.Index", string.Empty).Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                allPrefs.Add(prefKey);
-            }
-
-            foreach (var key in allPrefs)
-            {
-                if (!key.StartsWith(PrefKeyPrefix, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var json = EditorPrefs.GetString(key, string.Empty);
-                if (string.IsNullOrEmpty(json))
-                {
-                    continue;
-                }
-
-                var entry = JsonUtility.FromJson<InstancedEventPersistenceEntry>(json);
-                if (entry == null)
-                {
-                    continue;
-                }
-
-                var eventTypeName = entry.EventTypeName;
-                if (string.IsNullOrEmpty(eventTypeName))
-                {
-                    eventTypeName = key.Substring(PrefKeyPrefix.Length);
-                }
-
-                loaded[eventTypeName] = entry;
-            }
-
-            return loaded;
-        }
-
-        private static void EnsureCacheLoaded()
-        {
-            if (cache.Count != 0)
-            {
-                return;
-            }
-
-            var reloaded = LoadCacheFromEditorPrefs();
-            foreach (var pair in reloaded)
-            {
-                cache[pair.Key] = pair.Value;
-            }
-        }
 #else
+    public static void ScheduleSave(InstancedEventBaseOpaque eventInstance) { }
+
+    public static void CancelScheduledSaves() { }
+
         public static void SaveEventState(Type eventType, IEnumerable<InstancedEventListenerPersistedState> listeners) { }
 
         public static InstancedEventPersistenceEntry LoadEventState(Type eventType) => null;
@@ -244,13 +243,6 @@ namespace Abb2kTools.Events
                 editorCallbacksRegistered = true;
             }
 
-            RestoreRegisteredEventsFromPersistence(); 
-        }
-
-        [InitializeOnLoadMethod]
-        private static void InitializeFromPersistence()
-        {
-            EditorApplication.delayCall += RestoreRegisteredEventsFromPersistence;
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
@@ -300,9 +292,12 @@ namespace Abb2kTools.Events
 
         internal static void SaveCurrentEventStateToPersistence()
         {
+#if UNITY_EDITOR
+            InstancedEventPersistence.CancelScheduledSaves();
+#endif
             foreach (var pair in events)
             {
-                pair.Value?.SaveToPersistence();
+                pair.Value?.SaveToPersistenceImmediately();
 #if UNITY_EDITOR
                 RegisterEventType(pair.Key);
 #endif
@@ -370,29 +365,6 @@ namespace Abb2kTools.Events
 
             registeredEventTypes.Add(typeName);
             SaveEventRegistry();
-        }
-
-        private static void RestoreRegisteredEventsFromPersistence()
-        {
-            EnsureEventRegistryLoaded();
-            if (events.Count != 0)
-            {
-                return;
-            }
-
-            foreach (var typeName in registeredEventTypes)
-            {
-                var eventType = ResolveEventType(typeName);
-                if (eventType == null || events.ContainsKey(eventType))
-                {
-                    continue;
-                }
-
-                if (TryRestoreRegisteredEvent(eventType, out var restoredEvent))
-                {
-                    events[eventType] = restoredEvent;
-                }
-            }
         }
 
         private static bool TryRestoreRegisteredEvent(Type eventType, out InstancedEventBaseOpaque restoredEvent)
@@ -755,7 +727,20 @@ namespace Abb2kTools.Events
         [SerializeField, HideInInspector]
         protected List<ListenerHandle> instancesByPriority = new();
 
+        private static readonly ListenerPriorityComparer priorityComparer = new();
+
         internal void SaveToPersistence()
+        {
+            if (Application.isPlaying) return;
+
+#if UNITY_EDITOR
+            InstancedEventPersistence.ScheduleSave(this);
+#else
+            SaveToPersistenceImmediately();
+#endif
+        }
+
+        internal void SaveToPersistenceImmediately()
         {
             if (Application.isPlaying) return;
 
@@ -803,7 +788,7 @@ namespace Abb2kTools.Events
                 instancesByPriority.Add(handle);
             }
 
-            instancesByPriority.Sort(new ListenerPriorityComparer());
+            instancesByPriority.Sort(priorityComparer);
         }
 
         internal void ClearPlayModeListeners()
@@ -851,8 +836,9 @@ namespace Abb2kTools.Events
                 IsPlayModeListener = Application.isPlaying 
             };
 
-            instancesByPriority.Add(listener);
-            instancesByPriority.Sort(new ListenerPriorityComparer());
+            int insertIndex = instancesByPriority.BinarySearch(listener, priorityComparer);
+            if (insertIndex < 0) insertIndex = ~insertIndex;
+            instancesByPriority.Insert(insertIndex, listener);
 
             if (!Application.isPlaying)
             {

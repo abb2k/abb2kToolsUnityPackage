@@ -13,6 +13,7 @@ namespace Abb2kTools.Events.Editor
         private const string TooltipPriority = "Higher numbers evaluate first. Determines listener execution order.";
         private const string TooltipAutoBind = "Automatically unregisters this listener when the holding MonoBehaviour is destroyed.";
         private const string TooltipActiveInEditor = "If true, this listener will trigger even when outside of Play Mode.";
+        private const string TooltipVoidMethodResult = "Result returned after a void listener runs. Parameterless listeners ignore event parameters.";
 
         private static Type[] availableEventTypes = null;
         private static string[] availableEventNames = null;
@@ -68,7 +69,7 @@ namespace Abb2kTools.Events.Editor
             return new Type[0];
         }
 
-        private void SyncBindingState(SerializedProperty property)
+        private void SyncBindingState(SerializedProperty property, bool reinitialize = true)
         {
             if (property == null || property.serializedObject == null) return;
 
@@ -87,7 +88,14 @@ namespace Abb2kTools.Events.Editor
 
             if (isComplete)
             {
-                binding.Initialize(holder);
+                if (!reinitialize)
+                {
+                    binding.activeHandle?.SetActiveInEditor(binding.activeInEditor);
+                }
+                else
+                {
+                    binding.Initialize(holder);
+                }
             }
             else
             {
@@ -128,6 +136,7 @@ namespace Abb2kTools.Events.Editor
             SerializedProperty priorityProp = property.FindPropertyRelative("priority");
             SerializedProperty autoBindProp = property.FindPropertyRelative("autoBindToHolder");
             SerializedProperty activeInEditorProp = property.FindPropertyRelative("activeInEditor"); // <--- NEW Property Link
+            SerializedProperty voidMethodResultProp = property.FindPropertyRelative("voidMethodResult");
 
             // 2. Header Label
             Rect labelRect = new Rect(contentX, currentY, contentWidth, lineHeight);
@@ -210,8 +219,25 @@ namespace Abb2kTools.Events.Editor
 
             if (activeInEditorValue != activeInEditorProp.boolValue)
             {
+                SyncBindingState(property, reinitialize: false);
+            }
+
+            currentY += lineHeight + spacing;
+
+            Rect voidResultRect = new Rect(contentX, currentY, contentWidth, lineHeight);
+            bool guiEnabled = GUI.enabled;
+            GUI.enabled = guiEnabled && IsSelectedMethodVoid(targetObjProp, methodNameProp, currentEventType);
+
+            EditorGUIUtility.labelWidth = 100;
+            int voidResultValue = voidMethodResultProp.enumValueIndex;
+            EditorGUI.PropertyField(voidResultRect, voidMethodResultProp, new GUIContent("Void Result", TooltipVoidMethodResult));
+
+            if (voidResultValue != voidMethodResultProp.enumValueIndex)
+            {
                 SyncBindingState(property);
             }
+
+            GUI.enabled = guiEnabled;
 
             // Restore original editor states
             EditorGUIUtility.labelWidth = oldLabelWidth; 
@@ -283,7 +309,7 @@ namespace Abb2kTools.Events.Editor
         private void PopulateMenuWithMethods(GenericMenu menu, Type componentType, UnityEngine.Object targetInstance, string currentMethod, Type[] expectedParams, GenericMenu.MenuFunction2 onMenuSelect)
         {
             var methods = componentType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Where(m => m.ReturnType == typeof(ListenerResult) && !m.IsSpecialName)
+                .Where(m => (m.ReturnType == typeof(ListenerResult) || m.ReturnType == typeof(void)) && !m.IsSpecialName && !m.ContainsGenericParameters)
                 .ToArray();
 
             foreach (var m in methods)
@@ -292,7 +318,8 @@ namespace Abb2kTools.Events.Editor
                 bool isValid = IsMethodValid(m, expectedParams);
                 
                 string paramString = string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name));
-                string menuLabel = $"{componentType.Name}/{m.Name} ({paramString})";
+                string returnTypeName = m.ReturnType == typeof(void) ? "void" : nameof(ListenerResult);
+                string menuLabel = $"{componentType.Name}/{m.Name} ({paramString}) : {returnTypeName}";
 
                 GUIContent content = new GUIContent(menuLabel);
 
@@ -310,6 +337,7 @@ namespace Abb2kTools.Events.Editor
         private bool IsMethodValid(MethodInfo m, Type[] expectedParams)
         {
             ParameterInfo[] methodParams = m.GetParameters();
+            if (expectedParams.Length > 0 && CanIgnoreEventParameters(m)) return true;
             if (methodParams.Length != expectedParams.Length) return false;
 
             for (int i = 0; i < methodParams.Length; i++)
@@ -319,13 +347,47 @@ namespace Abb2kTools.Events.Editor
             return true;
         }
 
+        private static bool IsSelectedMethodVoid(SerializedProperty targetObjProp, SerializedProperty methodNameProp, Type currentEventType)
+        {
+            UnityEngine.Object target = targetObjProp.objectReferenceValue;
+            if (target == null || string.IsNullOrEmpty(methodNameProp.stringValue) || currentEventType == null)
+            {
+                return false;
+            }
+
+            Type[] expectedParams = GetExpectedParameterTypes(currentEventType);
+            BindingFlags methodFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            MethodInfo method = target.GetType().GetMethod(
+                methodNameProp.stringValue,
+                methodFlags,
+                null,
+                expectedParams,
+                null);
+
+            if (method == null && expectedParams.Length > 0)
+            {
+                method = target.GetType().GetMethod(methodNameProp.stringValue, methodFlags, null, Type.EmptyTypes, null);
+                return CanIgnoreEventParameters(method);
+            }
+
+            return method != null && method.ReturnType == typeof(void);
+        }
+
+        private static bool CanIgnoreEventParameters(MethodInfo method)
+        {
+            return method != null
+                && method.ReturnType == typeof(void)
+                && method.GetParameters().Length == 0
+                && method.DeclaringType.Assembly != typeof(MonoBehaviour).Assembly;
+        }
+
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
             float lineHeight = EditorGUIUtility.singleLineHeight;
             float spacing = 2f;
             float padding = 4f;
           
-            int lines = 5;
+            int lines = 6;
             return (lines * lineHeight) + ((lines - 1) * spacing) + (padding * 2) + 4f;
         }
 
