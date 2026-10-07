@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -10,6 +11,24 @@ namespace Abb2kTools.Editor
     [CustomPropertyDrawer(typeof(PrefabReferenceBase<>), true)]
     public class PrefabReferenceDrawer : PropertyDrawer
     {
+        private const float EmbeddedInspectorPadding = 8f;
+        private const float TextAreaLineHeight = 15f;
+        private SerializedObject embeddedSerializedObject;
+        private UnityEngine.Object embeddedInspectorTarget;
+        private readonly Dictionary<string, Vector2> embeddedInspectorScrollPositions = new();
+
+        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+        {
+            float fieldHeight = EditorGUIUtility.singleLineHeight;
+            PrefabReferenceInspectorAttribute inspectorAttribute = GetInspectorAttribute();
+            if (inspectorAttribute == null || (!inspectorAttribute.AlwaysOpen && !property.isExpanded))
+            {
+                return fieldHeight;
+            }
+
+            return fieldHeight + EditorGUIUtility.standardVerticalSpacing + GetEmbeddedInspectorHeight(property);
+        }
+
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
             EditorGUI.BeginProperty(position, label, property);
@@ -34,7 +53,31 @@ namespace Abb2kTools.Editor
                 currentPrefab = ((Component)componentProp.objectReferenceValue).gameObject;
             }
 
-            Rect fieldPosition = EditorGUI.PrefixLabel(position, label);
+            Rect fieldRect = new(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
+            PrefabReferenceInspectorAttribute inspectorAttribute = GetInspectorAttribute();
+            if (inspectorAttribute != null && !inspectorAttribute.AlwaysOpen)
+            {
+                const float foldoutWidth = 14f;
+                Rect foldoutRect = new Rect(fieldRect.x, fieldRect.y, foldoutWidth, fieldRect.height);
+                foldoutRect.x += 12f;
+                property.isExpanded = EditorGUI.Foldout(foldoutRect, property.isExpanded, GUIContent.none, false);
+                fieldRect.x += foldoutWidth;
+                fieldRect.width -= foldoutWidth;
+            }
+
+            float originalLabelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = Mathf.Min(
+                originalLabelWidth,
+                EditorStyles.label.CalcSize(label).x + 6f);
+            Rect fieldPosition;
+            try
+            {
+                fieldPosition = EditorGUI.PrefixLabel(fieldRect, label);
+            }
+            finally
+            {
+                EditorGUIUtility.labelWidth = originalLabelWidth;
+            }
 
             const float pickerButtonWidth = 22f;
             const float clearButtonWidth = 18f;
@@ -45,6 +88,12 @@ namespace Abb2kTools.Editor
 
             Rect clearButtonPosition = new(pickerButtonPosition.x - clearWidth, fieldPosition.y, clearWidth, fieldPosition.height);
             Rect valuePosition = new(fieldPosition.x, fieldPosition.y, fieldPosition.width - pickerButtonWidth - clearWidth, fieldPosition.height);
+
+            bool isDragHover = HandlePrefabDrag(valuePosition, componentType, property, componentProp, out Component[] draggedComponents, out bool canDrop, out bool didDrop);
+            if (didDrop)
+            {
+                currentPrefab = draggedComponents[0].gameObject;
+            }
 
             GUIContent prefabContent = EditorGUIUtility.ObjectContent(currentPrefab, typeof(GameObject));
             Texture miniIcon = currentPrefab != null
@@ -61,24 +110,40 @@ namespace Abb2kTools.Editor
             }
 
             bool openPicker = false;
-            if (GUI.Button(valuePosition, prefabContent, EditorStyles.objectField))
+            Color originalBackgroundColor = GUI.backgroundColor;
+            if (isDragHover && canDrop)
             {
-                if (currentPrefab != null)
+                Color blueTint = EditorGUIUtility.isProSkin
+                    ? new Color(0.35f, 0.58f, 0.9f, originalBackgroundColor.a)
+                    : new Color(0.55f, 0.72f, 0.95f, originalBackgroundColor.a);
+                GUI.backgroundColor = Color.Lerp(originalBackgroundColor, blueTint, 0.45f);
+            }
+
+            try
+            {
+                if (GUI.Button(valuePosition, prefabContent, EditorStyles.objectField))
                 {
-                    if (Event.current.clickCount >= 2)
+                    if (currentPrefab != null)
                     {
-                        Selection.activeObject = currentPrefab;
-                        AssetDatabase.OpenAsset(currentPrefab);
+                        if (Event.current.clickCount >= 2)
+                        {
+                            Selection.activeObject = currentPrefab;
+                            AssetDatabase.OpenAsset(currentPrefab);
+                        }
+                        else
+                        {
+                            EditorGUIUtility.PingObject(currentPrefab);
+                        }
                     }
                     else
                     {
-                        EditorGUIUtility.PingObject(currentPrefab);
+                        openPicker = true;
                     }
                 }
-                else
-                {
-                    openPicker = true;
-                }
+            }
+            finally
+            {
+                GUI.backgroundColor = originalBackgroundColor;
             }
 
             openPicker |= GUI.Button(pickerButtonPosition, new GUIContent("...", $"Select a prefab with a root {componentType.Name} component"), EditorStyles.miniButton);
@@ -88,7 +153,372 @@ namespace Abb2kTools.Editor
                 PrefabReferencePicker.Show(cursorScreenPosition, componentType, currentPrefab, property.serializedObject.targetObjects, property.propertyPath);
             }
 
+            if (inspectorAttribute != null && (inspectorAttribute.AlwaysOpen || property.isExpanded))
+            {
+                DrawEmbeddedInspector(position, property, componentProp, inspectorAttribute.AlwaysOpen);
+            }
+
             EditorGUI.EndProperty();
+        }
+
+        private PrefabReferenceInspectorAttribute GetInspectorAttribute()
+        {
+            return fieldInfo != null
+                ? Attribute.GetCustomAttribute(fieldInfo, typeof(PrefabReferenceInspectorAttribute), true) as PrefabReferenceInspectorAttribute
+                : null;
+        }
+
+        private static bool HandlePrefabDrag(
+            Rect position,
+            Type componentType,
+            SerializedProperty referenceProperty,
+            SerializedProperty componentProperty,
+            out Component[] draggedComponents,
+            out bool canDrop,
+            out bool didDrop)
+        {
+            Event currentEvent = Event.current;
+            draggedComponents = null;
+            canDrop = false;
+            didDrop = false;
+            bool isDragEvent = currentEvent.type == EventType.DragUpdated || currentEvent.type == EventType.DragPerform;
+            bool isRepaint = currentEvent.type == EventType.Repaint;
+            if ((!isDragEvent && !isRepaint) || !position.Contains(currentEvent.mousePosition))
+            {
+                return false;
+            }
+
+            UnityEngine.Object[] draggedObjects = DragAndDrop.objectReferences;
+            if (draggedObjects == null || draggedObjects.Length == 0)
+            {
+                return false;
+            }
+
+            bool acceptsMultiple = draggedObjects.Length == 1 ||
+                (referenceProperty.serializedObject.targetObjects.Length == 1 && TryGetListDropTarget(referenceProperty, out _, out _));
+            draggedComponents = new Component[draggedObjects.Length];
+            canDrop = acceptsMultiple;
+            for (int index = 0; index < draggedObjects.Length && canDrop; index++)
+            {
+                draggedComponents[index] = GetDraggedPrefabComponent(draggedObjects[index], componentType);
+                canDrop = draggedComponents[index] != null;
+            }
+
+            if (isDragEvent)
+            {
+                DragAndDrop.visualMode = canDrop ? DragAndDropVisualMode.Copy : DragAndDropVisualMode.Rejected;
+                if (currentEvent.type == EventType.DragPerform && canDrop)
+                {
+                    DragAndDrop.AcceptDrag();
+                    AssignDraggedPrefabComponents(referenceProperty, componentProperty, draggedComponents);
+                    didDrop = true;
+                }
+
+                currentEvent.Use();
+            }
+
+            return true;
+        }
+
+        private static Component GetDraggedPrefabComponent(UnityEngine.Object draggedObject, Type componentType)
+        {
+            GameObject draggedGameObject = draggedObject as GameObject;
+            if (draggedObject is Component draggedComponent)
+            {
+                draggedGameObject = draggedComponent.gameObject;
+            }
+
+            if (draggedGameObject == null)
+            {
+                return null;
+            }
+
+            GameObject prefabRoot = draggedGameObject.transform.root.gameObject;
+            if (PrefabUtility.IsPartOfPrefabInstance(prefabRoot))
+            {
+                prefabRoot = PrefabUtility.GetCorrespondingObjectFromSource(prefabRoot) as GameObject;
+            }
+
+            if (prefabRoot == null || !PrefabUtility.IsPartOfPrefabAsset(prefabRoot))
+            {
+                return null;
+            }
+
+            return prefabRoot.GetComponent(componentType);
+        }
+
+        private static void AssignDraggedPrefabComponents(SerializedProperty referenceProperty, SerializedProperty componentProperty, Component[] components)
+        {
+            if (components.Length == 1 || !TryGetListDropTarget(referenceProperty, out SerializedProperty listProperty, out int elementIndex))
+            {
+                componentProperty.objectReferenceValue = components[0];
+                return;
+            }
+
+            for (int index = 1; index < components.Length; index++)
+            {
+                listProperty.InsertArrayElementAtIndex(elementIndex + index);
+            }
+
+            for (int index = 0; index < components.Length; index++)
+            {
+                SerializedProperty referenceElement = listProperty.GetArrayElementAtIndex(elementIndex + index);
+                referenceElement.FindPropertyRelative("_component").objectReferenceValue = components[index];
+            }
+        }
+
+        private static bool TryGetListDropTarget(SerializedProperty property, out SerializedProperty listProperty, out int elementIndex)
+        {
+            const string arrayElementMarker = ".Array.data[";
+            string propertyPath = property.propertyPath;
+            int markerIndex = propertyPath.LastIndexOf(arrayElementMarker, StringComparison.Ordinal);
+            if (markerIndex < 0)
+            {
+                listProperty = null;
+                elementIndex = -1;
+                return false;
+            }
+
+            int indexStart = markerIndex + arrayElementMarker.Length;
+            int indexEnd = propertyPath.IndexOf(']', indexStart);
+            if (indexEnd < 0 || !int.TryParse(propertyPath.Substring(indexStart, indexEnd - indexStart), out elementIndex))
+            {
+                listProperty = null;
+                elementIndex = -1;
+                return false;
+            }
+
+            listProperty = property.serializedObject.FindProperty(propertyPath.Substring(0, markerIndex));
+            return listProperty != null && listProperty.isArray;
+        }
+
+        private void DrawEmbeddedInspector(Rect position, SerializedProperty property, SerializedProperty componentProperty, bool alwaysOpen)
+        {
+            if (!alwaysOpen && !property.isExpanded)
+            {
+                ResetEmbeddedInspector();
+                return;
+            }
+
+            const float inspectorIndent = 15f;
+            float y = position.y + EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+            Rect inspectorRect = new(
+                position.x + inspectorIndent,
+                y,
+                position.width - inspectorIndent,
+                position.height - (y - position.y));
+            if (componentProperty.hasMultipleDifferentValues)
+            {
+                ResetEmbeddedInspector();
+                EditorGUI.HelpBox(inspectorRect, "Multiple different prefabs are assigned.", MessageType.Info);
+                return;
+            }
+
+            Component component = componentProperty.objectReferenceValue as Component;
+            if (component == null)
+            {
+                ResetEmbeddedInspector();
+                EditorGUI.HelpBox(inspectorRect, "Assign a prefab to inspect its component.", MessageType.Info);
+                return;
+            }
+
+            SerializedObject serializedObject = GetEmbeddedSerializedObject(component);
+            serializedObject.UpdateIfRequiredOrScript();
+            GUI.Box(inspectorRect, GUIContent.none, EditorStyles.helpBox);
+            Rect viewRect = new(inspectorRect.x + 4f, inspectorRect.y + 4f, inspectorRect.width - 8f, inspectorRect.height - 8f);
+            float contentHeight = GetEmbeddedInspectorContentHeight(serializedObject);
+            Rect contentRect = new(0f, 0f, viewRect.width - 16f, Mathf.Max(viewRect.height, contentHeight));
+            string scrollKey = GetEmbeddedInspectorKey(property, component);
+            embeddedInspectorScrollPositions.TryGetValue(scrollKey, out Vector2 scrollPosition);
+            scrollPosition = GUI.BeginScrollView(viewRect, scrollPosition, contentRect);
+
+            SerializedProperty iterator = serializedObject.GetIterator();
+            bool enterChildren = true;
+            float propertyY = 0f;
+            while (iterator.NextVisible(enterChildren))
+            {
+                enterChildren = false;
+                float propertyHeight = EditorGUI.GetPropertyHeight(iterator, true);
+                Rect propertyRect = new(0f, propertyY, contentRect.width, propertyHeight);
+                bool isTextArea = iterator.propertyType == SerializedPropertyType.String && GetTextAreaAttribute(iterator) != null;
+                if (iterator.propertyPath == "m_Script")
+                {
+                    using (new EditorGUI.DisabledScope(true))
+                    {
+                        EditorGUI.PropertyField(propertyRect, iterator, true);
+                    }
+                }
+                else if (isTextArea)
+                {
+                    DrawTextAreaField(propertyRect, iterator);
+                }
+                else
+                {
+                    EditorGUI.PropertyField(propertyRect, iterator, true);
+                }
+
+                propertyY += propertyHeight + EditorGUIUtility.standardVerticalSpacing;
+            }
+
+            GUI.EndScrollView();
+            embeddedInspectorScrollPositions[scrollKey] = scrollPosition;
+            if (serializedObject.ApplyModifiedProperties())
+            {
+                if (PrefabUtility.IsPartOfPrefabAsset(component))
+                {
+                    PrefabUtility.SavePrefabAsset(component.transform.root.gameObject);
+                }
+                else if (PrefabUtility.IsPartOfPrefabInstance(component))
+                {
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(component);
+                }
+            }
+        }
+
+        private float GetEmbeddedInspectorContentHeight(SerializedObject serializedObject)
+        {
+            SerializedProperty iterator = serializedObject.GetIterator();
+            bool enterChildren = true;
+            float height = 0f;
+            while (iterator.NextVisible(enterChildren))
+            {
+                enterChildren = false;
+                float propertyHeight = EditorGUI.GetPropertyHeight(iterator, true);
+                TextAreaAttribute textAreaAttribute = GetTextAreaAttribute(iterator);
+                if (textAreaAttribute != null)
+                {
+                    int maxLines = Mathf.Max(textAreaAttribute.minLines, textAreaAttribute.maxLines);
+                    float maxTextAreaHeight = EditorGUIUtility.singleLineHeight * 2f + (maxLines - 1) * TextAreaLineHeight;
+                    propertyHeight = Mathf.Max(propertyHeight, maxTextAreaHeight);
+                }
+
+                height += propertyHeight + EditorGUIUtility.standardVerticalSpacing;
+            }
+
+            return height;
+        }
+
+        private float GetEmbeddedInspectorHeight(SerializedProperty property)
+        {
+            SerializedProperty componentProperty = property.FindPropertyRelative("_component");
+            if (componentProperty == null || componentProperty.hasMultipleDifferentValues || componentProperty.objectReferenceValue is not Component component)
+            {
+                return EditorGUIUtility.singleLineHeight * 2f + EmbeddedInspectorPadding;
+            }
+
+            SerializedObject serializedObject = GetEmbeddedSerializedObject(component);
+            serializedObject.UpdateIfRequiredOrScript();
+            return GetEmbeddedInspectorContentHeight(serializedObject) + EmbeddedInspectorPadding;
+        }
+
+        private SerializedObject GetEmbeddedSerializedObject(Component component)
+        {
+            if (embeddedSerializedObject == null || embeddedInspectorTarget != component)
+            {
+                embeddedSerializedObject = new SerializedObject(component);
+                embeddedInspectorTarget = component;
+            }
+
+            return embeddedSerializedObject;
+        }
+
+        private static string GetEmbeddedInspectorKey(SerializedProperty property, Component component)
+        {
+            return $"{property.serializedObject.targetObject.GetInstanceID()}:{property.propertyPath}:{component.GetInstanceID()}";
+        }
+
+        private static TextAreaAttribute GetTextAreaAttribute(SerializedProperty property)
+        {
+            Type currentType = property.serializedObject.targetObject.GetType();
+            FieldInfo fieldInfo = null;
+            string[] pathSegments = property.propertyPath.Split('.');
+            for (int index = 0; index < pathSegments.Length; index++)
+            {
+                string pathSegment = pathSegments[index];
+                if (pathSegment == "Array")
+                {
+                    index++;
+                    currentType = GetCollectionElementType(currentType);
+                    continue;
+                }
+
+                if (pathSegment.StartsWith("data[", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                fieldInfo = GetFieldInfo(currentType, pathSegment);
+                if (fieldInfo == null)
+                {
+                    return null;
+                }
+
+                currentType = fieldInfo.FieldType;
+            }
+
+            return fieldInfo?.GetCustomAttribute<TextAreaAttribute>(true);
+        }
+
+        private static FieldInfo GetFieldInfo(Type type, string fieldName)
+        {
+            while (type != null)
+            {
+                FieldInfo fieldInfo = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (fieldInfo != null)
+                {
+                    return fieldInfo;
+                }
+
+                type = type.BaseType;
+            }
+
+            return null;
+        }
+
+        private static Type GetCollectionElementType(Type collectionType)
+        {
+            if (collectionType.IsArray)
+            {
+                return collectionType.GetElementType();
+            }
+
+            return collectionType.IsGenericType ? collectionType.GetGenericArguments()[0] : collectionType;
+        }
+
+        private static void DrawTextAreaField(Rect position, SerializedProperty property)
+        {
+            GUIContent label = new(property.displayName, property.tooltip);
+            label = EditorGUI.BeginProperty(position, label, property);
+            bool previousShowMixedValue = EditorGUI.showMixedValue;
+            int previousIndentLevel = EditorGUI.indentLevel;
+            try
+            {
+                EditorGUI.indentLevel = 0;
+                EditorGUI.showMixedValue = property.hasMultipleDifferentValues;
+
+                Rect labelPosition = new(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
+                Rect textAreaPosition = new(position.x, labelPosition.yMax, position.width, position.height - labelPosition.height);
+                EditorGUI.LabelField(labelPosition, label);
+
+                EditorGUI.BeginChangeCheck();
+                string value = EditorGUI.TextArea(textAreaPosition, property.stringValue, EditorStyles.textArea);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    property.stringValue = value;
+                }
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = previousShowMixedValue;
+                EditorGUI.indentLevel = previousIndentLevel;
+                EditorGUI.EndProperty();
+            }
+        }
+
+        private void ResetEmbeddedInspector()
+        {
+            embeddedSerializedObject = null;
+            embeddedInspectorTarget = null;
         }
     }
 

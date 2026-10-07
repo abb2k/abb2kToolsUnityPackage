@@ -8,6 +8,26 @@ using UnityEngine.SceneManagement;
 
 namespace Abb2kTools
 {
+    [AttributeUsage(AttributeTargets.Field, Inherited = true)]
+    public sealed class PrefabReferenceInspectorAttribute : PropertyAttribute
+    {
+        public bool AlwaysOpen { get; }
+
+        public PrefabReferenceInspectorAttribute()
+        {
+        }
+
+        public PrefabReferenceInspectorAttribute(bool alwaysOpen)
+        {
+            AlwaysOpen = alwaysOpen;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Field, Inherited = true)]
+    public sealed class PrefabReferenceArrayAttribute : PropertyAttribute
+    {
+    }
+
     [System.Serializable]
     public abstract class PrefabReferenceBase<T> where T : Component
     {
