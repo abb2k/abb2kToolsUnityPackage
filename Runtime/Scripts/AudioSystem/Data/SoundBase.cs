@@ -16,6 +16,7 @@ namespace Abb2kTools.AudioSystem
         public float volume        = 1f;
         [Range(-3f, 3f)]
         public float pitch         = 1f;
+        public bool scaleWithTimeScale = true;
         [Range(-1f, 1f)]
         public float panStereo     = 0f;
         [Range(0f, 1f)]
@@ -42,7 +43,7 @@ namespace Abb2kTools.AudioSystem
             
             audioSource.clip   = clipData.Clip;
             audioSource.volume = volume * clipData.Volume * volumeMultiplier;
-            audioSource.pitch  = pitch * clipData.Pitch * pitchMultiplier;
+            audioSource.pitch  = pitch * clipData.Pitch * pitchMultiplier * (scaleWithTimeScale ? Time.timeScale : 1f);
             
             audioSource.panStereo     = panStereo;
             audioSource.spatialBlend  = spatialBlend;

@@ -23,42 +23,82 @@ namespace Abb2kTools.AudioSystem
 
         public SoundHandle PlaySFX(SoundEffect sfxSettings, Transform attached = null, AudioAttachmentType attachType = AudioAttachmentType.Direct)
         {
-            if (sfxSettings == null || sfxSettings.sound == null) return null;
+            return CreateSoundHandle(sfxSettings, attached, attachType, sfxSettings != null && sfxSettings.loop, true);
+        }
+
+        internal SoundHandle CreateSoundHandle(SoundBase settings, Transform attached, AudioAttachmentType attachType, bool loop, bool startImmediately)
+        {
+            if (settings == null || settings.sound == null) return null;
 
             List<PlayableClipData> clipsToPlay = new();
-            sfxSettings.sound.CollectPlayableClips(clipsToPlay);
+            settings.sound.CollectPlayableClips(clipsToPlay);
             if (clipsToPlay.Count == 0) return null;
 
+            bool useNativeLoop = loop &&
+                settings is SoundEffectLooping &&
+                settings.sound is not SoundCoding &&
+                clipsToPlay.Count == 1 &&
+                clipsToPlay[0].Delay <= 0f &&
+                clipsToPlay[0].StartOffset <= 0f &&
+                clipsToPlay[0].EndOffset <= 0f;
+
             ExternalAudioSource holder = GetOrCreateHolder(attached, attachType);
-            SoundHandle handle = new(null, holder, isPersistent: false)
+            SoundHandle handle = new(null, holder, isPersistent: false, scaleWithTimeScale: settings.scaleWithTimeScale)
             {
-                SequenceLoop = sfxSettings.loop
+                SequenceLoop = loop && !useNativeLoop
             };
 
-            float randVol = sfxSettings.volumeRange.Random();
-            float randPitch = sfxSettings.pitchRange.Random();
+            Ranged volumeRange = default;
+            Ranged pitchRange = default;
+            bool hasRandomization = false;
+
+            if (settings is SoundEffect sfxSettings)
+            {
+                volumeRange = sfxSettings.volumeRange;
+                pitchRange = sfxSettings.pitchRange;
+                hasRandomization = true;
+            }
+            else if (settings is SoundEffectOneShot oneShotSettings)
+            {
+                volumeRange = oneShotSettings.volumeRange;
+                pitchRange = oneShotSettings.pitchRange;
+                hasRandomization = true;
+            }
+            else if (settings is SoundEffectLooping loopingSettings)
+            {
+                volumeRange = loopingSettings.volumeRange;
+                pitchRange = loopingSettings.pitchRange;
+                hasRandomization = true;
+            }
+
+            float randVol = hasRandomization ? volumeRange.Random() : 1f;
+            float randPitch = hasRandomization ? pitchRange.Random() : 1f;
 
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
-                sfxSettings.ApplyBaseSettings(source, clipData, false, randVol, randPitch);
-                handle.AddSource(source, clipData, sfxSettings.volume * randVol, sfxSettings.pitch * randPitch);
+                settings.ApplyBaseSettings(source, clipData, useNativeLoop, randVol, randPitch);
+                handle.AddSource(source, clipData, settings.volume * randVol, settings.pitch * randPitch);
             }
 
-            if (sfxSettings.loop)
+            if (loop && hasRandomization)
             {
                 handle.OnLoopRestart += () =>
                 {
-                    float newRandVol = sfxSettings.volumeRange.Random();
-                    float newRandPitch = sfxSettings.pitchRange.Random();
-                    handle.UpdateRandomModifiers(sfxSettings.volume * newRandVol, sfxSettings.pitch * newRandPitch);
+                    float newRandVol = volumeRange.Random();
+                    float newRandPitch = pitchRange.Random();
+                    handle.UpdateRandomModifiers(settings.volume * newRandVol, settings.pitch * newRandPitch);
                 };
             }
 
-            if (sfxSettings.sound is SoundCoding coding)
+            if (settings.sound is SoundCoding coding)
                 handle.InitializeCoding(coding);
 
-            handle.Play();
+            if (startImmediately)
+                handle.Play();
+            else
+                handle.PrepareForPlayback();
+
             return handle;
         }
 
@@ -80,7 +120,7 @@ namespace Abb2kTools.AudioSystem
 
             ExternalAudioSource holder = GetOrCreateHolder(attached, attachType);
             
-            SoundHandle handle = new(soundSettings.soundID, holder, isPersistent: true)
+            SoundHandle handle = new(soundSettings.soundID, holder, isPersistent: true, scaleWithTimeScale: soundSettings.scaleWithTimeScale)
             {
                 SequenceLoop = useSequenceLoop
             };

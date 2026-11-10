@@ -23,6 +23,8 @@ namespace Abb2kTools.AudioSystem.Editor
         private const string Min = "min";
         private const string Max = "max";
         
+        private static readonly Dictionary<string, float> _loopingPreviewDurations = new();
+
         private readonly HashSet<string> _3dProperties = new() 
         { 
             "dopplerLevel", "spread", "rolloff", "minDist", "maxDist" 
@@ -112,6 +114,8 @@ namespace Abb2kTools.AudioSystem.Editor
                     if (iterator.name == Sound)
                     {
                         height += (EditorGUIUtility.singleLineHeight * 1.5f) + EditorGUIUtility.standardVerticalSpacing;
+                        if (IsLoopingSound(property))
+                            height += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
                     }
                 }
 
@@ -297,11 +301,25 @@ namespace Abb2kTools.AudioSystem.Editor
 
                     float propHeight = EditorGUI.GetPropertyHeight(iterator, true);
                     Rect rect = new(position.x, currentY, position.width, propHeight);
-                    EditorGUI.PropertyField(rect, iterator, true);
+                    if (iterator.name == Sound && IsLoopingSound(property))
+                        EditorGUI.PropertyField(rect, iterator, new GUIContent("Looping Sound"), true);
+                    else
+                        EditorGUI.PropertyField(rect, iterator, true);
                     currentY += propHeight + EditorGUIUtility.standardVerticalSpacing;
 
                     if (iterator.name == Sound)
                     {
+                        if (IsLoopingSound(property))
+                        {
+                            Rect durationRect = new(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight);
+                            EditorGUI.BeginChangeCheck();
+                            float duration = EditorGUI.FloatField(durationRect, "Preview Duration (seconds)", GetLoopingPreviewDuration(property));
+                            if (EditorGUI.EndChangeCheck())
+                                SetLoopingPreviewDuration(property, Mathf.Max(0f, duration));
+
+                            currentY += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+                        }
+
                         Rect buttonRectFull = new(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight * 1.5f);
                         buttonRectFull = EditorGUI.IndentedRect(buttonRectFull);
 
@@ -397,7 +415,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     GUI.Box(boxRect, GUIContent.none, EditorStyles.helpBox);
 
                     Rect labelRect = new(boxRect.x + 6, boxRect.y + 4, boxRect.width - 12, 18f);
-                    EditorGUI.LabelField(labelRect, "Options", EditorStyles.boldLabel);
+                    EditorGUI.LabelField(labelRect, IsLoopingSound(property) ? "Looping Sound Settings" : "Options", EditorStyles.boldLabel);
 
                     float innerY = boxRect.y + 22f;
                     foreach (var prop in optionsProps)
@@ -473,6 +491,12 @@ namespace Abb2kTools.AudioSystem.Editor
 
         private void TriggerPreview(SerializedProperty property, bool use3DSettings = false)
         {
+            if (IsLoopingSound(property))
+            {
+                TriggerLoopingPreview(property, use3DSettings, GetLoopingPreviewDuration(property));
+                return;
+            }
+
             var soundProp = property.FindPropertyRelative(Sound);
             if (soundProp == null || soundProp.objectReferenceValue == null) return;
 
@@ -508,6 +532,76 @@ namespace Abb2kTools.AudioSystem.Editor
             }
 
             EditorAudioPreviewer.PlayPreview(mod, baseVol, basePitch, targetTransform, use3DSettings ? property : null);
+        }
+
+        private void TriggerLoopingPreview(SerializedProperty property, bool use3DSettings, float duration)
+        {
+            GetPreviewSettings(property.FindPropertyRelative("startSound"), out var startSound, out float startVolume, out float startPitch);
+            GetPreviewSettings(property, out var loopingSound, out float loopingVolume, out float loopingPitch);
+            GetPreviewSettings(property.FindPropertyRelative("endSound"), out var endSound, out float endVolume, out float endPitch);
+            float enterTransitionDuration = property.FindPropertyRelative("enterTransitionDuration")?.floatValue ?? 0f;
+            float exitTransitionDuration = property.FindPropertyRelative("exitTransitionDuration")?.floatValue ?? 0f;
+
+            Transform targetTransform = null;
+            if (use3DSettings && property.serializedObject.targetObject is Component targetComponent)
+                targetTransform = targetComponent.transform;
+
+            EditorAudioPreviewer.PlayLoopingPreview(
+                property.serializedObject.targetObject,
+                startSound, startVolume, startPitch,
+                loopingSound, loopingVolume, loopingPitch,
+                endSound, endVolume, endPitch,
+                duration,
+                enterTransitionDuration,
+                exitTransitionDuration,
+                targetTransform,
+                use3DSettings ? property : null);
+        }
+
+        private static void GetPreviewSettings(SerializedProperty soundBaseProperty, out SoundModificationBase sound, out float volume, out float pitch)
+        {
+            sound = null;
+            volume = 1f;
+            pitch = 1f;
+            if (soundBaseProperty == null) return;
+
+            var soundProperty = soundBaseProperty.FindPropertyRelative(Sound);
+            sound = soundProperty != null ? soundProperty.objectReferenceValue as SoundModificationBase : null;
+            volume = soundBaseProperty.FindPropertyRelative(Volume)?.floatValue ?? 1f;
+            pitch = soundBaseProperty.FindPropertyRelative(Pitch)?.floatValue ?? 1f;
+
+            var volumeRange = soundBaseProperty.FindPropertyRelative(VolumeRange);
+            var pitchRange = soundBaseProperty.FindPropertyRelative(PitchRange);
+            if (volumeRange != null && pitchRange != null)
+            {
+                float volumeMin = volumeRange.FindPropertyRelative(Min).floatValue;
+                float volumeMax = volumeRange.FindPropertyRelative(Max).floatValue;
+                float pitchMin = pitchRange.FindPropertyRelative(Min).floatValue;
+                float pitchMax = pitchRange.FindPropertyRelative(Max).floatValue;
+                volume *= Random.Range(volumeMin, volumeMax);
+                pitch *= Random.Range(pitchMin, pitchMax);
+            }
+        }
+
+        private static bool IsLoopingSound(SerializedProperty property)
+        {
+            return property.type.Contains(nameof(SoundEffectLooping));
+        }
+
+        private static string GetLoopingPreviewDurationKey(SerializedProperty property)
+        {
+            return $"{property.serializedObject.targetObject.GetInstanceID()}:{property.propertyPath}";
+        }
+
+        private static float GetLoopingPreviewDuration(SerializedProperty property)
+        {
+            string key = GetLoopingPreviewDurationKey(property);
+            return _loopingPreviewDurations.TryGetValue(key, out float duration) ? duration : 3f;
+        }
+
+        private static void SetLoopingPreviewDuration(SerializedProperty property, float duration)
+        {
+            _loopingPreviewDurations[GetLoopingPreviewDurationKey(property)] = duration;
         }
     }
 }

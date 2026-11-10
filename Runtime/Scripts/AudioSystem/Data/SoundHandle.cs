@@ -13,6 +13,7 @@ namespace Abb2kTools.AudioSystem
         public string ID                  { get; }
         public bool IsPersistent          { get; }
         public ExternalAudioSource Holder { get; }
+        private readonly bool _scaleWithTimeScale;
 
         public bool IsPaused     { get; private set; }
         public bool IsStopped    { get; private set; } = true;
@@ -38,6 +39,12 @@ namespace Abb2kTools.AudioSystem
         
         private float _currentVolumeMultiplier = 1f;
         private float _currentPitchMultiplier = 1f;
+        private bool _isPreparedForPlayback;
+        private Action _onPause;
+        private Action _onResume;
+        private Func<bool> _onStopRequested;
+        private Action<float> _onVolumeChanged;
+        private Action<float> _onPitchChanged;
 
 #if DOTWEEN
         private readonly List<Tween> _activeTweens = new();
@@ -60,11 +67,12 @@ namespace Abb2kTools.AudioSystem
 
         public event Action OnLoopRestart;
 
-        public SoundHandle(string id, ExternalAudioSource holder, bool isPersistent)
+        public SoundHandle(string id, ExternalAudioSource holder, bool isPersistent, bool scaleWithTimeScale = true)
         {
             ID = id;
             Holder = holder;
             IsPersistent = isPersistent;
+            _scaleWithTimeScale = scaleWithTimeScale;
         }
 
         public void AddSource(AudioSource source, PlayableClipData clipData, float volumeMultiplier, float pitchMultiplier)
@@ -78,6 +86,22 @@ namespace Abb2kTools.AudioSystem
                 BasePitch = clipData.Pitch * pitchMultiplier,
                 Duration = duration
             });
+        }
+
+        internal SoundHandle PrepareForPlayback()
+        {
+            _isPreparedForPlayback = true;
+            IsStopped = false;
+            return this;
+        }
+
+        internal void SetLifecycleCallbacks(Action onPause, Action onResume, Func<bool> onStopRequested, Action<float> onVolumeChanged, Action<float> onPitchChanged)
+        {
+            _onPause = onPause;
+            _onResume = onResume;
+            _onStopRequested = onStopRequested;
+            _onVolumeChanged = onVolumeChanged;
+            _onPitchChanged = onPitchChanged;
         }
 
         public void InitializeCoding(SoundCoding coding)
@@ -272,18 +296,29 @@ namespace Abb2kTools.AudioSystem
             _currentVolumeMultiplier = volumeMultiplier;
             foreach (var s in _sources)
                 if (s.Source != null) s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
+            _onVolumeChanged?.Invoke(volumeMultiplier);
             
+            return this;
+        }
+
+        internal SoundHandle SetVolumeLocal(float volumeMultiplier)
+        {
+            _currentVolumeMultiplier = volumeMultiplier;
+            foreach (var s in _sources)
+                if (s.Source != null) s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
+
             return this;
         }
 
         public SoundHandle SetPitch(float pitchMultiplier)
         {
             _currentPitchMultiplier = pitchMultiplier;
+            _onPitchChanged?.Invoke(pitchMultiplier);
             foreach (var s in _sources)
-                if (s.Source != null) s.Source.pitch = s.BasePitch * _currentPitchMultiplier;
+                if (s.Source != null) s.Source.pitch = GetPlaybackPitch(s);
                 
             if (_secondaryCodingSource != null && _sources.Count > 0)
-                _secondaryCodingSource.pitch = _sources[0].BasePitch * _currentPitchMultiplier;
+                _secondaryCodingSource.pitch = GetPlaybackPitch(_sources[0]);
 
             return this;
         }
@@ -321,10 +356,11 @@ namespace Abb2kTools.AudioSystem
 
         public SoundHandle Play()
         {
-            if (!IsStopped && !IsPaused) return this; 
+            if (!IsStopped && !IsPaused && !_isPreparedForPlayback) return this;
 
             IsStopped = false;
             IsPaused = false;
+            _isPreparedForPlayback = false;
             _lastPlaybackTime = -1f;
 
             if (_playbackRoutine != null) SoundManager.Instance.StopCoroutine(_playbackRoutine);
@@ -348,6 +384,7 @@ namespace Abb2kTools.AudioSystem
         {
             if (IsStopped) return;
             IsPaused = true;
+            _onPause?.Invoke();
 
 #if DOTWEEN
             foreach (var t in _activeTweens)
@@ -365,6 +402,7 @@ namespace Abb2kTools.AudioSystem
         {
             if (IsStopped) return;
             IsPaused = false;
+            _onResume?.Invoke();
 
 #if DOTWEEN
             foreach (var t in _activeTweens)
@@ -381,9 +419,19 @@ namespace Abb2kTools.AudioSystem
         public void Stop()
         {
             if (IsStopped) return;
+            if (_onStopRequested?.Invoke() == true) return;
+
+            StopImmediately();
+        }
+
+        internal void StopImmediately()
+        {
+            if (IsStopped) return;
 
             IsStopped = true;
+            _isPreparedForPlayback = false;
             CancelQueuedTransition();
+            _onStopRequested = null;
             
 #if DOTWEEN
             KillAllActiveTweens();
@@ -404,6 +452,8 @@ namespace Abb2kTools.AudioSystem
         public void DestroyHandle()
         {
             IsStopped = true;
+            _isPreparedForPlayback = false;
+            _onStopRequested = null;
             CancelQueuedTransition();
 #if DOTWEEN
             KillAllActiveTweens();
@@ -438,6 +488,15 @@ namespace Abb2kTools.AudioSystem
             while (true)
             {
                 if (IsStopped || Holder == null) yield break;
+
+                if (_scaleWithTimeScale)
+                {
+                    foreach (var s in _sources)
+                        if (s.Source != null) s.Source.pitch = GetPlaybackPitch(s);
+
+                    if (_secondaryCodingSource != null && _sources.Count > 0)
+                        _secondaryCodingSource.pitch = GetPlaybackPitch(_sources[0]);
+                }
 
                 if (!IsPaused)
                 {
@@ -579,6 +638,11 @@ namespace Abb2kTools.AudioSystem
 
         public static implicit operator bool(SoundHandle handle) => handle != null && !handle.IsStopped;
 
+        private float GetPlaybackPitch(SourceData source)
+        {
+            return source.BasePitch * _currentPitchMultiplier * (_scaleWithTimeScale ? Time.timeScale : 1f);
+        }
+
         public void UpdateRandomModifiers(float volumeMultiplier, float pitchMultiplier)
         {
             foreach (var s in _sources)
@@ -591,7 +655,7 @@ namespace Abb2kTools.AudioSystem
                 if (s.Source != null)
                 {
                     s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
-                    s.Source.pitch = s.BasePitch * _currentPitchMultiplier;
+                    s.Source.pitch = GetPlaybackPitch(s);
                 }
             }
         }
