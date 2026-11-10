@@ -1550,9 +1550,6 @@ namespace Abb2kTools.AudioSystem.Editor
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
-            EditorGUILayout.Space();
-            if (GUILayout.Button("Open Asset Usage Finder"))
-                EditorApplication.ExecuteMenuItem("Tools/Find Asset Usages");
         }
     }
 }
