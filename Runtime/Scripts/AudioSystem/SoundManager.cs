@@ -9,6 +9,9 @@ namespace Abb2kTools.AudioSystem
     {
         private readonly Dictionary<string, SoundHandle> _persistentSounds = new();
         private readonly Dictionary<Transform, ExternalAudioSource> _externalHolders = new();
+        private readonly HashSet<SoundHandle> _parameterizedHandles = new();
+        private readonly HashSet<SoundHandle> _playingParameterizedHandles = new();
+        private readonly Dictionary<SoundParameter, int> _activeSoundParameterCounts = new();
 
         private AudioListener _mainListener;
         public AudioListener MainListener
@@ -18,6 +21,16 @@ namespace Abb2kTools.AudioSystem
                 if (!_mainListener)
                     _mainListener = FindAnyObjectByType<AudioListener>();
                 return _mainListener;
+            }
+        }
+
+        private void Update()
+        {
+            float deltaTime = Time.unscaledDeltaTime;
+            foreach (SoundHandle handle in _parameterizedHandles)
+            {
+                handle.UpdateParameterSources(deltaTime);
+                handle.UpdateParameterTransitions(deltaTime);
             }
         }
 
@@ -48,13 +61,16 @@ namespace Abb2kTools.AudioSystem
             {
                 SequenceLoop = loop && !useNativeLoop
             };
+            handle.SetParameterSourceTransform(attached != null ? attached : transform);
 
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
                 settings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f, playbackSettings);
-                handle.AddSource(source, clipData, playbackSettings.volume, playbackSettings.pitch);
+                handle.AddSource(source, clipData, playbackSettings.volume, playbackSettings.pitch, settings.parameterBindings);
             }
+
+            RegisterParameterizedHandle(handle);
 
             if (settings.sound is SoundCoding coding)
                 handle.InitializeCoding(coding);
@@ -90,13 +106,16 @@ namespace Abb2kTools.AudioSystem
             {
                 SequenceLoop = useSequenceLoop
             };
+            handle.SetParameterSourceTransform(attached != null ? attached : transform);
 
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
                 soundSettings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f, playbackSettings);
-                handle.AddSource(source, clipData, playbackSettings.volume, playbackSettings.pitch);
+                handle.AddSource(source, clipData, playbackSettings.volume, playbackSettings.pitch, soundSettings.parameterBindings);
             }
+
+            RegisterParameterizedHandle(handle);
 
             if (soundSettings.sound is SoundCoding coding)
                 handle.InitializeCoding(coding);
@@ -118,6 +137,77 @@ namespace Abb2kTools.AudioSystem
             {
                 _persistentSounds.Remove(soundID);
             }
+        }
+
+        internal void NotifyParameterChanged(SoundParameter parameter)
+        {
+            if (parameter == null) return;
+
+            foreach (SoundHandle handle in _parameterizedHandles)
+                if (handle.UsesParameter(parameter))
+                    handle.RefreshParameterValues(true);
+        }
+
+        private void RegisterParameterizedHandle(SoundHandle handle)
+        {
+            if (!handle.HasParameterBindings) return;
+
+            _parameterizedHandles.Add(handle);
+            handle.SetParameterLifecycleCallbacks(
+                OnParameterizedHandleStarted,
+                OnParameterizedHandleStopped,
+                OnParameterizedHandleDestroyed);
+
+            foreach (SoundParameter parameter in handle.GetActiveCountParameters())
+            {
+                if (_activeSoundParameterCounts.ContainsKey(parameter)) continue;
+                _activeSoundParameterCounts.Add(parameter, 0);
+                parameter.SetActiveSoundCount(0);
+            }
+
+            handle.RefreshParameterValues();
+        }
+
+        private void OnParameterizedHandleStarted(SoundHandle handle)
+        {
+            if (!_playingParameterizedHandles.Add(handle)) return;
+
+            foreach (SoundParameter parameter in handle.GetActiveCountParameters())
+            {
+                _activeSoundParameterCounts.TryGetValue(parameter, out int currentCount);
+                currentCount++;
+                _activeSoundParameterCounts[parameter] = currentCount;
+                parameter.SetActiveSoundCount(currentCount);
+            }
+
+            RefreshParameterizedHandles(true);
+        }
+
+        private void OnParameterizedHandleStopped(SoundHandle handle)
+        {
+            if (!_playingParameterizedHandles.Remove(handle)) return;
+
+            foreach (SoundParameter parameter in handle.GetActiveCountParameters())
+            {
+                _activeSoundParameterCounts.TryGetValue(parameter, out int currentCount);
+                currentCount = Mathf.Max(0, currentCount - 1);
+                _activeSoundParameterCounts[parameter] = currentCount;
+                parameter.SetActiveSoundCount(currentCount);
+            }
+
+            RefreshParameterizedHandles(true);
+        }
+
+        private void OnParameterizedHandleDestroyed(SoundHandle handle)
+        {
+            OnParameterizedHandleStopped(handle);
+            _parameterizedHandles.Remove(handle);
+        }
+
+        private void RefreshParameterizedHandles(bool transition)
+        {
+            foreach (SoundHandle handle in _parameterizedHandles)
+                handle.RefreshParameterValues(transition);
         }
 
         private ExternalAudioSource GetOrCreateHolder(Transform attached, AudioAttachmentType attachType)

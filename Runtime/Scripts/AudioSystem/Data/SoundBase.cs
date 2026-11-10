@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
 
@@ -56,6 +57,8 @@ namespace Abb2kTools.AudioSystem
     public abstract class SoundBase
     {
         public SoundModificationBase sound;
+
+        public List<SoundParameterBinding> parameterBindings = new();
         
         public enum MixerGroupPreference { Preferred, Specific }
         public MixerGroupPreference mixerGroupPreference;

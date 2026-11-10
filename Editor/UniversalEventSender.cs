@@ -19,7 +19,7 @@ namespace Abb2kTools.Events.Editor
 
         private Dictionary<string, bool> foldoutStates = new Dictionary<string, bool>();
 
-        [MenuItem("Tools/Universal Event Sender")]
+        [MenuItem("Tools/Abb2k/Universal Event Sender")]
         public static void ShowWindow()
         {
             GetWindow<UniversalEventSender>("Universal Event Sender");

@@ -25,6 +25,7 @@ namespace Abb2kTools.AudioSystem
         {
             public AudioSource Source;
             public PlayableClipData ClipData;
+            public SoundBasePlaybackSettings BaseSettings;
             public float BaseVolume;
             public float BasePitch;
             public float DelayTimer;
@@ -32,6 +33,18 @@ namespace Abb2kTools.AudioSystem
             public float PlaybackTimer;
             public bool IsPlaying;
             public bool IsFinished;
+            public readonly List<SoundParameterBinding> ParameterBindings = new();
+            public readonly Dictionary<SoundParameterTarget, ParameterTransition> ParameterValues = new();
+        }
+
+        private class ParameterTransition
+        {
+            public float CurrentValue = 1f;
+            public float StartValue = 1f;
+            public float TargetValue = 1f;
+            public float Duration;
+            public float Elapsed;
+            public bool HasBinding;
         }
 
         private readonly List<SourceData> _sources = new();
@@ -45,6 +58,17 @@ namespace Abb2kTools.AudioSystem
         private Func<bool> _onStopRequested;
         private Action<float> _onVolumeChanged;
         private Action<float> _onPitchChanged;
+        private Action<SoundHandle> _onParameterPlaybackStarted;
+        private Action<SoundHandle> _onParameterPlaybackStopped;
+        private Action<SoundHandle> _onParameterHandleDestroyed;
+        private bool _isParameterPlaybackActive;
+        private Transform _parameterSourceTransform;
+        private Rigidbody _parameterSourceRigidbody;
+        private Rigidbody2D _parameterSourceRigidbody2D;
+        private Vector3 _previousParameterSourcePosition;
+        private bool _hasPreviousParameterSourcePosition;
+        private float _parameterSourceSpeed;
+        private float _parameterPlaybackTime;
 
 #if DOTWEEN
         private readonly List<Tween> _activeTweens = new();
@@ -75,17 +99,41 @@ namespace Abb2kTools.AudioSystem
             _scaleWithTimeScale = scaleWithTimeScale;
         }
 
-        public void AddSource(AudioSource source, PlayableClipData clipData, float volumeMultiplier, float pitchMultiplier)
+        public void AddSource(
+            AudioSource source,
+            PlayableClipData clipData,
+            float volumeMultiplier,
+            float pitchMultiplier,
+            IReadOnlyList<SoundParameterBinding> soundBaseBindings = null)
         {
-            float duration = (clipData.Clip.length - clipData.StartOffset - clipData.EndOffset) / Mathf.Max(0.001f, clipData.Pitch * pitchMultiplier);
-            _sources.Add(new SourceData
+            float duration = clipData.Clip.length - clipData.StartOffset - clipData.EndOffset;
+            SourceData sourceData = new()
             {
                 Source = source,
                 ClipData = clipData,
+                BaseSettings = new SoundBasePlaybackSettings
+                {
+                    panStereo = source.panStereo,
+                    spatialBlend = source.spatialBlend,
+                    reverbZoneMix = source.reverbZoneMix,
+                    prio = source.priority,
+                    dopplerLevel = source.dopplerLevel,
+                    spread = source.spread,
+                    minDist = source.minDistance,
+                    maxDist = source.maxDistance
+                },
                 BaseVolume = clipData.Volume * volumeMultiplier,
                 BasePitch = clipData.Pitch * pitchMultiplier,
                 Duration = duration
-            });
+            };
+
+            if (soundBaseBindings != null)
+                sourceData.ParameterBindings.AddRange(soundBaseBindings);
+            if (clipData.ParameterBindings != null)
+                sourceData.ParameterBindings.AddRange(clipData.ParameterBindings);
+
+            _sources.Add(sourceData);
+            RefreshParameterValues(sourceData, false);
         }
 
         internal SoundHandle PrepareForPlayback()
@@ -102,6 +150,251 @@ namespace Abb2kTools.AudioSystem
             _onStopRequested = onStopRequested;
             _onVolumeChanged = onVolumeChanged;
             _onPitchChanged = onPitchChanged;
+        }
+
+        internal void SetParameterLifecycleCallbacks(
+            Action<SoundHandle> onPlaybackStarted,
+            Action<SoundHandle> onPlaybackStopped,
+            Action<SoundHandle> onHandleDestroyed)
+        {
+            _onParameterPlaybackStarted = onPlaybackStarted;
+            _onParameterPlaybackStopped = onPlaybackStopped;
+            _onParameterHandleDestroyed = onHandleDestroyed;
+        }
+
+        internal void SetParameterSourceTransform(Transform sourceTransform)
+        {
+            _parameterSourceTransform = sourceTransform;
+            _parameterSourceRigidbody = sourceTransform != null ? sourceTransform.GetComponentInParent<Rigidbody>() : null;
+            _parameterSourceRigidbody2D = sourceTransform != null ? sourceTransform.GetComponentInParent<Rigidbody2D>() : null;
+            UpdatePreviousParameterSourcePosition();
+        }
+
+        internal bool HasParameterBindings => _sources.Exists(source => source.ParameterBindings.Count > 0);
+
+        internal bool UsesParameter(SoundParameter parameter)
+        {
+            foreach (SourceData source in _sources)
+            {
+                foreach (SoundParameterBinding binding in source.ParameterBindings)
+                {
+                    if (binding != null && binding.parameter == parameter)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        internal HashSet<SoundParameter> GetActiveCountParameters()
+        {
+            HashSet<SoundParameter> parameters = new();
+            foreach (SourceData source in _sources)
+            {
+                foreach (SoundParameterBinding binding in source.ParameterBindings)
+                {
+                    if (binding != null &&
+                        binding.parameter != null &&
+                        binding.parameter.Source == SoundParameterSource.ActiveSoundCount)
+                    {
+                        parameters.Add(binding.parameter);
+                    }
+                }
+            }
+            return parameters;
+        }
+
+        internal void RefreshParameterValues(bool transition = false)
+        {
+            foreach (SourceData source in _sources)
+                RefreshParameterValues(source, transition);
+        }
+
+        private void RefreshParameterValues(SourceData source, bool transition)
+        {
+            Dictionary<SoundParameterTarget, float> targetValues = new();
+            Dictionary<SoundParameterTarget, float> transitionDurations = new();
+
+            foreach (SoundParameterBinding binding in source.ParameterBindings)
+            {
+                if (binding == null || binding.parameter == null) continue;
+
+                float mappedValue = binding.Evaluate(GetParameterInputValue(binding.parameter));
+                if (targetValues.TryGetValue(binding.target, out float targetValue))
+                    targetValues[binding.target] = targetValue * mappedValue;
+                else
+                    targetValues[binding.target] = mappedValue;
+
+                transitionDurations.TryGetValue(binding.target, out float currentDuration);
+                transitionDurations[binding.target] = Mathf.Max(currentDuration, binding.transitionDuration);
+            }
+
+            foreach (KeyValuePair<SoundParameterTarget, float> target in targetValues)
+            {
+                ParameterTransition value = GetParameterTransition(source, target.Key);
+                float duration = transitionDurations[target.Key];
+                value.HasBinding = true;
+                if (transition &&
+                    !Mathf.Approximately(value.CurrentValue, target.Value) &&
+                    duration > 0f)
+                {
+                    value.StartValue = value.CurrentValue;
+                    value.TargetValue = target.Value;
+                    value.Duration = duration;
+                    value.Elapsed = 0f;
+                }
+                else
+                {
+                    value.CurrentValue = target.Value;
+                    value.StartValue = target.Value;
+                    value.TargetValue = target.Value;
+                    value.Duration = 0f;
+                    value.Elapsed = 0f;
+                }
+            }
+
+            foreach (KeyValuePair<SoundParameterTarget, ParameterTransition> entry in source.ParameterValues)
+            {
+                if (targetValues.ContainsKey(entry.Key)) continue;
+                entry.Value.HasBinding = false;
+                entry.Value.CurrentValue = 1f;
+                entry.Value.StartValue = 1f;
+                entry.Value.TargetValue = 1f;
+                entry.Value.Duration = 0f;
+                entry.Value.Elapsed = 0f;
+            }
+
+            ApplySourceSettings(source);
+        }
+
+        internal void UpdateParameterTransitions(float deltaTime)
+        {
+            foreach (SourceData source in _sources)
+            {
+                bool changed = false;
+                foreach (ParameterTransition value in source.ParameterValues.Values)
+                {
+                    if (value.Duration <= 0f) continue;
+
+                    value.Elapsed = Mathf.Min(value.Elapsed + deltaTime, value.Duration);
+                    float t = value.Elapsed / value.Duration;
+                    value.CurrentValue = Mathf.Lerp(value.StartValue, value.TargetValue, t);
+                    if (t >= 1f) value.Duration = 0f;
+                    changed = true;
+                }
+
+                if (!changed) continue;
+                ApplySourceSettings(source);
+            }
+        }
+
+        private static ParameterTransition GetParameterTransition(SourceData source, SoundParameterTarget target)
+        {
+            if (!source.ParameterValues.TryGetValue(target, out ParameterTransition value))
+            {
+                value = new ParameterTransition();
+                source.ParameterValues.Add(target, value);
+            }
+            return value;
+        }
+
+        private static float GetParameterValue(SourceData source, SoundParameterTarget target, float defaultValue)
+        {
+            return source.ParameterValues.TryGetValue(target, out ParameterTransition value) && value.HasBinding
+                ? value.CurrentValue
+                : defaultValue;
+        }
+
+        private static float GetParameterValue(SourceData source, SoundParameterTarget target)
+        {
+            return GetParameterValue(source, target, 1f);
+        }
+
+        private void ApplySourceSettings(SourceData source)
+        {
+            if (source.Source == null) return;
+
+            source.Source.volume = source.BaseVolume *
+                                   _currentVolumeMultiplier *
+                                   GetParameterValue(source, SoundParameterTarget.VolumeMultiplier, 1f);
+            source.Source.pitch = GetPlaybackPitch(source);
+            source.Source.panStereo = GetParameterValue(source, SoundParameterTarget.PanStereo, source.BaseSettings.panStereo);
+            source.Source.spatialBlend = GetParameterValue(source, SoundParameterTarget.SpatialBlend, source.BaseSettings.spatialBlend);
+            source.Source.reverbZoneMix = GetParameterValue(source, SoundParameterTarget.ReverbZoneMix, source.BaseSettings.reverbZoneMix);
+            source.Source.dopplerLevel = GetParameterValue(source, SoundParameterTarget.DopplerLevel, source.BaseSettings.dopplerLevel);
+            source.Source.spread = GetParameterValue(source, SoundParameterTarget.Spread, source.BaseSettings.spread);
+            source.Source.minDistance = GetParameterValue(source, SoundParameterTarget.MinDistance, source.BaseSettings.minDist);
+            source.Source.maxDistance = GetParameterValue(source, SoundParameterTarget.MaxDistance, source.BaseSettings.maxDist);
+        }
+
+        private float GetParameterInputValue(SoundParameter parameter)
+        {
+            switch (parameter.Source)
+            {
+                case SoundParameterSource.Manual:
+                case SoundParameterSource.ActiveSoundCount:
+                    return parameter.CurrentValue;
+                case SoundParameterSource.DistanceToListener:
+                    if (_parameterSourceTransform != null &&
+                        SoundManager.TryGet(out SoundManager manager) &&
+                        manager.MainListener != null)
+                    {
+                        return Vector3.Distance(_parameterSourceTransform.position, manager.MainListener.transform.position);
+                    }
+                    return 0f;
+                case SoundParameterSource.EmitterSpeed:
+                    return _parameterSourceSpeed;
+                case SoundParameterSource.PlaybackTime:
+                    return _parameterPlaybackTime;
+                case SoundParameterSource.RigidbodySpeed:
+                    return _parameterSourceRigidbody != null ? _parameterSourceRigidbody.linearVelocity.magnitude : 0f;
+                case SoundParameterSource.Rigidbody2DSpeed:
+                    return _parameterSourceRigidbody2D != null ? _parameterSourceRigidbody2D.linearVelocity.magnitude : 0f;
+                default:
+                    return parameter.CurrentValue;
+            }
+        }
+
+        internal void UpdateParameterSources(float deltaTime)
+        {
+            if (!_isParameterPlaybackActive || IsStopped) return;
+            if (IsPaused)
+            {
+                _parameterSourceSpeed = 0f;
+                UpdatePreviousParameterSourcePosition();
+                return;
+            }
+
+            _parameterPlaybackTime += deltaTime;
+            if (_parameterSourceTransform != null && deltaTime > 0f)
+            {
+                Vector3 position = _parameterSourceTransform.position;
+                _parameterSourceSpeed = _hasPreviousParameterSourcePosition
+                    ? Vector3.Distance(position, _previousParameterSourcePosition) / deltaTime
+                    : 0f;
+                _previousParameterSourcePosition = position;
+                _hasPreviousParameterSourcePosition = true;
+            }
+
+            foreach (SourceData source in _sources)
+            {
+                foreach (SoundParameterBinding binding in source.ParameterBindings)
+                {
+                    if (binding?.parameter == null) continue;
+                    if (binding.parameter.Source != SoundParameterSource.Manual &&
+                        binding.parameter.Source != SoundParameterSource.ActiveSoundCount)
+                    {
+                        RefreshParameterValues(true);
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void UpdatePreviousParameterSourcePosition()
+        {
+            _hasPreviousParameterSourcePosition = _parameterSourceTransform != null;
+            if (_hasPreviousParameterSourcePosition)
+                _previousParameterSourcePosition = _parameterSourceTransform.position;
         }
 
         public void InitializeCoding(SoundCoding coding)
@@ -254,7 +547,9 @@ namespace Abb2kTools.AudioSystem
 
             float timer = 0f;
             float startVol = primary.Source.volume;
-            float targetVol = primary.BaseVolume * _currentVolumeMultiplier;
+            float targetVol = primary.BaseVolume *
+                              _currentVolumeMultiplier *
+                              GetParameterValue(primary, SoundParameterTarget.VolumeMultiplier);
             
             float maxDur = Mathf.Max(fadeOutDur, fadeInDur);
 
@@ -295,7 +590,7 @@ namespace Abb2kTools.AudioSystem
         {
             _currentVolumeMultiplier = volumeMultiplier;
             foreach (var s in _sources)
-                if (s.Source != null) s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
+                ApplySourceSettings(s);
             _onVolumeChanged?.Invoke(volumeMultiplier);
             
             return this;
@@ -305,7 +600,7 @@ namespace Abb2kTools.AudioSystem
         {
             _currentVolumeMultiplier = volumeMultiplier;
             foreach (var s in _sources)
-                if (s.Source != null) s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
+                ApplySourceSettings(s);
 
             return this;
         }
@@ -365,6 +660,7 @@ namespace Abb2kTools.AudioSystem
 
             if (_playbackRoutine != null) SoundManager.Instance.StopCoroutine(_playbackRoutine);
             _playbackRoutine = SoundManager.Instance.StartCoroutine(PlaybackRoutine());
+            NotifyParameterPlaybackStarted();
             
             if (CodingData != null && CurrentSection == null && CodingData.sections.Count > 0)
             {
@@ -432,6 +728,7 @@ namespace Abb2kTools.AudioSystem
             _isPreparedForPlayback = false;
             CancelQueuedTransition();
             _onStopRequested = null;
+            NotifyParameterPlaybackStopped();
             
 #if DOTWEEN
             KillAllActiveTweens();
@@ -454,6 +751,9 @@ namespace Abb2kTools.AudioSystem
             IsStopped = true;
             _isPreparedForPlayback = false;
             _onStopRequested = null;
+            NotifyParameterPlaybackStopped();
+            _onParameterHandleDestroyed?.Invoke(this);
+            _onParameterHandleDestroyed = null;
             CancelQueuedTransition();
 #if DOTWEEN
             KillAllActiveTweens();
@@ -596,7 +896,7 @@ namespace Abb2kTools.AudioSystem
                             {
                                 if (!s.Source.loop)
                                 {
-                                    s.PlaybackTimer += Time.deltaTime;
+                                    s.PlaybackTimer += Time.unscaledDeltaTime * Mathf.Abs(s.Source.pitch);
                                     if (s.PlaybackTimer >= s.Duration)
                                     {
                                         s.Source.Stop();
@@ -630,6 +930,7 @@ namespace Abb2kTools.AudioSystem
             }
 
             IsStopped = true;
+            NotifyParameterPlaybackStopped();
             OnCompleteEvent?.Invoke();
             OnCompleteEvent = null;
 
@@ -640,7 +941,27 @@ namespace Abb2kTools.AudioSystem
 
         private float GetPlaybackPitch(SourceData source)
         {
-            return source.BasePitch * _currentPitchMultiplier * (_scaleWithTimeScale ? Time.timeScale : 1f);
+            return source.BasePitch *
+                   _currentPitchMultiplier *
+                   GetParameterValue(source, SoundParameterTarget.PitchMultiplier) *
+                   (_scaleWithTimeScale ? Time.timeScale : 1f);
+        }
+
+        private void NotifyParameterPlaybackStarted()
+        {
+            if (_isParameterPlaybackActive) return;
+            _isParameterPlaybackActive = true;
+            _parameterPlaybackTime = 0f;
+            _parameterSourceSpeed = 0f;
+            UpdatePreviousParameterSourcePosition();
+            _onParameterPlaybackStarted?.Invoke(this);
+        }
+
+        private void NotifyParameterPlaybackStopped()
+        {
+            if (!_isParameterPlaybackActive) return;
+            _isParameterPlaybackActive = false;
+            _onParameterPlaybackStopped?.Invoke(this);
         }
 
         public void UpdateRandomModifiers(float volumeMultiplier, float pitchMultiplier)
@@ -650,12 +971,11 @@ namespace Abb2kTools.AudioSystem
                 s.BaseVolume = s.ClipData.Volume * volumeMultiplier;
                 s.BasePitch = s.ClipData.Pitch * pitchMultiplier;
                 
-                s.Duration = (s.ClipData.Clip.length - s.ClipData.StartOffset - s.ClipData.EndOffset) / Mathf.Max(0.001f, s.BasePitch);
+                s.Duration = s.ClipData.Clip.length - s.ClipData.StartOffset - s.ClipData.EndOffset;
 
                 if (s.Source != null)
                 {
-                    s.Source.volume = s.BaseVolume * _currentVolumeMultiplier;
-                    s.Source.pitch = GetPlaybackPitch(s);
+                    ApplySourceSettings(s);
                 }
             }
         }

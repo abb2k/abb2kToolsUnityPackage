@@ -44,7 +44,13 @@ namespace Abb2kTools.AudioSystem.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            DrawDefaultInspector();
+            DrawPropertiesExcluding(serializedObject, "m_Script", "parameterBindings");
+
+            SerializedProperty parameterBindings = serializedObject.FindProperty("parameterBindings");
+            if (parameterBindings != null)
+            {
+                EditorGUILayout.PropertyField(parameterBindings, new GUIContent("Sound Property Bindings"), true);
+            }
 
             GUILayout.Space(15);
 

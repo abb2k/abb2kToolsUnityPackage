@@ -101,6 +101,11 @@ namespace Abb2kTools.AudioSystem
                 else clip.Filters = clip.Filters.Clone();
 
                 clip.Filters.MergeWithParent(this.filters);
+                if (parameterBindings != null && parameterBindings.Count > 0)
+                {
+                    clip.ParameterBindings ??= new List<SoundParameterBinding>();
+                    clip.ParameterBindings.AddRange(parameterBindings);
+                }
                 result[i] = clip;
             }
         }

@@ -11,6 +11,7 @@ namespace Abb2kTools.AudioSystem.Editor
     {
         private const string MixerGroupPreference = "mixerGroupPreference";
         private const string Sound = "sound";
+        private const string ParameterBindings = "parameterBindings";
         private const string SFXIcon = "AudioClip Icon";
         private const string SoundIcon = "AudioSource Icon";
         private const string SFXTypeName = "SoundEffect";
@@ -32,9 +33,17 @@ namespace Abb2kTools.AudioSystem.Editor
             public SerializedProperty LoopSound;
             public SerializedProperty StartSound;
             public SerializedProperty EndSound;
+            public SerializedProperty ParameterBindings;
             public readonly List<SerializedProperty> Transitions = new();
             public readonly List<SerializedProperty> Settings = new();
             public readonly List<SerializedProperty> ThreeDSettings = new();
+        }
+
+        private sealed class InheritedBindingProperty
+        {
+            public SerializedObject SerializedObject;
+            public SerializedProperty Property;
+            public string SourceName;
         }
 
         private readonly HashSet<string> _3dProperties = new() 
@@ -101,6 +110,9 @@ namespace Abb2kTools.AudioSystem.Editor
 
                     enterChildren = false;
 
+                    if (iterator.name == ParameterBindings)
+                        continue;
+
                     if (_3dProperties.Contains(iterator.name))
                     {
                         threeDProps.Add(iterator.Copy());
@@ -156,6 +168,11 @@ namespace Abb2kTools.AudioSystem.Editor
                     float boxHeaderHeight = 22f;
                     height += boxHeaderHeight + boxContentHeight + 8f + EditorGUIUtility.standardVerticalSpacing;
                 }
+
+                SerializedProperty parameterBindings = property.FindPropertyRelative(ParameterBindings);
+                float parameterBindingsHeight = GetParameterBindingsBoxHeight(parameterBindings, property);
+                if (parameterBindingsHeight > 0f)
+                    height += parameterBindingsHeight + EditorGUIUtility.standardVerticalSpacing;
 
                 float headerHeight = 20f;
                 height += headerHeight + EditorGUIUtility.standardVerticalSpacing;
@@ -289,6 +306,9 @@ namespace Abb2kTools.AudioSystem.Editor
                     if (SerializedProperty.EqualContents(iterator, endProperty)) break;
 
                     enterChildren = false;
+
+                    if (iterator.name == ParameterBindings)
+                        continue;
 
                     if (_3dProperties.Contains(iterator.name))
                     {
@@ -454,8 +474,11 @@ namespace Abb2kTools.AudioSystem.Editor
 
                         if (disableField)
                             EditorGUI.BeginDisabledGroup(true);
-                        
-                        DrawSoundBaseField(propRect, property, prop);
+
+                        if (disableField)
+                            DrawPreferredMixerGroupField(propRect, property, prop);
+                        else
+                            DrawSoundBaseField(propRect, property, prop);
                     
                         if (disableField)
                             EditorGUI.EndDisabledGroup();
@@ -465,6 +488,12 @@ namespace Abb2kTools.AudioSystem.Editor
 
                     currentY += boxHeight + EditorGUIUtility.standardVerticalSpacing;
                 }
+
+                DrawParameterBindingsBox(
+                    position,
+                    ref currentY,
+                    property.FindPropertyRelative(ParameterBindings),
+                    property);
 
                 float contentHeight = 0f;
                 bool isExpanded = GetFoldoutState(property, _3dSettingsStates);
@@ -536,6 +565,9 @@ namespace Abb2kTools.AudioSystem.Editor
                     case EndSound:
                         result.EndSound = child;
                         break;
+                    case ParameterBindings:
+                        result.ParameterBindings = child;
+                        break;
                     case EnterTransitionDuration:
                     case ExitTransitionDuration:
                         result.Transitions.Add(child);
@@ -560,6 +592,10 @@ namespace Abb2kTools.AudioSystem.Editor
             height += GetSoundBaseFieldHeight(properties.LoopSound) + spacing;
             height += GetLoopingPropertyGroupHeight(properties.Transitions, property) + spacing;
             height += GetLoopingSettingsGroupHeight(properties, property) + spacing;
+            float parameterBindingsHeight = GetParameterBindingsBoxHeight(properties.ParameterBindings, property);
+            if (parameterBindingsHeight > 0f)
+                height += parameterBindingsHeight + spacing;
+            height += GetLoopingThreeDSettingsGroupHeight(properties, property) + spacing;
             height += EditorGUIUtility.singleLineHeight + spacing;
             height += EditorGUIUtility.singleLineHeight * 1.5f + spacing;
             height += GetSoundBaseFieldHeight(properties.StartSound) + spacing;
@@ -578,10 +614,16 @@ namespace Abb2kTools.AudioSystem.Editor
 
         private float GetLoopingSettingsGroupHeight(LoopingInspectorProperties properties, SerializedProperty soundBaseProperty)
         {
-            float height = 22f + 8f + 20f + EditorGUIUtility.standardVerticalSpacing;
+            float height = 22f + 8f;
             foreach (SerializedProperty prop in properties.Settings)
                 height += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
 
+            return height;
+        }
+
+        private float GetLoopingThreeDSettingsGroupHeight(LoopingInspectorProperties properties, SerializedProperty soundBaseProperty)
+        {
+            float height = 20f;
             if (GetFoldoutState(soundBaseProperty, _3dSettingsStates))
             {
                 height += 5f;
@@ -631,13 +673,29 @@ namespace Abb2kTools.AudioSystem.Editor
                 "Looping Sound Settings",
                 EditorStyles.boldLabel);
             float settingsY = settingsRect.y + 22f;
+            SerializedProperty mixerPreference = property.FindPropertyRelative(MixerGroupPreference);
             foreach (SerializedProperty prop in properties.Settings)
             {
                 float height = GetSoundBaseFieldHeight(prop);
                 Rect rect = new(settingsRect.x + 10f, settingsY, settingsRect.width - 20f, height);
-                DrawSoundBaseField(rect, property, prop);
+                bool showPreferredMixer = prop.name == SpecificMixerGroup &&
+                    mixerPreference != null &&
+                    mixerPreference.enumValueIndex == (int)SoundBase.MixerGroupPreference.Preferred;
+                if (showPreferredMixer)
+                {
+                    EditorGUI.BeginDisabledGroup(true);
+                    DrawPreferredMixerGroupField(rect, property, prop);
+                    EditorGUI.EndDisabledGroup();
+                }
+                else
+                {
+                    DrawSoundBaseField(rect, property, prop);
+                }
                 settingsY += height + spacing;
             }
+
+            currentY += settingsHeight + spacing;
+            DrawParameterBindingsBox(position, ref currentY, properties.ParameterBindings, property);
 
             float threeDHeight = 20f;
             bool showThreeDSettings = GetFoldoutState(property, _3dSettingsStates);
@@ -647,7 +705,7 @@ namespace Abb2kTools.AudioSystem.Editor
                 foreach (SerializedProperty prop in properties.ThreeDSettings)
                     threeDHeight += GetSoundBaseFieldHeight(prop) + spacing;
             }
-            Rect threeDRect = new(settingsRect.x + 6f, settingsY, settingsRect.width - 12f, threeDHeight);
+            Rect threeDRect = new(position.x, currentY, position.width, threeDHeight);
             GUI.Box(threeDRect, GUIContent.none, EditorStyles.helpBox);
             bool newShowThreeDSettings = EditorGUI.Foldout(
                 new Rect(threeDRect.x + 5f, threeDRect.y + 2f, threeDRect.width - 10f, 18f),
@@ -669,7 +727,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     threeDY += height + spacing;
                 }
             }
-            currentY += settingsHeight + spacing;
+            currentY += threeDHeight + spacing;
 
             Rect durationRect = new(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight);
             EditorGUI.BeginChangeCheck();
@@ -879,6 +937,24 @@ namespace Abb2kTools.AudioSystem.Editor
             }
         }
 
+        private static void DrawPreferredMixerGroupField(
+            Rect rect,
+            SerializedProperty soundBaseProperty,
+            SerializedProperty field)
+        {
+            SoundModificationBase sound = soundBaseProperty.FindPropertyRelative(Sound)?.objectReferenceValue as SoundModificationBase;
+            UnityEngine.Audio.AudioMixerGroup preferredMixerGroup = sound != null
+                ? sound.GetAudioInfo().DominantMixerGroup
+                : null;
+
+            EditorGUI.ObjectField(
+                rect,
+                new GUIContent(field.displayName, "Resolved preferred mixer group for the assigned sound."),
+                preferredMixerGroup,
+                typeof(UnityEngine.Audio.AudioMixerGroup),
+                false);
+        }
+
         private static void AddRandomizationMenuItems(GenericMenu menu, SerializedProperty property)
         {
             if (property == null) return;
@@ -938,6 +1014,132 @@ namespace Abb2kTools.AudioSystem.Editor
             return EditorGUI.GetPropertyHeight(field, true);
         }
 
+        private static float GetParameterBindingsBoxHeight(
+            SerializedProperty parameterBindings,
+            SerializedProperty soundBaseProperty)
+        {
+            List<InheritedBindingProperty> inheritedBindings = CollectInheritedBindings(soundBaseProperty);
+            if (parameterBindings == null && inheritedBindings.Count == 0)
+                return 0f;
+
+            float contentHeight = parameterBindings != null
+                ? GetSoundBaseFieldHeight(parameterBindings) + EditorGUIUtility.standardVerticalSpacing
+                : 0f;
+            if (inheritedBindings.Count > 0)
+            {
+                contentHeight += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+                foreach (InheritedBindingProperty binding in inheritedBindings)
+                    contentHeight += GetSoundBaseFieldHeight(binding.Property) + EditorGUIUtility.standardVerticalSpacing;
+            }
+
+            return contentHeight + 8f;
+        }
+
+        private static void DrawParameterBindingsBox(
+            Rect position,
+            ref float currentY,
+            SerializedProperty parameterBindings,
+            SerializedProperty soundBaseProperty)
+        {
+            List<InheritedBindingProperty> inheritedBindings = CollectInheritedBindings(soundBaseProperty);
+            if (parameterBindings == null && inheritedBindings.Count == 0)
+                return;
+
+            float contentHeight = parameterBindings != null
+                ? GetSoundBaseFieldHeight(parameterBindings) + EditorGUIUtility.standardVerticalSpacing
+                : 0f;
+            if (inheritedBindings.Count > 0)
+            {
+                contentHeight += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+                foreach (InheritedBindingProperty binding in inheritedBindings)
+                    contentHeight += GetSoundBaseFieldHeight(binding.Property) + EditorGUIUtility.standardVerticalSpacing;
+            }
+
+            float boxHeight = contentHeight + 8f;
+            Rect boxRect = new(position.x, currentY, position.width, boxHeight);
+            GUI.Box(boxRect, GUIContent.none, EditorStyles.helpBox);
+            float innerY = boxRect.y + 4f;
+
+            if (parameterBindings != null)
+            {
+                float propertyHeight = GetSoundBaseFieldHeight(parameterBindings);
+                Rect propertyRect = new(boxRect.x + 6f, innerY, boxRect.width - 12f, propertyHeight);
+                EditorGUI.PropertyField(propertyRect, parameterBindings, new GUIContent("Sound Property Bindings"), true);
+                innerY += propertyHeight + EditorGUIUtility.standardVerticalSpacing;
+            }
+
+            if (inheritedBindings.Count > 0)
+            {
+                EditorGUI.LabelField(
+                    new Rect(boxRect.x + 10f, innerY, boxRect.width - 20f, EditorGUIUtility.singleLineHeight),
+                    "Inherited",
+                    EditorStyles.boldLabel);
+                innerY += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+
+                foreach (InheritedBindingProperty binding in inheritedBindings)
+                {
+                    float propertyHeight = GetSoundBaseFieldHeight(binding.Property);
+                    Rect propertyRect = new(boxRect.x + 10f, innerY, boxRect.width - 20f, propertyHeight);
+                    SoundParameterBindingDrawer.DrawReadOnly(
+                        propertyRect,
+                        binding.Property,
+                        new GUIContent($"Inherited from {binding.SourceName}"));
+                    innerY += propertyHeight + EditorGUIUtility.standardVerticalSpacing;
+                }
+            }
+
+            currentY += boxHeight + EditorGUIUtility.standardVerticalSpacing;
+        }
+
+        private static List<InheritedBindingProperty> CollectInheritedBindings(SerializedProperty soundBaseProperty)
+        {
+            List<InheritedBindingProperty> bindings = new();
+            SerializedProperty soundProperty = soundBaseProperty.FindPropertyRelative(Sound);
+            if (soundProperty?.objectReferenceValue is SoundModificationBase sound)
+            {
+                CollectInheritedBindings(sound, bindings, new HashSet<int>());
+            }
+
+            return bindings;
+        }
+
+        private static void CollectInheritedBindings(
+            SoundModificationBase sound,
+            List<InheritedBindingProperty> bindings,
+            HashSet<int> visited)
+        {
+            if (sound == null || !visited.Add(sound.GetInstanceID()))
+                return;
+
+            SerializedObject serializedSound = new(sound);
+            serializedSound.Update();
+            SerializedProperty parameterBindings = serializedSound.FindProperty(ParameterBindings);
+            if (parameterBindings != null && parameterBindings.isArray)
+            {
+                for (int i = 0; i < parameterBindings.arraySize; i++)
+                {
+                    bindings.Add(new InheritedBindingProperty
+                    {
+                        SerializedObject = serializedSound,
+                        Property = parameterBindings.GetArrayElementAtIndex(i).Copy(),
+                        SourceName = sound.name
+                    });
+                }
+            }
+
+            SerializedProperty iterator = serializedSound.GetIterator();
+            bool enterChildren = true;
+            while (iterator.NextVisible(enterChildren))
+            {
+                enterChildren = true;
+                if (iterator.propertyType == SerializedPropertyType.ObjectReference &&
+                    iterator.objectReferenceValue is SoundModificationBase childSound)
+                {
+                    CollectInheritedBindings(childSound, bindings, visited);
+                }
+            }
+        }
+
         private static bool IsRandomizableField(string fieldName)
         {
             return fieldName == Volume ||
@@ -971,6 +1173,386 @@ namespace Abb2kTools.AudioSystem.Editor
         private static void SetLoopingPreviewDuration(SerializedProperty property, float duration)
         {
             _loopingPreviewDurations[GetLoopingPreviewDurationKey(property)] = duration;
+        }
+    }
+
+    [CustomPropertyDrawer(typeof(SoundParameterBinding))]
+    public class SoundParameterBindingDrawer : PropertyDrawer
+    {
+        private static readonly Dictionary<string, float> _previewInputs = new();
+        private static readonly Vector3[] _curvePoints = new Vector3[65];
+        private const float GraphHeight = 190f;
+
+        private readonly struct CurveBounds
+        {
+            public readonly float MinTime;
+            public readonly float MaxTime;
+            public readonly float MinValue;
+            public readonly float MaxValue;
+
+            public CurveBounds(float minTime, float maxTime, float minValue, float maxValue)
+            {
+                MinTime = minTime;
+                MaxTime = maxTime;
+                MinValue = minValue;
+                MaxValue = maxValue;
+            }
+        }
+
+        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+        {
+            if (!property.isExpanded)
+                return EditorGUIUtility.singleLineHeight;
+
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+            float height = EditorGUIUtility.singleLineHeight + spacing;
+            height += GetChildHeight(property, "parameter") + spacing;
+            height += GetChildHeight(property, "target") + spacing;
+            height += EditorGUIUtility.singleLineHeight + spacing + GraphHeight + spacing;
+            height += GetChildHeight(property, "mapping") + spacing;
+            height += GetChildHeight(property, "transitionDuration") + spacing;
+            height += EditorGUIUtility.singleLineHeight;
+            return height;
+        }
+
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            DrawBinding(position, property, label, false);
+        }
+
+        public static void DrawReadOnly(Rect position, SerializedProperty property, GUIContent label)
+        {
+            DrawBinding(position, property, label, true);
+        }
+
+        private static void DrawBinding(Rect position, SerializedProperty property, GUIContent label, bool readOnly)
+        {
+            EditorGUI.BeginProperty(position, label, property);
+
+            Rect foldoutRect = new(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
+            property.isExpanded = EditorGUI.Foldout(
+                foldoutRect,
+                property.isExpanded,
+                GetBindingFoldoutLabel(property, label),
+                true,
+                EditorStyles.foldout);
+            if (!property.isExpanded)
+            {
+                EditorGUI.EndProperty();
+                return;
+            }
+
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+            float currentY = position.y + EditorGUIUtility.singleLineHeight + spacing;
+            SerializedProperty parameter = property.FindPropertyRelative("parameter");
+            SerializedProperty target = property.FindPropertyRelative("target");
+            SerializedProperty mapping = property.FindPropertyRelative("mapping");
+
+            EditorGUI.indentLevel++;
+            DrawProperty(position, ref currentY, parameter, "Parameter", spacing, readOnly);
+            DrawProperty(position, ref currentY, target, "Target", spacing, readOnly);
+            EditorGUI.LabelField(
+                new Rect(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight),
+                "Mapping Curve",
+                EditorStyles.boldLabel);
+            currentY += EditorGUIUtility.singleLineHeight + spacing;
+            DrawCurveGraph(position, ref currentY, mapping, parameter);
+            DrawProperty(position, ref currentY, mapping, "Edit Curve", spacing, readOnly);
+            DrawProperty(
+                position,
+                ref currentY,
+                property.FindPropertyRelative("transitionDuration"),
+                "Transition Duration",
+                spacing,
+                readOnly);
+
+            if (mapping != null)
+                DrawPreview(position, ref currentY, parameter, target, mapping);
+
+            EditorGUI.indentLevel--;
+            EditorGUI.EndProperty();
+        }
+
+        private static GUIContent GetBindingFoldoutLabel(SerializedProperty property, GUIContent label)
+        {
+            SerializedProperty parameter = property.FindPropertyRelative("parameter");
+            SerializedProperty target = property.FindPropertyRelative("target");
+            string parameterName = parameter != null && parameter.objectReferenceValue != null
+                ? parameter.objectReferenceValue.name
+                : label.text;
+            string targetName = target != null &&
+                                target.enumValueIndex >= 0 &&
+                                target.enumValueIndex < target.enumDisplayNames.Length
+                ? target.enumDisplayNames[target.enumValueIndex]
+                : "Target";
+            string prefix = label.text.StartsWith("Inherited from ")
+                ? label.text
+                : "Sound Property Binding";
+
+            return new GUIContent($"{prefix} - {parameterName} ({targetName})");
+        }
+
+        private static void DrawCurveGraph(
+            Rect position,
+            ref float currentY,
+            SerializedProperty mapping,
+            SerializedProperty parameter)
+        {
+            Rect frame = new(position.x, currentY, position.width, GraphHeight);
+            GUI.Box(frame, GUIContent.none, EditorStyles.helpBox);
+            Rect graphRect = new(
+                frame.x + 42f,
+                frame.y + 8f,
+                Mathf.Max(1f, frame.width - 50f),
+                frame.height - 30f);
+
+            AnimationCurve curve = mapping != null ? mapping.animationCurveValue : null;
+            AnimationCurve displayCurve = curve != null && curve.length > 0
+                ? curve
+                : AnimationCurve.Linear(0f, 1f, 1f, 1f);
+            CurveBounds bounds = GetCurveBounds(displayCurve);
+            string graphKey = mapping != null && mapping.serializedObject.targetObject != null
+                ? $"{mapping.serializedObject.targetObject.GetInstanceID()}:{mapping.propertyPath}"
+                : string.Empty;
+
+            EditorGUI.DrawRect(graphRect, new Color(0.12f, 0.12f, 0.12f));
+            DrawCurveGraphContents(graphRect, displayCurve, bounds, parameter, graphKey);
+            currentY += GraphHeight + EditorGUIUtility.standardVerticalSpacing;
+        }
+
+        private static void DrawCurveGraphContents(
+            Rect graphRect,
+            AnimationCurve curve,
+            CurveBounds bounds,
+            SerializedProperty parameter,
+            string graphKey)
+        {
+            float previewInput = GetPreviewInput(parameter, graphKey, bounds.MinTime, bounds.MaxTime);
+            float previewOutput = curve.Evaluate(previewInput);
+            Vector3 previewPoint = CurveToGraphPoint(graphRect, bounds, previewInput, previewOutput);
+
+            Handles.BeginGUI();
+            Color previousColor = Handles.color;
+            if (Event.current.type == EventType.Repaint)
+            {
+                Handles.color = new Color(0.35f, 0.35f, 0.35f);
+                for (int i = 0; i <= 4; i++)
+                {
+                    float fraction = i / 4f;
+                    float x = Mathf.Lerp(graphRect.xMin, graphRect.xMax, fraction);
+                    float y = Mathf.Lerp(graphRect.yMax, graphRect.yMin, fraction);
+                    Handles.DrawLine(new Vector3(x, graphRect.yMin), new Vector3(x, graphRect.yMax));
+                    Handles.DrawLine(new Vector3(graphRect.xMin, y), new Vector3(graphRect.xMax, y));
+                }
+
+                for (int i = 0; i < _curvePoints.Length; i++)
+                {
+                    float time = Mathf.Lerp(bounds.MinTime, bounds.MaxTime, i / (float)(_curvePoints.Length - 1));
+                    _curvePoints[i] = CurveToGraphPoint(graphRect, bounds, time, curve.Evaluate(time));
+                }
+
+                Handles.color = new Color(0.3f, 0.85f, 1f);
+                Handles.DrawAAPolyLine(2f, _curvePoints);
+
+                Handles.color = new Color(1f, 0.78f, 0.2f);
+                Handles.DrawDottedLine(
+                    new Vector3(graphRect.xMin, previewPoint.y),
+                    new Vector3(graphRect.xMax, previewPoint.y),
+                    4f);
+                Handles.DrawSolidDisc(previewPoint, Vector3.forward, 4f);
+
+                Keyframe[] keys = curve.keys;
+                for (int i = 0; i < keys.Length; i++)
+                {
+                    Vector3 point = CurveToGraphPoint(graphRect, bounds, keys[i].time, keys[i].value);
+                    Handles.color = Color.white;
+                    Handles.DrawSolidDisc(point, Vector3.forward, 3.5f);
+                }
+            }
+
+            Handles.color = previousColor;
+            Handles.EndGUI();
+
+            const float valueLabelWidth = 54f;
+            const float valueLabelHeight = 16f;
+            Rect valueLabelRect = new(
+                Mathf.Clamp(previewPoint.x - valueLabelWidth * 0.5f, graphRect.xMin, graphRect.xMax - valueLabelWidth),
+                Mathf.Max(graphRect.yMin, previewPoint.y - valueLabelHeight - 2f),
+                valueLabelWidth,
+                valueLabelHeight);
+            EditorGUI.DrawRect(valueLabelRect, new Color(0.08f, 0.08f, 0.08f, 0.9f));
+            EditorGUI.LabelField(valueLabelRect, previewOutput.ToString("0.###"), EditorStyles.centeredGreyMiniLabel);
+
+            GUI.Label(
+                new Rect(graphRect.xMin - 40f, graphRect.yMin - 4f, 38f, 16f),
+                bounds.MaxValue.ToString("0.##"),
+                EditorStyles.miniLabel);
+            GUI.Label(
+                new Rect(graphRect.xMin - 40f, graphRect.yMax - 12f, 38f, 16f),
+                bounds.MinValue.ToString("0.##"),
+                EditorStyles.miniLabel);
+            GUI.Label(
+                new Rect(graphRect.xMin, graphRect.yMax + 2f, 55f, 16f),
+                bounds.MinTime.ToString("0.##"),
+                EditorStyles.miniLabel);
+            GUI.Label(
+                new Rect(graphRect.xMax - 55f, graphRect.yMax + 2f, 55f, 16f),
+                bounds.MaxTime.ToString("0.##"),
+                EditorStyles.miniLabel);
+        }
+
+        private static CurveBounds GetCurveBounds(AnimationCurve curve)
+        {
+            Keyframe[] keys = curve.keys;
+            float minTime = keys.Length > 0 ? keys[0].time : 0f;
+            float maxTime = keys.Length > 1 ? keys[keys.Length - 1].time : minTime + 1f;
+            if (maxTime - minTime < 0.001f)
+                maxTime = minTime + 1f;
+
+            float minValue = float.PositiveInfinity;
+            float maxValue = float.NegativeInfinity;
+            for (int i = 0; i <= 64; i++)
+            {
+                float value = curve.Evaluate(Mathf.Lerp(minTime, maxTime, i / 64f));
+                minValue = Mathf.Min(minValue, value);
+                maxValue = Mathf.Max(maxValue, value);
+            }
+            foreach (Keyframe key in keys)
+            {
+                minValue = Mathf.Min(minValue, key.value);
+                maxValue = Mathf.Max(maxValue, key.value);
+            }
+
+            float padding = maxValue - minValue;
+            padding = padding < 0.001f
+                ? Mathf.Max(0.5f, Mathf.Abs(minValue) * 0.1f)
+                : padding * 0.1f;
+            return new CurveBounds(minTime, maxTime, minValue - padding, maxValue + padding);
+        }
+
+        private static Vector3 CurveToGraphPoint(Rect graphRect, CurveBounds bounds, float time, float value)
+        {
+            float x = Mathf.Lerp(graphRect.xMin, graphRect.xMax, Mathf.InverseLerp(bounds.MinTime, bounds.MaxTime, time));
+            float y = Mathf.Lerp(graphRect.yMax, graphRect.yMin, Mathf.InverseLerp(bounds.MinValue, bounds.MaxValue, value));
+            return new Vector3(x, y);
+        }
+
+        private static float GetPreviewInput(SerializedProperty parameter, string graphKey, float minValue, float maxValue)
+        {
+            string key = parameter != null && parameter.serializedObject.targetObject != null
+                ? GetPreviewInputKey(parameter)
+                : graphKey;
+            float initialValue = parameter != null && parameter.objectReferenceValue is SoundParameter soundParameter
+                ? soundParameter.CurrentValue
+                : minValue;
+            if (!_previewInputs.TryGetValue(key, out float previewInput))
+                previewInput = initialValue;
+            return Mathf.Clamp(previewInput, minValue, maxValue);
+        }
+
+        private static string GetPreviewInputKey(SerializedProperty parameter)
+        {
+            return $"{parameter.serializedObject.targetObject.GetInstanceID()}:{parameter.propertyPath}";
+        }
+
+        private static float GetChildHeight(SerializedProperty property, string childName)
+        {
+            SerializedProperty child = property.FindPropertyRelative(childName);
+            return child == null ? EditorGUIUtility.singleLineHeight : EditorGUI.GetPropertyHeight(child, true);
+        }
+
+        private static void DrawProperty(
+            Rect position,
+            ref float currentY,
+            SerializedProperty property,
+            string label,
+            float spacing,
+            bool readOnly = false)
+        {
+            if (property == null) return;
+
+            float height = EditorGUI.GetPropertyHeight(property, true);
+            Rect rect = new(position.x, currentY, position.width, height);
+            if (readOnly)
+                EditorGUI.BeginDisabledGroup(true);
+            EditorGUI.PropertyField(rect, property, new GUIContent(label), true);
+            if (readOnly)
+                EditorGUI.EndDisabledGroup();
+            currentY += height + spacing;
+        }
+
+        private static void DrawPreview(
+            Rect position,
+            ref float currentY,
+            SerializedProperty parameter,
+            SerializedProperty target,
+            SerializedProperty mapping)
+        {
+            AnimationCurve curve = mapping.animationCurveValue;
+            float minValue = 0f;
+            float maxValue = 1f;
+            if (curve != null && curve.length > 0)
+            {
+                Keyframe[] keys = curve.keys;
+                minValue = keys[0].time;
+                maxValue = keys[keys.Length - 1].time;
+                if (maxValue <= minValue)
+                    maxValue = minValue + 1f;
+            }
+
+            string key = $"{parameter.serializedObject.targetObject.GetInstanceID()}:{parameter.propertyPath}";
+            SoundParameter soundParameter = parameter.objectReferenceValue as SoundParameter;
+            float initialValue = soundParameter != null ? soundParameter.CurrentValue : minValue;
+            if (!_previewInputs.TryGetValue(key, out float previewInput))
+                previewInput = initialValue;
+            previewInput = Mathf.Clamp(previewInput, minValue, maxValue);
+
+            float outputWidth = 100f;
+            float gap = 6f;
+            float lineHeight = EditorGUIUtility.singleLineHeight;
+            Rect sliderRect = new(position.x, currentY, position.width - outputWidth - gap, lineHeight);
+            Rect outputRect = new(sliderRect.xMax + gap, currentY, outputWidth, lineHeight);
+            EditorGUI.BeginChangeCheck();
+            previewInput = EditorGUI.Slider(sliderRect, "Preview Input", previewInput, minValue, maxValue);
+            if (EditorGUI.EndChangeCheck())
+                _previewInputs[key] = previewInput;
+
+            float mappedValue = curve != null && curve.length > 0
+                ? curve.Evaluate(Mathf.Clamp(previewInput, minValue, maxValue))
+                : 1f;
+            SoundParameterTarget targetType = target != null
+                ? (SoundParameterTarget)target.enumValueIndex
+                : SoundParameterTarget.VolumeMultiplier;
+            string targetName = targetType switch
+            {
+                SoundParameterTarget.VolumeMultiplier => "Volume",
+                SoundParameterTarget.PitchMultiplier => "Pitch",
+                SoundParameterTarget.PanStereo => "Pan",
+                SoundParameterTarget.SpatialBlend => "3D Blend",
+                SoundParameterTarget.ReverbZoneMix => "Reverb",
+                SoundParameterTarget.DopplerLevel => "Doppler",
+                SoundParameterTarget.Spread => "Spread",
+                SoundParameterTarget.MinDistance => "Min Distance",
+                SoundParameterTarget.MaxDistance => "Max Distance",
+                _ => targetType.ToString()
+            };
+            string output = targetType == SoundParameterTarget.VolumeMultiplier ||
+                            targetType == SoundParameterTarget.PitchMultiplier
+                ? $"{mappedValue:0.###}x"
+                : mappedValue.ToString("0.###");
+            EditorGUI.LabelField(outputRect, $"{targetName}: {output}", EditorStyles.miniLabel);
+        }
+    }
+
+    [CustomEditor(typeof(SoundParameter))]
+    public class SoundParameterEditor : UnityEditor.Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            DrawDefaultInspector();
+            EditorGUILayout.Space();
+            if (GUILayout.Button("Open Asset Usage Finder"))
+                EditorApplication.ExecuteMenuItem("Tools/Find Asset Usages");
         }
     }
 }

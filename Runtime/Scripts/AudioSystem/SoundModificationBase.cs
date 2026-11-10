@@ -14,10 +14,13 @@ namespace Abb2kTools.AudioSystem
         public float EndOffset;
         public AudioMixerGroup PreferredMixerGroup;
         public AudioFilterSettings Filters;
+        public List<SoundParameterBinding> ParameterBindings;
     }
     
     public abstract class SoundModificationBase : ScriptableObject
     {
+        public List<SoundParameterBinding> parameterBindings = new();
+
         public abstract AudioFilterSettings Filters { get; }
 
         /// <summary>

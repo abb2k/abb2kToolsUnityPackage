@@ -128,6 +128,12 @@ namespace Abb2kTools.AudioSystem
                     clip.PreferredMixerGroup = preferredMixerGroup;
                 }
 
+                if (parameterBindings != null && parameterBindings.Count > 0)
+                {
+                    clip.ParameterBindings ??= new List<SoundParameterBinding>();
+                    clip.ParameterBindings.AddRange(parameterBindings);
+                }
+
                 if (startOffset > 0f || endOffset > 0f)
                 {
                     clip.Delay -= startOffset;

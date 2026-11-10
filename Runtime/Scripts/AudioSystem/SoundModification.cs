@@ -43,7 +43,10 @@ namespace Abb2kTools.AudioSystem
                 StartOffset = clampedStart,
                 EndOffset = clampedEnd,
                 PreferredMixerGroup = preferredMixerGroup,
-                Filters = filters
+                Filters = filters,
+                ParameterBindings = parameterBindings != null
+                    ? new List<SoundParameterBinding>(parameterBindings)
+                    : new List<SoundParameterBinding>()
             });
         }
     }
