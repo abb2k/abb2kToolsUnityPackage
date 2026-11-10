@@ -608,14 +608,30 @@ namespace Abb2kTools.AudioSystem
         public SoundHandle SetPitch(float pitchMultiplier)
         {
             _currentPitchMultiplier = pitchMultiplier;
-            _onPitchChanged?.Invoke(pitchMultiplier);
+            if (_onPitchChanged != null)
+            {
+                _onPitchChanged(pitchMultiplier);
+                return this;
+            }
+
+            ApplyPitchToSources();
+            return this;
+        }
+
+        internal SoundHandle SetPitchLocal(float pitchMultiplier)
+        {
+            _currentPitchMultiplier = pitchMultiplier;
+            ApplyPitchToSources();
+            return this;
+        }
+
+        private void ApplyPitchToSources()
+        {
             foreach (var s in _sources)
                 if (s.Source != null) s.Source.pitch = GetPlaybackPitch(s);
                 
             if (_secondaryCodingSource != null && _sources.Count > 0)
                 _secondaryCodingSource.pitch = GetPlaybackPitch(_sources[0]);
-
-            return this;
         }
 
 #if DOTWEEN

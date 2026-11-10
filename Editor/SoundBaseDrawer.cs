@@ -25,8 +25,24 @@ namespace Abb2kTools.AudioSystem.Editor
         private const string EndSound = "endSound";
         private const string EnterTransitionDuration = "enterTransitionDuration";
         private const string ExitTransitionDuration = "exitTransitionDuration";
+        private const string ModulateLoopVolume = "modulateLoopVolume";
+        private const string MinLoopVolumeMultiplier = "minLoopVolumeMultiplier";
+        private const string StartLoopVolumeMultiplier = "startLoopVolumeMultiplier";
+        private const string MaxLoopVolumeMultiplier = "maxLoopVolumeMultiplier";
+        private const string LoopVolumeModulationMode = "loopVolumeModulationMode";
+        private const string LoopVolumeGrowthRate = "loopVolumeGrowthRate";
+        private const string LoopVolumeSineCycleDuration = "loopVolumeSineCycleDuration";
+        private const string ModulateLoopPitch = "modulateLoopPitch";
+        private const string MinLoopPitchMultiplier = "minLoopPitchMultiplier";
+        private const string StartLoopPitchMultiplier = "startLoopPitchMultiplier";
+        private const string MaxLoopPitchMultiplier = "maxLoopPitchMultiplier";
+        private const string LoopPitchModulationMode = "loopPitchModulationMode";
+        private const string LoopPitchGrowthRate = "loopPitchGrowthRate";
+        private const string LoopPitchSineCycleDuration = "loopPitchSineCycleDuration";
+        private const float LoopModulationGraphHeight = 58f;
         
         private static readonly Dictionary<string, float> _loopingPreviewDurations = new();
+        private static readonly Dictionary<string, bool> _loopModulationFoldouts = new();
 
         private sealed class LoopingInspectorProperties
         {
@@ -83,6 +99,27 @@ namespace Abb2kTools.AudioSystem.Editor
         private void SetFoldoutState(SerializedProperty property, Dictionary<string, bool> dict, bool value)
         {
             dict[property.propertyPath] = value;
+        }
+
+        private static bool GetLoopModulationFoldoutState(SerializedProperty property, string foldoutKey)
+        {
+            string key = $"{property.serializedObject.targetObject.GetInstanceID()}:{property.propertyPath}:{foldoutKey}";
+            if (!_loopModulationFoldouts.TryGetValue(key, out bool isExpanded))
+            {
+                isExpanded = false;
+                _loopModulationFoldouts[key] = isExpanded;
+            }
+
+            return isExpanded;
+        }
+
+        private static void SetLoopModulationFoldoutState(
+            SerializedProperty property,
+            string foldoutKey,
+            bool isExpanded)
+        {
+            string key = $"{property.serializedObject.targetObject.GetInstanceID()}:{property.propertyPath}:{foldoutKey}";
+            _loopModulationFoldouts[key] = isExpanded;
         }
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
@@ -572,6 +609,21 @@ namespace Abb2kTools.AudioSystem.Editor
                     case ExitTransitionDuration:
                         result.Transitions.Add(child);
                         break;
+                    case ModulateLoopVolume:
+                    case MinLoopVolumeMultiplier:
+                    case StartLoopVolumeMultiplier:
+                    case MaxLoopVolumeMultiplier:
+                    case LoopVolumeModulationMode:
+                    case LoopVolumeGrowthRate:
+                    case LoopVolumeSineCycleDuration:
+                    case ModulateLoopPitch:
+                    case MinLoopPitchMultiplier:
+                    case StartLoopPitchMultiplier:
+                    case MaxLoopPitchMultiplier:
+                    case LoopPitchModulationMode:
+                    case LoopPitchGrowthRate:
+                    case LoopPitchSineCycleDuration:
+                        break;
                     default:
                         if (_3dProperties.Contains(child.name))
                             result.ThreeDSettings.Add(child);
@@ -591,6 +643,24 @@ namespace Abb2kTools.AudioSystem.Editor
             float height = EditorGUIUtility.singleLineHeight + spacing;
             height += GetSoundBaseFieldHeight(properties.LoopSound) + spacing;
             height += GetLoopingPropertyGroupHeight(properties.Transitions, property) + spacing;
+            height += GetLoopModulationGroupHeight(
+                property,
+                "volume",
+                MinLoopVolumeMultiplier,
+                StartLoopVolumeMultiplier,
+                MaxLoopVolumeMultiplier,
+                LoopVolumeModulationMode,
+                LoopVolumeGrowthRate,
+                LoopVolumeSineCycleDuration) + spacing;
+            height += GetLoopModulationGroupHeight(
+                property,
+                "pitch",
+                MinLoopPitchMultiplier,
+                StartLoopPitchMultiplier,
+                MaxLoopPitchMultiplier,
+                LoopPitchModulationMode,
+                LoopPitchGrowthRate,
+                LoopPitchSineCycleDuration) + spacing;
             height += GetLoopingSettingsGroupHeight(properties, property) + spacing;
             float parameterBindingsHeight = GetParameterBindingsBoxHeight(properties.ParameterBindings, property);
             if (parameterBindingsHeight > 0f)
@@ -609,6 +679,33 @@ namespace Abb2kTools.AudioSystem.Editor
             foreach (SerializedProperty prop in properties)
                 height += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
 
+            return height;
+        }
+
+        private float GetLoopModulationGroupHeight(
+            SerializedProperty property,
+            string foldoutKey,
+            string minField,
+            string startField,
+            string maxField,
+            string modeField,
+            string growthRateField,
+            string sineCycleDurationField)
+        {
+            if (!GetLoopModulationFoldoutState(property, foldoutKey))
+                return 22f;
+
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+            float height = 22f + 8f + LoopModulationGraphHeight + spacing;
+            height += GetSoundBaseFieldHeight(property.FindPropertyRelative(minField)) + spacing;
+            height += GetSoundBaseFieldHeight(property.FindPropertyRelative(startField)) + spacing;
+            height += GetSoundBaseFieldHeight(property.FindPropertyRelative(maxField)) + spacing;
+            SerializedProperty mode = property.FindPropertyRelative(modeField);
+            height += GetSoundBaseFieldHeight(mode) + spacing;
+            string modeSpecificField = mode.enumValueIndex == (int)SoundLoopModulationMode.SineWave
+                ? sineCycleDurationField
+                : growthRateField;
+            height += GetSoundBaseFieldHeight(property.FindPropertyRelative(modeSpecificField)) + spacing;
             return height;
         }
 
@@ -664,6 +761,33 @@ namespace Abb2kTools.AudioSystem.Editor
                 transitionY += height + spacing;
             }
             currentY += transitionHeight + spacing;
+
+            DrawLoopModulationGroup(
+                position,
+                ref currentY,
+                property,
+                "Volume Modulation",
+                "volume",
+                ModulateLoopVolume,
+                MinLoopVolumeMultiplier,
+                StartLoopVolumeMultiplier,
+                MaxLoopVolumeMultiplier,
+                LoopVolumeModulationMode,
+                LoopVolumeGrowthRate,
+                LoopVolumeSineCycleDuration);
+            DrawLoopModulationGroup(
+                position,
+                ref currentY,
+                property,
+                "Pitch Modulation",
+                "pitch",
+                ModulateLoopPitch,
+                MinLoopPitchMultiplier,
+                StartLoopPitchMultiplier,
+                MaxLoopPitchMultiplier,
+                LoopPitchModulationMode,
+                LoopPitchGrowthRate,
+                LoopPitchSineCycleDuration);
 
             float settingsHeight = GetLoopingSettingsGroupHeight(properties, property);
             Rect settingsRect = new(position.x, currentY, position.width, settingsHeight);
@@ -768,6 +892,255 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorGUI.indentLevel--;
         }
 
+        private void DrawLoopModulationGroup(
+            Rect position,
+            ref float currentY,
+            SerializedProperty property,
+            string title,
+            string foldoutKey,
+            string enabledField,
+            string minField,
+            string startField,
+            string maxField,
+            string modeField,
+            string growthRateField,
+            string sineCycleDurationField)
+        {
+            float groupHeight = GetLoopModulationGroupHeight(
+                property,
+                foldoutKey,
+                minField,
+                startField,
+                maxField,
+                modeField,
+                growthRateField,
+                sineCycleDurationField);
+            Rect groupRect = new(position.x, currentY, position.width, groupHeight);
+            GUI.Box(groupRect, GUIContent.none, EditorStyles.helpBox);
+
+            bool expanded = GetLoopModulationFoldoutState(property, foldoutKey);
+            Rect foldoutRect = new(groupRect.x + 5f, groupRect.y + 2f, groupRect.width - 80f, 18f);
+            bool newExpanded = EditorGUI.Foldout(foldoutRect, expanded, title, true, EditorStyles.foldout);
+            if (newExpanded != expanded)
+                SetLoopModulationFoldoutState(property, foldoutKey, newExpanded);
+
+            SerializedProperty enabled = property.FindPropertyRelative(enabledField);
+            Rect enabledRect = new(groupRect.xMax - 72f, groupRect.y + 2f, 66f, 18f);
+            EditorGUI.BeginChangeCheck();
+            bool newEnabled = EditorGUI.ToggleLeft(enabledRect, "Enabled", enabled.boolValue);
+            if (EditorGUI.EndChangeCheck())
+                enabled.boolValue = newEnabled;
+
+            if (expanded)
+            {
+                float spacing = EditorGUIUtility.standardVerticalSpacing;
+                float y = groupRect.y + 22f;
+                SerializedProperty min = property.FindPropertyRelative(minField);
+                SerializedProperty start = property.FindPropertyRelative(startField);
+                SerializedProperty max = property.FindPropertyRelative(maxField);
+                SerializedProperty mode = property.FindPropertyRelative(modeField);
+                SerializedProperty growthRate = property.FindPropertyRelative(growthRateField);
+                SerializedProperty sineCycleDuration = property.FindPropertyRelative(sineCycleDurationField);
+                DrawLoopModulationField(groupRect, ref y, min, spacing);
+                DrawLoopModulationField(groupRect, ref y, start, spacing);
+                DrawLoopModulationField(groupRect, ref y, max, spacing);
+                DrawLoopModulationField(groupRect, ref y, mode, spacing);
+                bool isSineWave = mode.enumValueIndex == (int)SoundLoopModulationMode.SineWave;
+                DrawLoopModulationField(
+                    groupRect,
+                    ref y,
+                    isSineWave ? sineCycleDuration : growthRate,
+                    spacing,
+                    new GUIContent(isSineWave ? "Cycle Duration (seconds)" : "Growth Rate (multiplier/sec)"));
+
+                string previewKey = GetLoopingPreviewDurationKey(property);
+                bool isPreviewing = enabled.boolValue &&
+                    EditorAudioPreviewer.IsPlaying &&
+                    EditorAudioPreviewer.CurrentLoopingPreviewKey == previewKey;
+                DrawLoopModulationGraph(
+                    groupRect,
+                    ref y,
+                    title,
+                    min.floatValue,
+                    start.floatValue,
+                    max.floatValue,
+                    (SoundLoopModulationMode)mode.enumValueIndex,
+                    growthRate.floatValue,
+                    sineCycleDuration.floatValue,
+                    GetLoopingPreviewDuration(property),
+                    isPreviewing ? EditorAudioPreviewer.CurrentTime : 0f,
+                    isPreviewing,
+                    spacing);
+            }
+
+            currentY += groupHeight + EditorGUIUtility.standardVerticalSpacing;
+        }
+
+        private static void DrawLoopModulationField(
+            Rect groupRect,
+            ref float y,
+            SerializedProperty field,
+            float spacing,
+            GUIContent label = null)
+        {
+            if (field == null) return;
+
+            float fieldHeight = GetSoundBaseFieldHeight(field);
+            Rect fieldRect = new(groupRect.x + 10f, y, groupRect.width - 20f, fieldHeight);
+            if (label == null)
+                EditorGUI.PropertyField(fieldRect, field, true);
+            else
+                EditorGUI.PropertyField(fieldRect, field, label, true);
+            y += fieldHeight + spacing;
+        }
+
+        private static void DrawLoopModulationGraph(
+            Rect groupRect,
+            ref float y,
+            string label,
+            float minValue,
+            float startValue,
+            float maxValue,
+            SoundLoopModulationMode mode,
+            float growthRate,
+            float sineCycleDuration,
+            float previewDuration,
+            float previewTime,
+            bool isPreviewing,
+            float spacing)
+        {
+            float lowerBound = Mathf.Min(minValue, maxValue);
+            float upperBound = Mathf.Max(minValue, maxValue);
+            float clampedStart = Mathf.Clamp(startValue, lowerBound, upperBound);
+            float range = upperBound - lowerBound;
+            float rate = Mathf.Max(0f, growthRate);
+            float cycleDuration = Mathf.Max(0.01f, sineCycleDuration);
+            float timeToMax = rate > 0f ? (upperBound - clampedStart) / rate : 0f;
+            float graphDuration = previewDuration > 0f
+                ? previewDuration
+                : mode == SoundLoopModulationMode.SineWave
+                    ? cycleDuration
+                    : Mathf.Max(timeToMax * 1.25f, 1f);
+            Rect graphRect = new(
+                groupRect.x + 10f,
+                y,
+                groupRect.width - 20f,
+                LoopModulationGraphHeight);
+            GUI.Box(graphRect, GUIContent.none, EditorStyles.helpBox);
+            EditorGUI.LabelField(
+                new Rect(graphRect.x + 5f, graphRect.y + 2f, graphRect.width - 10f, 14f),
+                new GUIContent(
+                    mode == SoundLoopModulationMode.SineWave
+                        ? $"{label} Sine: {lowerBound:G3} -> {clampedStart:G3} -> {upperBound:G3}"
+                        : $"{label}: {lowerBound:G3} -> {clampedStart:G3} -> {upperBound:G3}",
+                    $"Minimum: {lowerBound:R}; Start: {clampedStart:R}; Maximum: {upperBound:R}"),
+                EditorStyles.miniBoldLabel);
+
+            Rect plotRect = new(
+                graphRect.x + 6f,
+                graphRect.y + 16f,
+                Mathf.Max(1f, graphRect.width - 12f),
+                graphRect.height - 30f);
+            EditorGUI.LabelField(
+                new Rect(plotRect.x, plotRect.yMax, 30f, 12f),
+                "0s",
+                EditorStyles.miniLabel);
+            EditorGUI.LabelField(
+                new Rect(plotRect.xMax - 40f, plotRect.yMax, 40f, 12f),
+                $"{graphDuration:G3}s",
+                EditorStyles.miniLabel);
+
+            Color previousColor = Handles.color;
+            Handles.BeginGUI();
+            Handles.color = EditorGUIUtility.isProSkin
+                ? new Color(0.65f, 0.65f, 0.65f, 0.7f)
+                : new Color(0.3f, 0.3f, 0.3f, 0.7f);
+            Handles.DrawAAPolyLine(
+                1f,
+                new Vector3(plotRect.xMin, plotRect.yMin, 0f),
+                new Vector3(plotRect.xMax, plotRect.yMin, 0f));
+            Handles.DrawAAPolyLine(
+                1f,
+                new Vector3(plotRect.xMin, plotRect.yMax, 0f),
+                new Vector3(plotRect.xMax, plotRect.yMax, 0f));
+            Handles.color = EditorGUIUtility.isProSkin
+                ? new Color(0.4f, 0.8f, 1f)
+                : new Color(0.1f, 0.35f, 0.8f);
+
+            Vector3[] points = new Vector3[24];
+            for (int i = 0; i < points.Length; i++)
+            {
+                float normalizedTime = i / (float)(points.Length - 1);
+                float time = normalizedTime * graphDuration;
+                float value = EvaluateModulationValue(
+                    mode,
+                    lowerBound,
+                    clampedStart,
+                    upperBound,
+                    rate,
+                    cycleDuration,
+                    time);
+                float normalizedValue = range > 0f ? Mathf.Clamp01((value - lowerBound) / range) : 0f;
+                points[i] = new Vector3(
+                    Mathf.Lerp(plotRect.xMin, plotRect.xMax, normalizedTime),
+                    Mathf.Lerp(plotRect.yMax, plotRect.yMin, normalizedValue),
+                    0f);
+            }
+            Handles.DrawAAPolyLine(2f, points);
+
+            if (isPreviewing)
+            {
+                float previewProgress = Mathf.Clamp01(previewTime / graphDuration);
+                float previewValue = EvaluateModulationValue(
+                    mode,
+                    lowerBound,
+                    clampedStart,
+                    upperBound,
+                    rate,
+                    cycleDuration,
+                    previewTime);
+                float normalizedValue = range > 0f
+                    ? Mathf.Clamp01((previewValue - lowerBound) / range)
+                    : 0f;
+                Vector3 previewPoint = new(
+                    Mathf.Lerp(plotRect.xMin, plotRect.xMax, previewProgress),
+                    Mathf.Lerp(plotRect.yMax, plotRect.yMin, normalizedValue),
+                    0f);
+                Handles.color = EditorGUIUtility.isProSkin
+                    ? new Color(1f, 0.75f, 0.25f)
+                    : new Color(0.85f, 0.35f, 0.05f);
+                Handles.DrawSolidDisc(previewPoint, Vector3.forward, 3f);
+            }
+
+            Handles.color = previousColor;
+            Handles.EndGUI();
+            y += LoopModulationGraphHeight + spacing;
+        }
+
+        private static float EvaluateModulationValue(
+            SoundLoopModulationMode mode,
+            float lowerBound,
+            float startValue,
+            float upperBound,
+            float growthRate,
+            float sineCycleDuration,
+            float elapsed)
+        {
+            if (mode == SoundLoopModulationMode.SineWave)
+            {
+                if (upperBound <= lowerBound)
+                    return lowerBound;
+
+                float startProgress = (startValue - lowerBound) / (upperBound - lowerBound);
+                float startPhase = Mathf.Asin(startProgress * 2f - 1f);
+                float phase = startPhase + (Mathf.PI * 2f * elapsed / sineCycleDuration);
+                float sineProgress = 0.5f + 0.5f * Mathf.Sin(phase);
+                return Mathf.Lerp(lowerBound, upperBound, sineProgress);
+            }
+
+            return Mathf.Min(upperBound, startValue + elapsed * growthRate);
+        }
+
         private void DrawLoopingEffectField(
             Rect position,
             ref float currentY,
@@ -823,6 +1196,22 @@ namespace Abb2kTools.AudioSystem.Editor
             GetPreviewSettings(property.FindPropertyRelative("endSound"), out var endSound, out float endVolume, out float endPitch);
             float enterTransitionDuration = property.FindPropertyRelative("enterTransitionDuration")?.floatValue ?? 0f;
             float exitTransitionDuration = property.FindPropertyRelative("exitTransitionDuration")?.floatValue ?? 0f;
+            bool modulateLoopVolume = property.FindPropertyRelative(ModulateLoopVolume)?.boolValue ?? false;
+            float minLoopVolumeMultiplier = property.FindPropertyRelative(MinLoopVolumeMultiplier)?.floatValue ?? 1f;
+            float startLoopVolumeMultiplier = property.FindPropertyRelative(StartLoopVolumeMultiplier)?.floatValue ?? 1f;
+            float maxLoopVolumeMultiplier = property.FindPropertyRelative(MaxLoopVolumeMultiplier)?.floatValue ?? 1f;
+            SoundLoopModulationMode loopVolumeMode =
+                (SoundLoopModulationMode)(property.FindPropertyRelative(LoopVolumeModulationMode)?.enumValueIndex ?? 0);
+            float loopVolumeGrowthRate = property.FindPropertyRelative(LoopVolumeGrowthRate)?.floatValue ?? 0.2f;
+            float loopVolumeSineCycleDuration = property.FindPropertyRelative(LoopVolumeSineCycleDuration)?.floatValue ?? 2f;
+            bool modulateLoopPitch = property.FindPropertyRelative(ModulateLoopPitch)?.boolValue ?? false;
+            float minLoopPitchMultiplier = property.FindPropertyRelative(MinLoopPitchMultiplier)?.floatValue ?? 1f;
+            float startLoopPitchMultiplier = property.FindPropertyRelative(StartLoopPitchMultiplier)?.floatValue ?? 1f;
+            float maxLoopPitchMultiplier = property.FindPropertyRelative(MaxLoopPitchMultiplier)?.floatValue ?? 1f;
+            SoundLoopModulationMode loopPitchMode =
+                (SoundLoopModulationMode)(property.FindPropertyRelative(LoopPitchModulationMode)?.enumValueIndex ?? 0);
+            float loopPitchGrowthRate = property.FindPropertyRelative(LoopPitchGrowthRate)?.floatValue ?? 0.2f;
+            float loopPitchSineCycleDuration = property.FindPropertyRelative(LoopPitchSineCycleDuration)?.floatValue ?? 2f;
 
             Transform targetTransform = null;
             if (use3DSettings && property.serializedObject.targetObject is Component targetComponent)
@@ -836,8 +1225,23 @@ namespace Abb2kTools.AudioSystem.Editor
                 duration,
                 enterTransitionDuration,
                 exitTransitionDuration,
+                modulateLoopVolume,
+                minLoopVolumeMultiplier,
+                startLoopVolumeMultiplier,
+                maxLoopVolumeMultiplier,
+                loopVolumeMode,
+                loopVolumeGrowthRate,
+                loopVolumeSineCycleDuration,
+                modulateLoopPitch,
+                minLoopPitchMultiplier,
+                startLoopPitchMultiplier,
+                maxLoopPitchMultiplier,
+                loopPitchMode,
+                loopPitchGrowthRate,
+                loopPitchSineCycleDuration,
                 targetTransform,
-                use3DSettings ? property : null);
+                use3DSettings ? property : null,
+                GetLoopingPreviewDurationKey(property));
         }
 
         private static void GetPreviewSettings(SerializedProperty soundBaseProperty, out SoundModificationBase sound, out float volume, out float pitch)

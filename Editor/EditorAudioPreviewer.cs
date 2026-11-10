@@ -14,6 +14,7 @@ namespace Abb2kTools.AudioSystem.Editor
         private static double _startTime;
         private static double _pauseTime;
         private static SoundModificationBase _currentTarget;
+        private static string _currentLoopingPreviewKey;
 
         // --- 3D Settings State ---
         private static bool _apply3D;
@@ -26,6 +27,7 @@ namespace Abb2kTools.AudioSystem.Editor
         public static bool IsPlaying => _previewGO != null && _pendingClips.Count > 0;
         public static bool IsPaused { get; private set; }
         public static SoundModificationBase CurrentTarget => _currentTarget;
+        public static string CurrentLoopingPreviewKey => _currentLoopingPreviewKey;
 
         // 1. Hook into Editor state changes to prevent leaks
         static EditorAudioPreviewer()
@@ -94,6 +96,20 @@ namespace Abb2kTools.AudioSystem.Editor
             public float FadeOutDuration;
             public float PhaseStartTime;
             public float PhaseEndTime;
+            public bool ModulateVolume;
+            public float MinVolumeMultiplier = 1f;
+            public float StartVolumeMultiplier = 1f;
+            public float MaxVolumeMultiplier = 1f;
+            public SoundLoopModulationMode VolumeMode;
+            public float VolumeGrowthRate;
+            public float VolumeSineCycleDuration = 2f;
+            public bool ModulatePitch;
+            public float MinPitchMultiplier = 1f;
+            public float StartPitchMultiplier = 1f;
+            public float MaxPitchMultiplier = 1f;
+            public SoundLoopModulationMode PitchMode;
+            public float PitchGrowthRate;
+            public float PitchSineCycleDuration = 2f;
         }
 
         public static void PlayPreview(SoundModificationBase soundBase, float volMult = 1f, float pitchMult = 1f, Transform sourceTransform = null, SerializedProperty soundProperty = null)
@@ -101,6 +117,7 @@ namespace Abb2kTools.AudioSystem.Editor
             StopPreview();
             if (soundBase == null) return;
 
+            _currentLoopingPreviewKey = null;
             _currentTarget = soundBase;
             
             _previewGO = EditorUtility.CreateGameObjectWithHideFlags("AudioPreview_Hidden", HideFlags.HideAndDontSave);
@@ -135,7 +152,21 @@ namespace Abb2kTools.AudioSystem.Editor
             float pitchMultiplier,
             float endTime,
             float fadeInDuration,
-            float fadeOutDuration)
+            float fadeOutDuration,
+            bool modulateVolume,
+            float minVolumeMultiplier,
+            float startVolumeMultiplier,
+            float maxVolumeMultiplier,
+            SoundLoopModulationMode volumeMode,
+            float volumeGrowthRate,
+            float volumeSineCycleDuration,
+            bool modulatePitch,
+            float minPitchMultiplier,
+            float startPitchMultiplier,
+            float maxPitchMultiplier,
+            SoundLoopModulationMode pitchMode,
+            float pitchGrowthRate,
+            float pitchSineCycleDuration)
         {
             if (sound == null || endTime <= 0f) return;
 
@@ -159,7 +190,21 @@ namespace Abb2kTools.AudioSystem.Editor
                     FadeInDuration = fadeInDuration,
                     FadeOutDuration = fadeOutDuration,
                     PhaseStartTime = 0f,
-                    PhaseEndTime = endTime
+                    PhaseEndTime = endTime,
+                    ModulateVolume = modulateVolume,
+                    MinVolumeMultiplier = minVolumeMultiplier,
+                    StartVolumeMultiplier = startVolumeMultiplier,
+                    MaxVolumeMultiplier = maxVolumeMultiplier,
+                    VolumeMode = volumeMode,
+                    VolumeGrowthRate = volumeGrowthRate,
+                    VolumeSineCycleDuration = volumeSineCycleDuration,
+                    ModulatePitch = modulatePitch,
+                    MinPitchMultiplier = minPitchMultiplier,
+                    StartPitchMultiplier = startPitchMultiplier,
+                    MaxPitchMultiplier = maxPitchMultiplier,
+                    PitchMode = pitchMode,
+                    PitchGrowthRate = pitchGrowthRate,
+                    PitchSineCycleDuration = pitchSineCycleDuration
                 });
                 return;
             }
@@ -167,8 +212,28 @@ namespace Abb2kTools.AudioSystem.Editor
             float loopingDuration = GetSequenceDuration(sound, pitchMultiplier);
             if (loopingDuration <= 0f) return;
 
+            int firstClipIndex = _pendingClips.Count;
             for (float loopStart = 0f; loopStart < endTime; loopStart += loopingDuration)
                 AppendPhase(sound, volumeMultiplier, pitchMultiplier, loopStart, endTime, 0f, endTime, fadeInDuration, fadeOutDuration);
+
+            for (int i = firstClipIndex; i < _pendingClips.Count; i++)
+            {
+                PreviewClip clip = _pendingClips[i];
+                clip.ModulateVolume = modulateVolume;
+                clip.MinVolumeMultiplier = minVolumeMultiplier;
+                clip.StartVolumeMultiplier = startVolumeMultiplier;
+                clip.MaxVolumeMultiplier = maxVolumeMultiplier;
+                clip.VolumeMode = volumeMode;
+                clip.VolumeGrowthRate = volumeGrowthRate;
+                clip.VolumeSineCycleDuration = volumeSineCycleDuration;
+                clip.ModulatePitch = modulatePitch;
+                clip.MinPitchMultiplier = minPitchMultiplier;
+                clip.StartPitchMultiplier = startPitchMultiplier;
+                clip.MaxPitchMultiplier = maxPitchMultiplier;
+                clip.PitchMode = pitchMode;
+                clip.PitchGrowthRate = pitchGrowthRate;
+                clip.PitchSineCycleDuration = pitchSineCycleDuration;
+            }
         }
 
         public static void PlayLoopingPreview(
@@ -177,13 +242,22 @@ namespace Abb2kTools.AudioSystem.Editor
             SoundModificationBase loopingSound, float loopingVolume, float loopingPitch,
             SoundModificationBase endSound, float endVolume, float endPitch,
             float loopDuration, float enterTransitionDuration, float exitTransitionDuration,
-            Transform sourceTransform = null, SerializedProperty soundProperty = null)
+            bool modulateLoopVolume,
+            float minLoopVolumeMultiplier, float startLoopVolumeMultiplier, float maxLoopVolumeMultiplier,
+            SoundLoopModulationMode loopVolumeMode,
+            float loopVolumeGrowthRate, float loopVolumeSineCycleDuration,
+            bool modulateLoopPitch,
+            float minLoopPitchMultiplier, float startLoopPitchMultiplier, float maxLoopPitchMultiplier,
+            SoundLoopModulationMode loopPitchMode,
+            float loopPitchGrowthRate, float loopPitchSineCycleDuration,
+            Transform sourceTransform = null, SerializedProperty soundProperty = null, string previewKey = null)
         {
             StopPreview();
 
             if (target == null) return;
 
             _currentTarget = null;
+            _currentLoopingPreviewKey = previewKey;
             _previewGO = EditorUtility.CreateGameObjectWithHideFlags("AudioPreview_Hidden", HideFlags.HideAndDontSave);
 
             if (sourceTransform != null && soundProperty != null)
@@ -203,7 +277,27 @@ namespace Abb2kTools.AudioSystem.Editor
 
             float endTime = Mathf.Max(0f, loopDuration);
             AppendPhase(startSound, startVolume, startPitch, 0f, endTime);
-            AppendLoopingPhase(loopingSound, loopingVolume, loopingPitch, endTime, enterTransitionDuration, exitTransitionDuration);
+            AppendLoopingPhase(
+                loopingSound,
+                loopingVolume,
+                loopingPitch,
+                endTime,
+                enterTransitionDuration,
+                exitTransitionDuration,
+                modulateLoopVolume,
+                minLoopVolumeMultiplier,
+                startLoopVolumeMultiplier,
+                maxLoopVolumeMultiplier,
+                loopVolumeMode,
+                loopVolumeGrowthRate,
+                loopVolumeSineCycleDuration,
+                modulateLoopPitch,
+                minLoopPitchMultiplier,
+                startLoopPitchMultiplier,
+                maxLoopPitchMultiplier,
+                loopPitchMode,
+                loopPitchGrowthRate,
+                loopPitchSineCycleDuration);
             AppendPhase(endSound, endVolume, endPitch, endTime, float.PositiveInfinity);
 
             if (_pendingClips.Count == 0)
@@ -337,8 +431,13 @@ namespace Abb2kTools.AudioSystem.Editor
 
                 if (pClip.Source != null)
                 {
-                    pClip.Source.volume = newClipData.Volume * pClip.VolMult;
-                    pClip.Source.pitch = newClipData.Pitch * pClip.PitchMult;
+                    pClip.Source.volume = newClipData.Volume *
+                        pClip.VolMult *
+                        GetPhaseVolumeMultiplier(pClip, currentTime) *
+                        GetLoopVolumeMultiplier(pClip, currentTime);
+                    pClip.Source.pitch = newClipData.Pitch *
+                        pClip.PitchMult *
+                        GetLoopPitchMultiplier(pClip, currentTime);
                     if (newClipData.PreferredMixerGroup != null)
                         pClip.Source.outputAudioMixerGroup = newClipData.PreferredMixerGroup;
                 }
@@ -397,8 +496,13 @@ namespace Abb2kTools.AudioSystem.Editor
 
                         pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
-                        pClip.Source.volume = pClip.Data.Volume * pClip.VolMult;
-                        pClip.Source.pitch = pClip.Data.Pitch * pClip.PitchMult;
+                        pClip.Source.volume = pClip.Data.Volume *
+                            pClip.VolMult *
+                            GetPhaseVolumeMultiplier(pClip, currentTime) *
+                            GetLoopVolumeMultiplier(pClip, currentTime);
+                        pClip.Source.pitch = pClip.Data.Pitch *
+                            pClip.PitchMult *
+                            GetLoopPitchMultiplier(pClip, currentTime);
                         pClip.Source.loop = pClip.Looping;
                         if (pClip.Data.PreferredMixerGroup != null) pClip.Source.outputAudioMixerGroup = pClip.Data.PreferredMixerGroup;
                     }
@@ -448,8 +552,13 @@ namespace Abb2kTools.AudioSystem.Editor
 
                         pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
-                        pClip.Source.volume = pClip.Data.Volume * pClip.VolMult * GetPhaseVolumeMultiplier(pClip, targetTime);
-                        pClip.Source.pitch = pClip.Data.Pitch * pClip.PitchMult;
+                        pClip.Source.volume = pClip.Data.Volume *
+                            pClip.VolMult *
+                            GetPhaseVolumeMultiplier(pClip, targetTime) *
+                            GetLoopVolumeMultiplier(pClip, targetTime);
+                        pClip.Source.pitch = pClip.Data.Pitch *
+                            pClip.PitchMult *
+                            GetLoopPitchMultiplier(pClip, targetTime);
                         pClip.Source.loop = pClip.Looping;
                         if (pClip.Data.PreferredMixerGroup != null) pClip.Source.outputAudioMixerGroup = pClip.Data.PreferredMixerGroup;
                     }
@@ -476,6 +585,7 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorApplication.update -= EditorUpdate;
             IsPaused = false;
             _apply3D = false;
+            _currentLoopingPreviewKey = null;
             
             if (_previewGO != null) 
             {
@@ -517,8 +627,13 @@ namespace Abb2kTools.AudioSystem.Editor
                         Apply3DSettings(pClip.Source);
 
                         pClip.Source.clip = pClip.Data.Clip;
-                        pClip.Source.volume = pClip.Data.Volume * pClip.VolMult * GetPhaseVolumeMultiplier(pClip, elapsed);
-                        pClip.Source.pitch = pClip.Data.Pitch * pClip.PitchMult;
+                        pClip.Source.volume = pClip.Data.Volume *
+                            pClip.VolMult *
+                            GetPhaseVolumeMultiplier(pClip, elapsed) *
+                            GetLoopVolumeMultiplier(pClip, elapsed);
+                        pClip.Source.pitch = pClip.Data.Pitch *
+                            pClip.PitchMult *
+                            GetLoopPitchMultiplier(pClip, elapsed);
                         pClip.Source.loop = pClip.Looping;
                         if (pClip.Data.PreferredMixerGroup != null) pClip.Source.outputAudioMixerGroup = pClip.Data.PreferredMixerGroup;
 
@@ -541,7 +656,13 @@ namespace Abb2kTools.AudioSystem.Editor
                 {
                     if (pClip.Source != null && pClip.Source.gameObject != null)
                     {
-                        pClip.Source.volume = pClip.Data.Volume * pClip.VolMult * GetPhaseVolumeMultiplier(pClip, elapsed);
+                        pClip.Source.volume = pClip.Data.Volume *
+                            pClip.VolMult *
+                            GetPhaseVolumeMultiplier(pClip, elapsed) *
+                            GetLoopVolumeMultiplier(pClip, elapsed);
+                        pClip.Source.pitch = pClip.Data.Pitch *
+                            pClip.PitchMult *
+                            GetLoopPitchMultiplier(pClip, elapsed);
                         if (EditorApplication.timeSinceStartup - pClip.StartPlayTime >= (pClip.Duration + tailDuration)) 
                         {
                             GameObject.DestroyImmediate(pClip.Source.gameObject);
@@ -566,6 +687,62 @@ namespace Abb2kTools.AudioSystem.Editor
                 ? Mathf.Clamp01((clip.PhaseEndTime - (float)elapsed) / clip.FadeOutDuration)
                 : 1f;
             return Mathf.Min(fadeIn, fadeOut);
+        }
+
+        private static float GetLoopVolumeMultiplier(PreviewClip clip, double elapsed)
+        {
+            return clip.ModulateVolume
+                ? GetLoopModulationValue(
+                    (float)elapsed,
+                    clip.MinVolumeMultiplier,
+                    clip.StartVolumeMultiplier,
+                    clip.MaxVolumeMultiplier,
+                    clip.VolumeMode,
+                    clip.VolumeGrowthRate,
+                    clip.VolumeSineCycleDuration)
+                : 1f;
+        }
+
+        private static float GetLoopPitchMultiplier(PreviewClip clip, double elapsed)
+        {
+            return clip.ModulatePitch
+                ? GetLoopModulationValue(
+                    (float)elapsed,
+                    clip.MinPitchMultiplier,
+                    clip.StartPitchMultiplier,
+                    clip.MaxPitchMultiplier,
+                    clip.PitchMode,
+                    clip.PitchGrowthRate,
+                    clip.PitchSineCycleDuration)
+                : 1f;
+        }
+
+        private static float GetLoopModulationValue(
+            float elapsed,
+            float minValue,
+            float startValue,
+            float maxValue,
+            SoundLoopModulationMode mode,
+            float growthRate,
+            float sineCycleDuration)
+        {
+            float lowerBound = Mathf.Min(minValue, maxValue);
+            float upperBound = Mathf.Max(minValue, maxValue);
+            float clampedStart = Mathf.Clamp(startValue, lowerBound, upperBound);
+            if (mode == SoundLoopModulationMode.SineWave)
+            {
+                if (upperBound <= lowerBound)
+                    return lowerBound;
+
+                float startProgress = (clampedStart - lowerBound) / (upperBound - lowerBound);
+                float startPhase = Mathf.Asin(startProgress * 2f - 1f);
+                float phase = startPhase +
+                    (Mathf.PI * 2f * (float)elapsed / Mathf.Max(0.01f, sineCycleDuration));
+                float sineProgress = 0.5f + 0.5f * Mathf.Sin(phase);
+                return Mathf.Lerp(lowerBound, upperBound, sineProgress);
+            }
+
+            return Mathf.Min(upperBound, clampedStart + elapsed * Mathf.Max(0f, growthRate));
         }
     }
 }
