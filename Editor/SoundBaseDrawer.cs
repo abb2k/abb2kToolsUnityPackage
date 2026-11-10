@@ -18,12 +18,24 @@ namespace Abb2kTools.AudioSystem.Editor
         private const string SpecificMixerGroup = "specificMixerGroup";
         private const string Volume = "volume";
         private const string Pitch = "pitch";
-        private const string VolumeRange = "volumeRange";
-        private const string PitchRange = "pitchRange";
         private const string Min = "min";
         private const string Max = "max";
+        private const string StartSound = "startSound";
+        private const string EndSound = "endSound";
+        private const string EnterTransitionDuration = "enterTransitionDuration";
+        private const string ExitTransitionDuration = "exitTransitionDuration";
         
         private static readonly Dictionary<string, float> _loopingPreviewDurations = new();
+
+        private sealed class LoopingInspectorProperties
+        {
+            public SerializedProperty LoopSound;
+            public SerializedProperty StartSound;
+            public SerializedProperty EndSound;
+            public readonly List<SerializedProperty> Transitions = new();
+            public readonly List<SerializedProperty> Settings = new();
+            public readonly List<SerializedProperty> ThreeDSettings = new();
+        }
 
         private readonly HashSet<string> _3dProperties = new() 
         { 
@@ -32,13 +44,14 @@ namespace Abb2kTools.AudioSystem.Editor
 
         private readonly HashSet<string> _persistentAndRandomizationProperties = new()
         {
-            "soundID", "loop", VolumeRange, PitchRange
+            "soundID", "loop"
         };
 
         private static readonly Dictionary<string, bool> _3dSettingsStates = new();
 
         static SoundBaseDrawer()
         {
+            EditorApplication.contextualPropertyMenu += AddRandomizationMenuItems;
             EditorApplication.update += () =>
             {
                 if (EditorAudioPreviewer.IsPlaying)
@@ -65,6 +78,9 @@ namespace Abb2kTools.AudioSystem.Editor
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
+            if (property.isExpanded && IsLoopingSound(property))
+                return GetLoopingInspectorHeight(property);
+
             float height = EditorGUIUtility.singleLineHeight;
 
             if (property.isExpanded)
@@ -109,7 +125,7 @@ namespace Abb2kTools.AudioSystem.Editor
                         continue;
                     }
 
-                    height += EditorGUI.GetPropertyHeight(iterator, true) + EditorGUIUtility.standardVerticalSpacing;
+                    height += GetSoundBaseFieldHeight(iterator) + EditorGUIUtility.standardVerticalSpacing;
 
                     if (iterator.name == Sound)
                     {
@@ -124,7 +140,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     float boxContentHeight = 0f;
                     foreach (var prop in persistentAndRandProps)
                     {
-                        boxContentHeight += EditorGUI.GetPropertyHeight(prop, true) + EditorGUIUtility.standardVerticalSpacing;
+                        boxContentHeight += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
                     }
                     float boxPadding = 8f; 
                     height += boxContentHeight + boxPadding + EditorGUIUtility.standardVerticalSpacing;
@@ -135,7 +151,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     float boxContentHeight = 0f;
                     foreach (var prop in optionsProps)
                     {
-                        boxContentHeight += EditorGUI.GetPropertyHeight(prop, true) + EditorGUIUtility.standardVerticalSpacing;
+                        boxContentHeight += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
                     }
                     float boxHeaderHeight = 22f;
                     height += boxHeaderHeight + boxContentHeight + 8f + EditorGUIUtility.standardVerticalSpacing;
@@ -148,7 +164,7 @@ namespace Abb2kTools.AudioSystem.Editor
                 {
                     foreach (var prop3D in threeDProps)
                     {
-                        height += EditorGUI.GetPropertyHeight(prop3D, true) + EditorGUIUtility.standardVerticalSpacing;
+                        height += GetSoundBaseFieldHeight(prop3D) + EditorGUIUtility.standardVerticalSpacing;
                     }
                     height += 5f; 
                 }
@@ -168,7 +184,7 @@ namespace Abb2kTools.AudioSystem.Editor
             else
                 displayLabel.text = $"{label.text}";
 
-            if (typeName.Contains(SFXTypeName))
+            if (typeName.Contains(SFXTypeName) || IsLoopingSound(property))
             {
                 displayLabel.image = EditorGUIUtility.IconContent(SFXIcon).image;
             }
@@ -248,6 +264,13 @@ namespace Abb2kTools.AudioSystem.Editor
 
             float currentY = position.y + EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
 
+            if (property.isExpanded && IsLoopingSound(property))
+            {
+                DrawLoopingInspector(position, property, currentY);
+                EditorGUI.EndProperty();
+                return;
+            }
+
             if (property.isExpanded)
             {
                 EditorGUI.indentLevel++;
@@ -299,12 +322,12 @@ namespace Abb2kTools.AudioSystem.Editor
                         continue;
                     }
 
-                    float propHeight = EditorGUI.GetPropertyHeight(iterator, true);
+                    float propHeight = GetSoundBaseFieldHeight(iterator);
                     Rect rect = new(position.x, currentY, position.width, propHeight);
                     if (iterator.name == Sound && IsLoopingSound(property))
                         EditorGUI.PropertyField(rect, iterator, new GUIContent("Looping Sound"), true);
                     else
-                        EditorGUI.PropertyField(rect, iterator, true);
+                        DrawSoundBaseField(rect, property, iterator);
                     currentY += propHeight + EditorGUIUtility.standardVerticalSpacing;
 
                     if (iterator.name == Sound)
@@ -362,7 +385,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     float boxContentHeight = 0f;
                     foreach (var prop in persistentAndRandProps)
                     {
-                        boxContentHeight += EditorGUI.GetPropertyHeight(prop, true) + EditorGUIUtility.standardVerticalSpacing;
+                        boxContentHeight += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
                     }
                     float boxHeight = boxContentHeight + 4f;
                     Rect boxRect = new(position.x, currentY, position.width, boxHeight);
@@ -371,7 +394,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     float innerY = boxRect.y + 4f;
                     foreach (var prop in persistentAndRandProps)
                     {
-                        float propHeight = EditorGUI.GetPropertyHeight(prop, true);
+                        float propHeight = GetSoundBaseFieldHeight(prop);
                         Rect propRect = new(boxRect.x + 6, innerY, boxRect.width - 12, propHeight);
 
                         if (prop.name.Equals("soundID") && prop.propertyType == SerializedPropertyType.String)
@@ -395,7 +418,7 @@ namespace Abb2kTools.AudioSystem.Editor
                             }
                         }
 
-                        EditorGUI.PropertyField(propRect, prop, true);
+                        DrawSoundBaseField(propRect, property, prop);
 
                         innerY += propHeight + EditorGUIUtility.standardVerticalSpacing;
                     }
@@ -408,7 +431,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     float boxContentHeight = 0f;
                     foreach (var prop in optionsProps)
                     {
-                        boxContentHeight += EditorGUI.GetPropertyHeight(prop, true) + EditorGUIUtility.standardVerticalSpacing;
+                        boxContentHeight += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
                     }
                     float boxHeight = 22f + boxContentHeight + 6f;
                     Rect boxRect = new(position.x, currentY, position.width, boxHeight);
@@ -420,7 +443,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     float innerY = boxRect.y + 22f;
                     foreach (var prop in optionsProps)
                     {
-                        float propHeight = EditorGUI.GetPropertyHeight(prop, true);
+                        float propHeight = GetSoundBaseFieldHeight(prop);
                         Rect propRect = new(boxRect.x + 10, innerY, boxRect.width - 20, propHeight);
 
                         bool disableField = 
@@ -432,7 +455,7 @@ namespace Abb2kTools.AudioSystem.Editor
                         if (disableField)
                             EditorGUI.BeginDisabledGroup(true);
                         
-                        EditorGUI.PropertyField(propRect, prop, true);
+                        DrawSoundBaseField(propRect, property, prop);
                     
                         if (disableField)
                             EditorGUI.EndDisabledGroup();
@@ -450,7 +473,7 @@ namespace Abb2kTools.AudioSystem.Editor
                 {
                     foreach (var prop3D in threeDProps)
                     {
-                        contentHeight += EditorGUI.GetPropertyHeight(prop3D, true) + EditorGUIUtility.standardVerticalSpacing;
+                        contentHeight += GetSoundBaseFieldHeight(prop3D) + EditorGUIUtility.standardVerticalSpacing;
                     }
                 }
 
@@ -475,9 +498,9 @@ namespace Abb2kTools.AudioSystem.Editor
                     EditorGUI.indentLevel++;
                     foreach (var prop3D in threeDProps)
                     {
-                        float propHeight = EditorGUI.GetPropertyHeight(prop3D, true);
+                        float propHeight = GetSoundBaseFieldHeight(prop3D);
                         Rect rect = new(position.x + 15, currentY, position.width - 25, propHeight);
-                        EditorGUI.PropertyField(rect, prop3D, true);
+                        DrawSoundBaseField(rect, property, prop3D);
                         currentY += propHeight + EditorGUIUtility.standardVerticalSpacing;
                     }
                     EditorGUI.indentLevel--;
@@ -487,6 +510,219 @@ namespace Abb2kTools.AudioSystem.Editor
             }
 
             EditorGUI.EndProperty();
+        }
+
+        private LoopingInspectorProperties CollectLoopingInspectorProperties(SerializedProperty property)
+        {
+            LoopingInspectorProperties result = new();
+            SerializedProperty iterator = property.Copy();
+            SerializedProperty endProperty = iterator.GetEndProperty();
+            bool enterChildren = true;
+
+            while (iterator.NextVisible(enterChildren))
+            {
+                if (SerializedProperty.EqualContents(iterator, endProperty)) break;
+                enterChildren = false;
+
+                SerializedProperty child = iterator.Copy();
+                switch (child.name)
+                {
+                    case Sound:
+                        result.LoopSound = child;
+                        break;
+                    case StartSound:
+                        result.StartSound = child;
+                        break;
+                    case EndSound:
+                        result.EndSound = child;
+                        break;
+                    case EnterTransitionDuration:
+                    case ExitTransitionDuration:
+                        result.Transitions.Add(child);
+                        break;
+                    default:
+                        if (_3dProperties.Contains(child.name))
+                            result.ThreeDSettings.Add(child);
+                        else
+                            result.Settings.Add(child);
+                        break;
+                }
+            }
+
+            return result;
+        }
+
+        private float GetLoopingInspectorHeight(SerializedProperty property)
+        {
+            LoopingInspectorProperties properties = CollectLoopingInspectorProperties(property);
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+            float height = EditorGUIUtility.singleLineHeight + spacing;
+            height += GetSoundBaseFieldHeight(properties.LoopSound) + spacing;
+            height += GetLoopingPropertyGroupHeight(properties.Transitions, property) + spacing;
+            height += GetLoopingSettingsGroupHeight(properties, property) + spacing;
+            height += EditorGUIUtility.singleLineHeight + spacing;
+            height += EditorGUIUtility.singleLineHeight * 1.5f + spacing;
+            height += GetSoundBaseFieldHeight(properties.StartSound) + spacing;
+            height += GetSoundBaseFieldHeight(properties.EndSound) + spacing;
+            return height + spacing;
+        }
+
+        private float GetLoopingPropertyGroupHeight(List<SerializedProperty> properties, SerializedProperty soundBaseProperty)
+        {
+            float height = 22f + 8f;
+            foreach (SerializedProperty prop in properties)
+                height += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
+
+            return height;
+        }
+
+        private float GetLoopingSettingsGroupHeight(LoopingInspectorProperties properties, SerializedProperty soundBaseProperty)
+        {
+            float height = 22f + 8f + 20f + EditorGUIUtility.standardVerticalSpacing;
+            foreach (SerializedProperty prop in properties.Settings)
+                height += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
+
+            if (GetFoldoutState(soundBaseProperty, _3dSettingsStates))
+            {
+                height += 5f;
+                foreach (SerializedProperty prop in properties.ThreeDSettings)
+                    height += GetSoundBaseFieldHeight(prop) + EditorGUIUtility.standardVerticalSpacing;
+            }
+
+            return height;
+        }
+
+        private void DrawLoopingInspector(Rect position, SerializedProperty property, float currentY)
+        {
+            LoopingInspectorProperties properties = CollectLoopingInspectorProperties(property);
+            float spacing = EditorGUIUtility.standardVerticalSpacing;
+            EditorGUI.indentLevel++;
+
+            if (properties.LoopSound != null)
+            {
+                float height = GetSoundBaseFieldHeight(properties.LoopSound);
+                Rect rect = new(position.x, currentY, position.width, height);
+                EditorGUI.PropertyField(rect, properties.LoopSound, new GUIContent("Loop Sound"), true);
+                currentY += height + spacing;
+            }
+
+            float transitionHeight = GetLoopingPropertyGroupHeight(properties.Transitions, property);
+            Rect transitionRect = new(position.x, currentY, position.width, transitionHeight);
+            GUI.Box(transitionRect, GUIContent.none, EditorStyles.helpBox);
+            EditorGUI.LabelField(
+                new Rect(transitionRect.x + 6f, transitionRect.y + 4f, transitionRect.width - 12f, 18f),
+                "Loop Transitions",
+                EditorStyles.boldLabel);
+            float transitionY = transitionRect.y + 22f;
+            foreach (SerializedProperty prop in properties.Transitions)
+            {
+                float height = GetSoundBaseFieldHeight(prop);
+                Rect rect = new(transitionRect.x + 10f, transitionY, transitionRect.width - 20f, height);
+                EditorGUI.PropertyField(rect, prop, true);
+                transitionY += height + spacing;
+            }
+            currentY += transitionHeight + spacing;
+
+            float settingsHeight = GetLoopingSettingsGroupHeight(properties, property);
+            Rect settingsRect = new(position.x, currentY, position.width, settingsHeight);
+            GUI.Box(settingsRect, GUIContent.none, EditorStyles.helpBox);
+            EditorGUI.LabelField(
+                new Rect(settingsRect.x + 6f, settingsRect.y + 4f, settingsRect.width - 12f, 18f),
+                "Looping Sound Settings",
+                EditorStyles.boldLabel);
+            float settingsY = settingsRect.y + 22f;
+            foreach (SerializedProperty prop in properties.Settings)
+            {
+                float height = GetSoundBaseFieldHeight(prop);
+                Rect rect = new(settingsRect.x + 10f, settingsY, settingsRect.width - 20f, height);
+                DrawSoundBaseField(rect, property, prop);
+                settingsY += height + spacing;
+            }
+
+            float threeDHeight = 20f;
+            bool showThreeDSettings = GetFoldoutState(property, _3dSettingsStates);
+            if (showThreeDSettings)
+            {
+                threeDHeight += 5f;
+                foreach (SerializedProperty prop in properties.ThreeDSettings)
+                    threeDHeight += GetSoundBaseFieldHeight(prop) + spacing;
+            }
+            Rect threeDRect = new(settingsRect.x + 6f, settingsY, settingsRect.width - 12f, threeDHeight);
+            GUI.Box(threeDRect, GUIContent.none, EditorStyles.helpBox);
+            bool newShowThreeDSettings = EditorGUI.Foldout(
+                new Rect(threeDRect.x + 5f, threeDRect.y + 2f, threeDRect.width - 10f, 18f),
+                showThreeDSettings,
+                "3D Sound Settings",
+                true,
+                EditorStyles.foldout);
+            if (newShowThreeDSettings != showThreeDSettings)
+                SetFoldoutState(property, _3dSettingsStates, newShowThreeDSettings);
+
+            if (newShowThreeDSettings)
+            {
+                float threeDY = threeDRect.y + 20f;
+                foreach (SerializedProperty prop in properties.ThreeDSettings)
+                {
+                    float height = GetSoundBaseFieldHeight(prop);
+                    Rect rect = new(threeDRect.x + 10f, threeDY, threeDRect.width - 20f, height);
+                    DrawSoundBaseField(rect, property, prop);
+                    threeDY += height + spacing;
+                }
+            }
+            currentY += settingsHeight + spacing;
+
+            Rect durationRect = new(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight);
+            EditorGUI.BeginChangeCheck();
+            float duration = EditorGUI.FloatField(
+                durationRect,
+                "Preview Duration (seconds)",
+                GetLoopingPreviewDuration(property));
+            if (EditorGUI.EndChangeCheck())
+                SetLoopingPreviewDuration(property, Mathf.Max(0f, duration));
+            currentY += EditorGUIUtility.singleLineHeight + spacing;
+
+            float controlsHeight = EditorGUIUtility.singleLineHeight * 1.5f;
+            Rect controlsRect = EditorGUI.IndentedRect(new Rect(position.x, currentY, position.width, controlsHeight));
+            if (properties.LoopSound != null && properties.LoopSound.objectReferenceValue != null)
+            {
+                Rect playRect = new(controlsRect.x, controlsRect.y, controlsRect.width - 80f, controlsRect.height);
+                Rect stopRect = new(controlsRect.xMax - 75f, controlsRect.y, 75f, controlsRect.height);
+
+                GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
+                if (GUI.Button(playRect, new GUIContent("▶ Preview Audio Settings")))
+                    TriggerPreview(property, Event.current.shift);
+
+                GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
+                if (GUI.Button(stopRect, "■ Stop"))
+                    EditorAudioPreviewer.StopPreview();
+                GUI.backgroundColor = Color.white;
+            }
+            else
+            {
+                EditorGUI.BeginDisabledGroup(true);
+                GUI.Button(controlsRect, "Assign a Sound to Preview");
+                EditorGUI.EndDisabledGroup();
+            }
+            currentY += controlsHeight + spacing;
+
+            DrawLoopingEffectField(position, ref currentY, properties.StartSound, "Start Sound", spacing);
+            DrawLoopingEffectField(position, ref currentY, properties.EndSound, "End Sound", spacing);
+            EditorGUI.indentLevel--;
+        }
+
+        private void DrawLoopingEffectField(
+            Rect position,
+            ref float currentY,
+            SerializedProperty effect,
+            string label,
+            float spacing)
+        {
+            if (effect == null) return;
+
+            float height = GetSoundBaseFieldHeight(effect);
+            Rect rect = new(position.x, currentY, position.width, height);
+            EditorGUI.PropertyField(rect, effect, new GUIContent(label), true);
+            currentY += height + spacing;
         }
 
         private void TriggerPreview(SerializedProperty property, bool use3DSettings = false)
@@ -506,20 +742,8 @@ namespace Abb2kTools.AudioSystem.Editor
             float baseVol = property.FindPropertyRelative(Volume)?.floatValue ?? 1f;
             float basePitch = property.FindPropertyRelative(Pitch)?.floatValue ?? 1f;
 
-            var volRangeProp = property.FindPropertyRelative(VolumeRange);
-            var pitchRangeProp = property.FindPropertyRelative(PitchRange);
-
-            if (volRangeProp != null && pitchRangeProp != null)
-            {
-                float vMin = volRangeProp.FindPropertyRelative(Min).floatValue;
-                float vMax = volRangeProp.FindPropertyRelative(Max).floatValue;
-                
-                float pMin = pitchRangeProp.FindPropertyRelative(Min).floatValue;
-                float pMax = pitchRangeProp.FindPropertyRelative(Max).floatValue;
-                
-                baseVol *= Random.Range(vMin, vMax);
-                basePitch *= Random.Range(pMin, pMax);
-            }
+            baseVol = GetPreviewParameter(property, Volume, baseVol);
+            basePitch = GetPreviewParameter(property, Pitch, basePitch);
 
             Transform targetTransform = null;
             
@@ -570,17 +794,162 @@ namespace Abb2kTools.AudioSystem.Editor
             volume = soundBaseProperty.FindPropertyRelative(Volume)?.floatValue ?? 1f;
             pitch = soundBaseProperty.FindPropertyRelative(Pitch)?.floatValue ?? 1f;
 
-            var volumeRange = soundBaseProperty.FindPropertyRelative(VolumeRange);
-            var pitchRange = soundBaseProperty.FindPropertyRelative(PitchRange);
-            if (volumeRange != null && pitchRange != null)
+            volume = GetPreviewParameter(soundBaseProperty, Volume, volume);
+            pitch = GetPreviewParameter(soundBaseProperty, Pitch, pitch);
+        }
+
+        private static float GetPreviewParameter(SerializedProperty soundBaseProperty, string parameterName, float constantValue)
+        {
+            SerializedProperty randomization = soundBaseProperty.FindPropertyRelative($"{parameterName}Randomization");
+            if (randomization == null) return constantValue;
+
+            SerializedProperty mode = randomization.FindPropertyRelative("mode");
+            if (mode == null || mode.enumValueIndex != (int)SoundParameterMode.RandomBetween)
+                return constantValue;
+
+            return Random.Range(
+                randomization.FindPropertyRelative(Min).floatValue,
+                randomization.FindPropertyRelative(Max).floatValue);
+        }
+
+        private static void DrawSoundBaseField(Rect rect, SerializedProperty soundBaseProperty, SerializedProperty field)
+        {
+            if (!IsRandomizableField(field.name))
             {
-                float volumeMin = volumeRange.FindPropertyRelative(Min).floatValue;
-                float volumeMax = volumeRange.FindPropertyRelative(Max).floatValue;
-                float pitchMin = pitchRange.FindPropertyRelative(Min).floatValue;
-                float pitchMax = pitchRange.FindPropertyRelative(Max).floatValue;
-                volume *= Random.Range(volumeMin, volumeMax);
-                pitch *= Random.Range(pitchMin, pitchMax);
+                EditorGUI.PropertyField(rect, field, true);
+                return;
             }
+
+            SerializedProperty randomization = soundBaseProperty.FindPropertyRelative($"{field.name}Randomization");
+            if (randomization == null)
+            {
+                EditorGUI.PropertyField(rect, field, true);
+                return;
+            }
+
+            SerializedProperty mode = randomization.FindPropertyRelative("mode");
+            if (mode.enumValueIndex == (int)SoundParameterMode.Constant)
+            {
+                EditorGUI.PropertyField(rect, field, true);
+            }
+            else
+            {
+                int previousIndentLevel = EditorGUI.indentLevel;
+                Rect contentRect = EditorGUI.IndentedRect(rect);
+                EditorGUI.indentLevel = 0;
+                try
+                {
+                    float propertyLabelWidth = Mathf.Min(EditorGUIUtility.labelWidth, contentRect.width * 0.4f);
+                    Rect propertyLabelRect = new(
+                        contentRect.x,
+                        contentRect.y,
+                        propertyLabelWidth,
+                        contentRect.height);
+                    Rect valuesRect = new(
+                        propertyLabelRect.xMax,
+                        contentRect.y,
+                        contentRect.width - propertyLabelWidth,
+                        contentRect.height);
+                    const float rangeLabelWidth = 30f;
+                    const float gap = 6f;
+                    float inputWidth = (valuesRect.width - (rangeLabelWidth * 2f) - gap) * 0.5f;
+                    Rect minLabelRect = new(valuesRect.x, valuesRect.y, rangeLabelWidth, valuesRect.height);
+                    Rect minRect = new(valuesRect.x + rangeLabelWidth, valuesRect.y, inputWidth, valuesRect.height);
+                    Rect maxLabelRect = new(minRect.xMax + gap, valuesRect.y, rangeLabelWidth, valuesRect.height);
+                    Rect maxRect = new(maxLabelRect.xMax, valuesRect.y, inputWidth, valuesRect.height);
+
+                    SerializedProperty min = randomization.FindPropertyRelative(Min);
+                    SerializedProperty max = randomization.FindPropertyRelative(Max);
+                    EditorGUI.BeginProperty(propertyLabelRect, GUIContent.none, field);
+                    EditorGUI.LabelField(propertyLabelRect, field.displayName);
+                    EditorGUI.EndProperty();
+                    EditorGUI.LabelField(minLabelRect, "Min", EditorStyles.miniLabel);
+                    EditorGUI.LabelField(maxLabelRect, "Max", EditorStyles.miniLabel);
+                    EditorGUI.BeginProperty(minRect, GUIContent.none, min);
+                    min.floatValue = EditorGUI.FloatField(minRect, min.floatValue);
+                    EditorGUI.EndProperty();
+                    EditorGUI.BeginProperty(maxRect, GUIContent.none, max);
+                    max.floatValue = EditorGUI.FloatField(maxRect, max.floatValue);
+                    EditorGUI.EndProperty();
+                }
+                finally
+                {
+                    EditorGUI.indentLevel = previousIndentLevel;
+                }
+            }
+        }
+
+        private static void AddRandomizationMenuItems(GenericMenu menu, SerializedProperty property)
+        {
+            if (property == null) return;
+
+            string propertyPath = property.propertyPath;
+            const string randomizationSuffix = "Randomization";
+            int randomizationIndex = propertyPath.IndexOf(randomizationSuffix, System.StringComparison.Ordinal);
+            string parameterPath;
+            string randomizationPath;
+            if (randomizationIndex >= 0)
+            {
+                int randomizationPathEnd = randomizationIndex + randomizationSuffix.Length;
+                randomizationPath = propertyPath.Substring(0, randomizationPathEnd);
+                parameterPath = propertyPath.Substring(0, randomizationIndex);
+                parameterPath = parameterPath.TrimEnd('.');
+            }
+            else
+            {
+                parameterPath = propertyPath;
+                randomizationPath = parameterPath + "Randomization";
+            }
+
+            int parameterPathStart = parameterPath.LastIndexOf('.');
+            string parameterName = parameterPathStart < 0
+                ? parameterPath
+                : parameterPath.Substring(parameterPathStart + 1);
+            if (!IsRandomizableField(parameterName)) return;
+
+            SerializedProperty randomization = property.serializedObject.FindProperty(randomizationPath);
+            SerializedProperty mode = randomization?.FindPropertyRelative("mode");
+            if (mode == null) return;
+
+            SerializedObject serializedObject = property.serializedObject;
+            string modePath = mode.propertyPath;
+            menu.AddItem(new GUIContent("Constant"), mode.enumValueIndex == (int)SoundParameterMode.Constant, () =>
+            {
+                SetRandomizationMode(serializedObject, modePath, SoundParameterMode.Constant);
+            });
+            menu.AddItem(new GUIContent("Random Between Min and Max"), mode.enumValueIndex == (int)SoundParameterMode.RandomBetween, () =>
+            {
+                SetRandomizationMode(serializedObject, modePath, SoundParameterMode.RandomBetween);
+            });
+        }
+
+        private static void SetRandomizationMode(SerializedObject serializedObject, string modePath, SoundParameterMode value)
+        {
+            serializedObject.Update();
+            SerializedProperty mode = serializedObject.FindProperty(modePath);
+            if (mode == null) return;
+
+            mode.enumValueIndex = (int)value;
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private static float GetSoundBaseFieldHeight(SerializedProperty field)
+        {
+            return EditorGUI.GetPropertyHeight(field, true);
+        }
+
+        private static bool IsRandomizableField(string fieldName)
+        {
+            return fieldName == Volume ||
+                   fieldName == Pitch ||
+                   fieldName == "panStereo" ||
+                   fieldName == "spatialBlend" ||
+                   fieldName == "reverbZoneMix" ||
+                   fieldName == Prio ||
+                   fieldName == "dopplerLevel" ||
+                   fieldName == "spread" ||
+                   fieldName == "minDist" ||
+                   fieldName == "maxDist";
         }
 
         private static bool IsLoopingSound(SerializedProperty property)

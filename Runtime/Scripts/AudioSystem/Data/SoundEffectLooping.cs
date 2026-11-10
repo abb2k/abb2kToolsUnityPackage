@@ -10,12 +10,6 @@ namespace Abb2kTools.AudioSystem
         public SoundEffectOneShot startSound;
         public SoundEffectOneShot endSound;
 
-        [Header("SFX Randomization Modifiers")]
-        [Tooltip("Multiplies against the base volume.")]
-        public Ranged volumeRange = new(0.9f, 1.1f);
-        [Tooltip("Multiplies against the base pitch.")]
-        public Ranged pitchRange = new(0.9f, 1.1f);
-
         [Header("Loop Transitions")]
         [Min(0f)]
         public float enterTransitionDuration = 0.15f;

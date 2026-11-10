@@ -34,6 +34,7 @@ namespace Abb2kTools.AudioSystem
             settings.sound.CollectPlayableClips(clipsToPlay);
             if (clipsToPlay.Count == 0) return null;
 
+            SoundBasePlaybackSettings playbackSettings = settings.SamplePlaybackSettings();
             bool useNativeLoop = loop &&
                 settings is SoundEffectLooping &&
                 settings.sound is not SoundCoding &&
@@ -48,47 +49,11 @@ namespace Abb2kTools.AudioSystem
                 SequenceLoop = loop && !useNativeLoop
             };
 
-            Ranged volumeRange = default;
-            Ranged pitchRange = default;
-            bool hasRandomization = false;
-
-            if (settings is SoundEffect sfxSettings)
-            {
-                volumeRange = sfxSettings.volumeRange;
-                pitchRange = sfxSettings.pitchRange;
-                hasRandomization = true;
-            }
-            else if (settings is SoundEffectOneShot oneShotSettings)
-            {
-                volumeRange = oneShotSettings.volumeRange;
-                pitchRange = oneShotSettings.pitchRange;
-                hasRandomization = true;
-            }
-            else if (settings is SoundEffectLooping loopingSettings)
-            {
-                volumeRange = loopingSettings.volumeRange;
-                pitchRange = loopingSettings.pitchRange;
-                hasRandomization = true;
-            }
-
-            float randVol = hasRandomization ? volumeRange.Random() : 1f;
-            float randPitch = hasRandomization ? pitchRange.Random() : 1f;
-
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
-                settings.ApplyBaseSettings(source, clipData, useNativeLoop, randVol, randPitch);
-                handle.AddSource(source, clipData, settings.volume * randVol, settings.pitch * randPitch);
-            }
-
-            if (loop && hasRandomization)
-            {
-                handle.OnLoopRestart += () =>
-                {
-                    float newRandVol = volumeRange.Random();
-                    float newRandPitch = pitchRange.Random();
-                    handle.UpdateRandomModifiers(settings.volume * newRandVol, settings.pitch * newRandPitch);
-                };
+                settings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f, playbackSettings);
+                handle.AddSource(source, clipData, playbackSettings.volume, playbackSettings.pitch);
             }
 
             if (settings.sound is SoundCoding coding)
@@ -113,6 +78,7 @@ namespace Abb2kTools.AudioSystem
             soundSettings.sound.CollectPlayableClips(clipsToPlay);
             if (clipsToPlay.Count == 0) return null;
 
+            SoundBasePlaybackSettings playbackSettings = soundSettings.SamplePlaybackSettings();
             bool hasOffsets = clipsToPlay.Count > 0 && (clipsToPlay[0].StartOffset > 0f || clipsToPlay[0].EndOffset > 0f);
             
             bool useNativeLoop = soundSettings.loop && clipsToPlay.Count == 1 && clipsToPlay[0].Delay <= 0f && !hasOffsets;
@@ -128,8 +94,8 @@ namespace Abb2kTools.AudioSystem
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
-                soundSettings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f);
-                handle.AddSource(source, clipData, soundSettings.volume, soundSettings.pitch);
+                soundSettings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f, playbackSettings);
+                handle.AddSource(source, clipData, playbackSettings.volume, playbackSettings.pitch);
             }
 
             if (soundSettings.sound is SoundCoding coding)
