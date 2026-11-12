@@ -431,10 +431,10 @@ namespace Abb2kTools.AudioSystem.Editor
 
                 if (pClip.Source != null)
                 {
-                    pClip.Source.volume = newClipData.Volume *
+                    AudioSourceGain.SetVolume(pClip.Source, newClipData.Volume *
                         pClip.VolMult *
                         GetPhaseVolumeMultiplier(pClip, currentTime) *
-                        GetLoopVolumeMultiplier(pClip, currentTime);
+                        GetLoopVolumeMultiplier(pClip, currentTime));
                     pClip.Source.pitch = newClipData.Pitch *
                         pClip.PitchMult *
                         GetLoopPitchMultiplier(pClip, currentTime);
@@ -496,10 +496,10 @@ namespace Abb2kTools.AudioSystem.Editor
 
                         pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
-                        pClip.Source.volume = pClip.Data.Volume *
+                        AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, currentTime) *
-                            GetLoopVolumeMultiplier(pClip, currentTime);
+                            GetLoopVolumeMultiplier(pClip, currentTime));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, currentTime);
@@ -552,10 +552,10 @@ namespace Abb2kTools.AudioSystem.Editor
 
                         pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
-                        pClip.Source.volume = pClip.Data.Volume *
+                        AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, targetTime) *
-                            GetLoopVolumeMultiplier(pClip, targetTime);
+                            GetLoopVolumeMultiplier(pClip, targetTime));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, targetTime);
@@ -627,10 +627,10 @@ namespace Abb2kTools.AudioSystem.Editor
                         Apply3DSettings(pClip.Source);
 
                         pClip.Source.clip = pClip.Data.Clip;
-                        pClip.Source.volume = pClip.Data.Volume *
+                        AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, elapsed) *
-                            GetLoopVolumeMultiplier(pClip, elapsed);
+                            GetLoopVolumeMultiplier(pClip, elapsed));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, elapsed);
@@ -656,10 +656,10 @@ namespace Abb2kTools.AudioSystem.Editor
                 {
                     if (pClip.Source != null && pClip.Source.gameObject != null)
                     {
-                        pClip.Source.volume = pClip.Data.Volume *
+                        AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, elapsed) *
-                            GetLoopVolumeMultiplier(pClip, elapsed);
+                            GetLoopVolumeMultiplier(pClip, elapsed));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, elapsed);

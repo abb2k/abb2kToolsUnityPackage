@@ -313,9 +313,11 @@ namespace Abb2kTools.AudioSystem
         {
             if (source.Source == null) return;
 
-            source.Source.volume = source.BaseVolume *
-                                   _currentVolumeMultiplier *
-                                   GetParameterValue(source, SoundParameterTarget.VolumeMultiplier, 1f);
+            AudioSourceGain.SetVolume(
+                source.Source,
+                source.BaseVolume *
+                _currentVolumeMultiplier *
+                GetParameterValue(source, SoundParameterTarget.VolumeMultiplier, 1f));
             source.Source.pitch = GetPlaybackPitch(source);
             source.Source.panStereo = GetParameterValue(source, SoundParameterTarget.PanStereo, source.BaseSettings.panStereo);
             source.Source.spatialBlend = GetParameterValue(source, SoundParameterTarget.SpatialBlend, source.BaseSettings.spatialBlend);
@@ -546,7 +548,9 @@ namespace Abb2kTools.AudioSystem
             if (!IsPaused) _secondaryCodingSource.Play();
 
             float timer = 0f;
-            float startVol = primary.Source.volume;
+            float startVol = primary.BaseVolume *
+                             _currentVolumeMultiplier *
+                             GetParameterValue(primary, SoundParameterTarget.VolumeMultiplier);
             float targetVol = primary.BaseVolume *
                               _currentVolumeMultiplier *
                               GetParameterValue(primary, SoundParameterTarget.VolumeMultiplier);
@@ -559,16 +563,16 @@ namespace Abb2kTools.AudioSystem
                 float tOut = Mathf.Clamp01(timer / Mathf.Max(0.001f, fadeOutDur));
                 float tIn = Mathf.Clamp01(timer / Mathf.Max(0.001f, fadeInDur));
 
-                primary.Source.volume = startVol * Mathf.Cos(tOut * Mathf.PI / 2f);
-                _secondaryCodingSource.volume = targetVol * Mathf.Sin(tIn * Mathf.PI / 2f);
+                AudioSourceGain.SetVolume(primary.Source, startVol * Mathf.Cos(tOut * Mathf.PI / 2f));
+                AudioSourceGain.SetVolume(_secondaryCodingSource, targetVol * Mathf.Sin(tIn * Mathf.PI / 2f));
 
                 yield return null;
             }
 
-            primary.Source.volume = 0f;
+            AudioSourceGain.SetVolume(primary.Source, 0f);
             primary.Source.Stop();
             
-            _secondaryCodingSource.volume = targetVol;
+            AudioSourceGain.SetVolume(_secondaryCodingSource, targetVol);
 
             var temp = primary.Source;
             primary.Source = _secondaryCodingSource;

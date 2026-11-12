@@ -64,7 +64,7 @@ namespace Abb2kTools.AudioSystem
         public MixerGroupPreference mixerGroupPreference;
         public AudioMixerGroup specificMixerGroup;
 
-        [Range(0f, 1f)]
+        [Min(0f)]
         public float volume        = 1f;
         [SerializeField, HideInInspector] private SoundParameterRandomization volumeRandomization = new(1f);
         [Range(-3f, 3f)]
@@ -126,7 +126,7 @@ namespace Abb2kTools.AudioSystem
             audioSource.loop = nativeLoop; 
             
             audioSource.clip   = clipData.Clip;
-            audioSource.volume = settings.volume * clipData.Volume * volumeMultiplier;
+            AudioSourceGain.SetVolume(audioSource, settings.volume * clipData.Volume * volumeMultiplier);
             audioSource.pitch  = settings.pitch * clipData.Pitch * pitchMultiplier * (scaleWithTimeScale ? Time.timeScale : 1f);
             
             audioSource.panStereo     = settings.panStereo;

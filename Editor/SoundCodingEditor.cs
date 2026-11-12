@@ -149,15 +149,19 @@ namespace Abb2kTools.AudioSystem.Editor
             
             _baseVolume = clips[0].Volume;
 
-            _primarySource = _previewGO.AddComponent<AudioSource>();
+            GameObject primarySourceObject = new("PrimaryAudioSource");
+            primarySourceObject.transform.SetParent(_previewGO.transform, false);
+            _primarySource = primarySourceObject.AddComponent<AudioSource>();
             _primarySource.clip = clips[0].Clip;
-            _primarySource.volume = _baseVolume;
+            AudioSourceGain.SetVolume(_primarySource, _baseVolume);
             _primarySource.pitch = clips[0].Pitch;
             coding.Filters?.ApplyTo(_primarySource);
             
-            _secondarySource = _previewGO.AddComponent<AudioSource>();
+            GameObject secondarySourceObject = new("SecondaryAudioSource");
+            secondarySourceObject.transform.SetParent(_previewGO.transform, false);
+            _secondarySource = secondarySourceObject.AddComponent<AudioSource>();
             _secondarySource.clip = clips[0].Clip;
-            _secondarySource.volume = 0f;
+            AudioSourceGain.SetVolume(_secondarySource, 0f);
             _secondarySource.pitch = clips[0].Pitch;
             coding.Filters?.ApplyTo(_secondarySource);
 
@@ -233,7 +237,7 @@ namespace Abb2kTools.AudioSystem.Editor
 
             _isTransitioning = true;
             _transitionTimer = 0f;
-            _transitionStartVolume = _primarySource.volume;
+            _transitionStartVolume = _baseVolume;
             _activeTransitionData = transition;
 
             _secondarySource.time = Mathf.Clamp(targetSec.startTime, 0f, _secondarySource.clip.length - 0.01f);
@@ -311,8 +315,8 @@ namespace Abb2kTools.AudioSystem.Editor
                 float tOut = Mathf.Clamp01(_transitionTimer / fadeOut);
                 float tIn = Mathf.Clamp01(_transitionTimer / fadeIn);
                 
-                _primarySource.volume = _transitionStartVolume * Mathf.Cos(tOut * Mathf.PI / 2f);
-                _secondarySource.volume = _baseVolume * Mathf.Sin(tIn * Mathf.PI / 2f);
+                AudioSourceGain.SetVolume(_primarySource, _transitionStartVolume * Mathf.Cos(tOut * Mathf.PI / 2f));
+                AudioSourceGain.SetVolume(_secondarySource, _baseVolume * Mathf.Sin(tIn * Mathf.PI / 2f));
 
                 if (tOut >= 1f && tIn >= 1f)
                 {

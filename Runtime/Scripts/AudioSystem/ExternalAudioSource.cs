@@ -18,7 +18,10 @@ namespace Abb2kTools.AudioSystem
 
         public AudioSource AddAudioSource()
         {
-            AudioSource newSource = gameObject.AddComponent<AudioSource>();
+            GameObject sourceObject = new("AudioSource");
+            sourceObject.transform.SetParent(transform, false);
+
+            AudioSource newSource = sourceObject.AddComponent<AudioSource>();
             _addedSources.Add(newSource);
             return newSource;
         }
@@ -30,12 +33,11 @@ namespace Abb2kTools.AudioSystem
             source.Stop();
             source.clip = null; 
 
-            if (_addedSources.Contains(source))
-            {
-                _addedSources.Remove(source);
-            }
-
-            Destroy(source);
+            bool isOwnedSource = _addedSources.Remove(source);
+            if (isOwnedSource && source.transform.parent == transform)
+                Destroy(source.gameObject);
+            else
+                Destroy(source);
 
             if (DestroyEntireObjectOnDeplete && _addedSources.Count == 0)
             {
