@@ -8,7 +8,7 @@ namespace Abb2kTools.AudioSystem.Editor
     [CustomEditor(typeof(SoundModificationBase), true)]
     public class SoundModificationEditor : UnityEditor.Editor
     {
-        private static readonly Dictionary<AudioClip, Texture2D> _waveformCache = new();
+        private static readonly Dictionary<AudioClip, Dictionary<float, Texture2D>> _waveformCache = new();
         private bool _isDraggingPlayhead;
         private int _draggingClipIndex = -1;
         private int _draggingEdge = 0; 
@@ -273,20 +273,19 @@ namespace Abb2kTools.AudioSystem.Editor
                 baseColor = Color.Lerp(baseColor, new Color(1f, 0.3f, 0.1f, 0.9f), clipData.Filters.distortionLevel);
             }
 
-            Texture2D waveformTex = GetWaveformTexture(clipData.Clip, 256, 64, baseColor, new Color(0f, 0f, 0f, 0f));
+            float waveformGain = Mathf.Max(0f, clipData.Volume);
+            if (clipData.Filters != null && clipData.Filters.enableDistortion)
+                waveformGain += clipData.Filters.distortionLevel;
+
+            Texture2D waveformTex = GetWaveformTexture(clipData.Clip, 256, 64, baseColor, new Color(0f, 0f, 0f, 0f), waveformGain);
             if (waveformTex != null)
             {
-                float volumeScale = Mathf.Clamp01(clipData.Volume); 
-                if (clipData.Filters != null && clipData.Filters.enableDistortion) volumeScale = Mathf.Clamp01(volumeScale + clipData.Filters.distortionLevel);
-                
-                float waveHeight = fullBlockRect.height * volumeScale;
-                Rect waveRect = new Rect(fullBlockRect.x, fullBlockRect.y + ((fullBlockRect.height - waveHeight) / 2f), fullBlockRect.width, waveHeight);
-                
-                // Draw Base Waveform
-                GUI.DrawTexture(waveRect, waveformTex, ScaleMode.StretchToFill);
+                Rect waveRect = fullBlockRect;
+                if (waveformGain > 0f)
+                    GUI.DrawTexture(waveRect, waveformTex, ScaleMode.StretchToFill);
 
                 // 2. Draw Ghosted Echo Waveforms
-                if (clipData.Filters != null && clipData.Filters.enableEcho)
+                if (waveformGain > 0f && clipData.Filters != null && clipData.Filters.enableEcho)
                 {
                     float echoDelaySec = clipData.Filters.echoDelay / 1000f;
                     int bounces = Mathf.Clamp(Mathf.RoundToInt(clipData.Filters.echoDecayRatio * 5f), 1, 5);
@@ -512,10 +511,15 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorAudioPreviewer.Seek(seekTime);
         }
 
-        private static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor)
+        private static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor, float gain)
         {
             if (clip == null) return null;
-            if (_waveformCache.TryGetValue(clip, out var cachedTex) && cachedTex != null) return cachedTex;
+            if (_waveformCache.TryGetValue(clip, out var clipCache) &&
+                clipCache.TryGetValue(gain, out var cachedTex) &&
+                cachedTex != null)
+            {
+                return cachedTex;
+            }
 
             Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave, filterMode = FilterMode.Bilinear };
             Color[] pixels = new Color[width * height];
@@ -533,13 +537,18 @@ namespace Abb2kTools.AudioSystem.Editor
                     for (int s = 0; s < step && (x * step + s) < sampleData.Length; s++)
                         if (Mathf.Abs(sampleData[x * step + s]) > maxSample) maxSample = Mathf.Abs(sampleData[x * step + s]);
 
-                    int lineHeight = Mathf.Clamp(Mathf.RoundToInt(maxSample * halfHeight), 1, halfHeight);
+                    int lineHeight = Mathf.Clamp(Mathf.RoundToInt(maxSample * gain * halfHeight), 1, halfHeight);
                     for (int y = halfHeight - lineHeight; y <= halfHeight + lineHeight; y++)
                         if (y >= 0 && y < height) pixels[y * width + x] = waveformColor;
                 }
             }
             tex.SetPixels(pixels); tex.Apply();
-            _waveformCache[clip] = tex;
+            if (clipCache == null)
+            {
+                clipCache = new Dictionary<float, Texture2D>();
+                _waveformCache[clip] = clipCache;
+            }
+            clipCache[gain] = tex;
             return tex;
         }
     }

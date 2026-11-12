@@ -21,7 +21,7 @@ namespace Abb2kTools.AudioSystem.Editor
         private float _dragStartValue;
         private float _dragStartValue2;
 
-        private static readonly Dictionary<AudioClip, Texture2D> _waveformCache = new();
+        private static readonly Dictionary<AudioClip, Dictionary<float, Texture2D>> _waveformCache = new();
         private static readonly Dictionary<string, Texture2D> _gradientCache = new();
 
         // Custom Previewer State
@@ -350,6 +350,7 @@ namespace Abb2kTools.AudioSystem.Editor
         {
             float timelineDuration = 10f;
             AudioClip baseClip = null;
+            float baseVolume = 1f;
             
             if (coding.inputSound != null)
             {
@@ -358,6 +359,7 @@ namespace Abb2kTools.AudioSystem.Editor
                 if (clips.Count > 0 && clips[0].Clip != null)
                 {
                     baseClip = clips[0].Clip;
+                    baseVolume = clips[0].Volume;
                     timelineDuration = baseClip.length;
                 }
             }
@@ -376,7 +378,7 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorGUI.DrawRect(trackArea, new Color(0.1f, 0.1f, 0.1f, 1f));
             if (baseClip != null)
             {
-                Texture2D waveTex = GetWaveformTexture(baseClip, 512, 100, new Color(0.3f, 0.5f, 0.7f, 0.6f), Color.clear);
+                Texture2D waveTex = GetWaveformTexture(baseClip, 512, 100, new Color(0.3f, 0.5f, 0.7f, 0.6f), Color.clear, baseVolume);
                 GUI.DrawTexture(trackArea, waveTex, ScaleMode.StretchToFill);
             }
 
@@ -759,10 +761,15 @@ namespace Abb2kTools.AudioSystem.Editor
             return tex;
         }
 
-        private static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor)
+        private static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor, float gain)
         {
             if (clip == null) return null;
-            if (_waveformCache.TryGetValue(clip, out var cachedTex) && cachedTex != null) return cachedTex;
+            if (_waveformCache.TryGetValue(clip, out var clipCache) &&
+                clipCache.TryGetValue(gain, out var cachedTex) &&
+                cachedTex != null)
+            {
+                return cachedTex;
+            }
 
             Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave, filterMode = FilterMode.Bilinear };
             Color[] pixels = new Color[width * height];
@@ -780,13 +787,18 @@ namespace Abb2kTools.AudioSystem.Editor
                     for (int s = 0; s < step && (x * step + s) < sampleData.Length; s++)
                         if (Mathf.Abs(sampleData[x * step + s]) > maxSample) maxSample = Mathf.Abs(sampleData[x * step + s]);
 
-                    int lineHeight = Mathf.Clamp(Mathf.RoundToInt(maxSample * halfHeight), 1, halfHeight);
+                    int lineHeight = Mathf.Clamp(Mathf.RoundToInt(maxSample * gain * halfHeight), 1, halfHeight);
                     for (int y = halfHeight - lineHeight; y <= halfHeight + lineHeight; y++)
                         if (y >= 0 && y < height) pixels[y * width + x] = waveformColor;
                 }
             }
             tex.SetPixels(pixels); tex.Apply();
-            _waveformCache[clip] = tex;
+            if (clipCache == null)
+            {
+                clipCache = new Dictionary<float, Texture2D>();
+                _waveformCache[clip] = clipCache;
+            }
+            clipCache[gain] = tex;
             return tex;
         }
         #endregion
