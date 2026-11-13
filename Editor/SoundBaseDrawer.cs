@@ -1288,7 +1288,7 @@ namespace Abb2kTools.AudioSystem.Editor
             return inputs;
         }
 
-        private static object GetPropertyValue(SerializedProperty property)
+        internal static object GetPropertyValue(SerializedProperty property)
         {
             object value = property.serializedObject.targetObject;
             string path = property.propertyPath.Replace(".Array.data[", "[");
@@ -1848,7 +1848,7 @@ namespace Abb2kTools.AudioSystem.Editor
                 readOnly);
 
             if (mapping != null)
-                DrawPreview(position, ref currentY, parameter, target, mapping);
+                DrawPreview(position, ref currentY, property, parameter, target, mapping);
 
             EditorGUI.indentLevel--;
             EditorGUI.EndProperty();
@@ -2065,6 +2065,7 @@ namespace Abb2kTools.AudioSystem.Editor
         private static void DrawPreview(
             Rect position,
             ref float currentY,
+            SerializedProperty binding,
             SerializedProperty parameter,
             SerializedProperty target,
             SerializedProperty mapping)
@@ -2096,7 +2097,11 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorGUI.BeginChangeCheck();
             previewInput = EditorGUI.Slider(sliderRect, "Preview Input", previewInput, minValue, maxValue);
             if (EditorGUI.EndChangeCheck())
+            {
                 _previewInputs[key] = previewInput;
+                if (SoundBaseDrawer.GetPropertyValue(binding) is SoundParameterBinding soundParameterBinding)
+                    EditorAudioPreviewer.UpdatePreviewBindingInput(soundParameterBinding, previewInput);
+            }
 
             float mappedValue = curve != null && curve.length > 0
                 ? curve.Evaluate(Mathf.Clamp(previewInput, minValue, maxValue))

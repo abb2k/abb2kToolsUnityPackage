@@ -144,7 +144,9 @@ namespace Abb2kTools.AudioSystem.Editor
         {
             public SoundBasePlaybackSettings BaseSettings;
             public IReadOnlyList<SoundParameterBinding> SoundBaseBindings;
-            public IReadOnlyDictionary<SoundParameterBinding, float> PreviewInputs;
+            public Dictionary<SoundParameterBinding, float> PreviewInputs;
+            public float BaseVolumeMultiplier;
+            public float BasePitchMultiplier;
         }
 
         public static void PlayPreview(SoundModificationBase soundBase, float volMult = 1f, float pitchMult = 1f, Transform sourceTransform = null, SerializedProperty soundProperty = null)
@@ -162,6 +164,13 @@ namespace Abb2kTools.AudioSystem.Editor
             IReadOnlyList<SoundParameterBinding> soundBaseBindings,
             IReadOnlyDictionary<SoundParameterBinding, float> previewInputs)
         {
+            Dictionary<SoundParameterBinding, float> copiedPreviewInputs = new();
+            if (previewInputs != null)
+            {
+                foreach (KeyValuePair<SoundParameterBinding, float> previewInput in previewInputs)
+                    copiedPreviewInputs.Add(previewInput.Key, previewInput.Value);
+            }
+
             PlayPreviewInternal(
                 soundBase,
                 volMult,
@@ -172,8 +181,64 @@ namespace Abb2kTools.AudioSystem.Editor
                 {
                     BaseSettings = baseSettings,
                     SoundBaseBindings = soundBaseBindings,
-                    PreviewInputs = previewInputs
+                    PreviewInputs = copiedPreviewInputs,
+                    BaseVolumeMultiplier = volMult,
+                    BasePitchMultiplier = pitchMult
                 });
+        }
+
+        public static void UpdatePreviewBindingInput(SoundParameterBinding binding, float input)
+        {
+            if (!IsPlaying || _bindingPreviewContext == null || binding == null)
+                return;
+
+            _bindingPreviewContext.PreviewInputs[binding] = input;
+            float currentTime = CurrentTime;
+
+            foreach (PreviewClip clip in _pendingClips)
+            {
+                clip.BoundValues = new Dictionary<SoundParameterTarget, float>();
+                AddPreviewBindingValues(
+                    _bindingPreviewContext.SoundBaseBindings,
+                    _bindingPreviewContext,
+                    clip.BoundValues);
+                AddPreviewBindingValues(
+                    clip.Data.ParameterBindings,
+                    _bindingPreviewContext,
+                    clip.BoundValues);
+
+                clip.VolMult = _bindingPreviewContext.BaseVolumeMultiplier;
+                if (clip.BoundValues.TryGetValue(SoundParameterTarget.VolumeMultiplier, out float boundVolume))
+                    clip.VolMult *= boundVolume;
+
+                clip.PitchMult = _bindingPreviewContext.BasePitchMultiplier;
+                if (clip.BoundValues.TryGetValue(SoundParameterTarget.PitchMultiplier, out float boundPitch))
+                    clip.PitchMult *= boundPitch;
+
+                if (clip.Source == null)
+                    continue;
+
+                ApplyBoundSettings(clip.Source, clip.BoundValues, _bindingPreviewContext.BaseSettings);
+                AudioSourceGain.SetVolume(
+                    clip.Source,
+                    clip.Data.Volume *
+                    clip.VolMult *
+                    GetPhaseVolumeMultiplier(clip, currentTime) *
+                    GetLoopVolumeMultiplier(clip, currentTime));
+                clip.Source.pitch = clip.Data.Pitch *
+                    clip.PitchMult *
+                    GetLoopPitchMultiplier(clip, currentTime);
+
+                if (!clip.Looping)
+                {
+                    float remainingDuration = Mathf.Max(
+                        0f,
+                        (clip.Data.Clip.length - clip.Data.EndOffset - clip.Source.time) /
+                        Mathf.Max(0.001f, clip.Source.pitch));
+                    clip.Duration = (float)(EditorApplication.timeSinceStartup - clip.StartPlayTime) + remainingDuration;
+                    clip.Source.SetScheduledEndTime(AudioSettings.dspTime + remainingDuration);
+                }
+            }
         }
 
         private static void PlayPreviewInternal(

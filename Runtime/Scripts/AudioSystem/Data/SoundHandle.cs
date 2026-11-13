@@ -48,6 +48,7 @@ namespace Abb2kTools.AudioSystem
         }
 
         private readonly List<SourceData> _sources = new();
+        private readonly Dictionary<SoundParameter, float> _parameterOverrides = new();
         private Coroutine _playbackRoutine;
         
         private float _currentVolumeMultiplier = 1f;
@@ -183,6 +184,37 @@ namespace Abb2kTools.AudioSystem
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Sets a manual parameter value for this handle only.
+        /// </summary>
+        public void SetParameterValue(SoundParameter parameter, float value)
+        {
+            if (parameter == null)
+                throw new ArgumentNullException(nameof(parameter));
+            if (parameter.Source != SoundParameterSource.Manual)
+                throw new InvalidOperationException(
+                    $"Sound Parameter '{parameter.name}' is driven by {parameter.Source} and cannot be set manually.");
+            if (!UsesParameter(parameter))
+                throw new InvalidOperationException(
+                    $"Sound Parameter '{parameter.name}' is not bound to sound handle '{ID}'.");
+
+            _parameterOverrides[parameter] = value;
+            RefreshParameterValues(true);
+        }
+
+        /// <summary>
+        /// Removes this handle's override and resumes using the parameter's shared value.
+        /// </summary>
+        public void ClearParameterValue(SoundParameter parameter)
+        {
+            if (parameter == null)
+                throw new ArgumentNullException(nameof(parameter));
+            if (!_parameterOverrides.Remove(parameter))
+                return;
+
+            RefreshParameterValues(true);
         }
 
         internal HashSet<SoundParameter> GetActiveCountParameters()
@@ -330,6 +362,9 @@ namespace Abb2kTools.AudioSystem
 
         private float GetParameterInputValue(SoundParameter parameter)
         {
+            if (_parameterOverrides.TryGetValue(parameter, out float overrideValue))
+                return overrideValue;
+
             switch (parameter.Source)
             {
                 case SoundParameterSource.Manual:
