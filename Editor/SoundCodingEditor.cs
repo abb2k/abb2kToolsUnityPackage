@@ -764,6 +764,7 @@ namespace Abb2kTools.AudioSystem.Editor
         private static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor, float gain)
         {
             if (clip == null) return null;
+            gain = AudioWaveformProjectSettings.NormalizeGain(gain);
             if (_waveformCache.TryGetValue(clip, out var clipCache) &&
                 clipCache.TryGetValue(gain, out var cachedTex) &&
                 cachedTex != null)

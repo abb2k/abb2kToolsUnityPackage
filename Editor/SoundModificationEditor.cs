@@ -1041,6 +1041,7 @@ namespace Abb2kTools.AudioSystem.Editor
         internal static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor, float gain)
         {
             if (clip == null) return null;
+            gain = AudioWaveformProjectSettings.NormalizeGain(gain);
             width = Mathf.Min(4096, Mathf.NextPowerOfTwo(Mathf.Max(64, width)));
             height = Mathf.Min(512, Mathf.NextPowerOfTwo(Mathf.Max(64, height)));
             WaveformTextureKey key = new(width, height, gain);
