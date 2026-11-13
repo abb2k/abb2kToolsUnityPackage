@@ -23,6 +23,8 @@ namespace Abb2kTools.AudioSystem.Editor
         private static float _minDist;
         private static float _maxDist;
         private static AudioRolloffMode _rolloffMode;
+        private static BindingPreviewContext _bindingPreviewContext;
+        private static Transform _followTransform;
 
         public static bool IsPlaying => _previewGO != null && _pendingClips.Count > 0;
         public static bool IsPaused { get; private set; }
@@ -42,6 +44,31 @@ namespace Abb2kTools.AudioSystem.Editor
             {
                 StopPreview();
             }
+        }
+
+        private static void ApplyBoundSettings(
+            AudioSource source,
+            Dictionary<SoundParameterTarget, float> boundValues,
+            SoundBasePlaybackSettings baseSettings)
+        {
+            source.panStereo = GetBoundValue(boundValues, SoundParameterTarget.PanStereo, baseSettings.panStereo);
+            source.spatialBlend = GetBoundValue(boundValues, SoundParameterTarget.SpatialBlend, baseSettings.spatialBlend);
+            source.reverbZoneMix = GetBoundValue(boundValues, SoundParameterTarget.ReverbZoneMix, baseSettings.reverbZoneMix);
+            source.priority = baseSettings.prio;
+            source.dopplerLevel = GetBoundValue(boundValues, SoundParameterTarget.DopplerLevel, baseSettings.dopplerLevel);
+            source.spread = GetBoundValue(boundValues, SoundParameterTarget.Spread, baseSettings.spread);
+            source.minDistance = GetBoundValue(boundValues, SoundParameterTarget.MinDistance, baseSettings.minDist);
+            source.maxDistance = GetBoundValue(boundValues, SoundParameterTarget.MaxDistance, baseSettings.maxDist);
+        }
+
+        private static float GetBoundValue(
+            Dictionary<SoundParameterTarget, float> boundValues,
+            SoundParameterTarget target,
+            float defaultValue)
+        {
+            return boundValues != null && boundValues.TryGetValue(target, out float value)
+                ? value
+                : defaultValue;
         }
 
         private static void OnBeforeAssemblyReload()
@@ -84,6 +111,7 @@ namespace Abb2kTools.AudioSystem.Editor
         private class PreviewClip
         {
             public PlayableClipData Data;
+            public Dictionary<SoundParameterTarget, float> BoundValues;
             public bool Played;
             public float VolMult;
             public float PitchMult;
@@ -112,13 +140,56 @@ namespace Abb2kTools.AudioSystem.Editor
             public float PitchSineCycleDuration = 2f;
         }
 
+        private sealed class BindingPreviewContext
+        {
+            public SoundBasePlaybackSettings BaseSettings;
+            public IReadOnlyList<SoundParameterBinding> SoundBaseBindings;
+            public IReadOnlyDictionary<SoundParameterBinding, float> PreviewInputs;
+        }
+
         public static void PlayPreview(SoundModificationBase soundBase, float volMult = 1f, float pitchMult = 1f, Transform sourceTransform = null, SerializedProperty soundProperty = null)
+        {
+            PlayPreviewInternal(soundBase, volMult, pitchMult, sourceTransform, soundProperty, null);
+        }
+
+        public static void PlayPreviewWithBindings(
+            SoundModificationBase soundBase,
+            float volMult,
+            float pitchMult,
+            Transform sourceTransform,
+            SerializedProperty soundProperty,
+            SoundBasePlaybackSettings baseSettings,
+            IReadOnlyList<SoundParameterBinding> soundBaseBindings,
+            IReadOnlyDictionary<SoundParameterBinding, float> previewInputs)
+        {
+            PlayPreviewInternal(
+                soundBase,
+                volMult,
+                pitchMult,
+                sourceTransform,
+                soundProperty,
+                new BindingPreviewContext
+                {
+                    BaseSettings = baseSettings,
+                    SoundBaseBindings = soundBaseBindings,
+                    PreviewInputs = previewInputs
+                });
+        }
+
+        private static void PlayPreviewInternal(
+            SoundModificationBase soundBase,
+            float volMult,
+            float pitchMult,
+            Transform sourceTransform,
+            SerializedProperty soundProperty,
+            BindingPreviewContext bindingPreviewContext)
         {
             StopPreview();
             if (soundBase == null) return;
 
             _currentLoopingPreviewKey = null;
             _currentTarget = soundBase;
+            _bindingPreviewContext = bindingPreviewContext;
             
             _previewGO = EditorUtility.CreateGameObjectWithHideFlags("AudioPreview_Hidden", HideFlags.HideAndDontSave);
 
@@ -127,6 +198,7 @@ namespace Abb2kTools.AudioSystem.Editor
             {
                 _apply3D = true;
                 _previewGO.transform.position = sourceTransform.position;
+                _followTransform = sourceTransform;
                 _spatialBlend = soundProperty.FindPropertyRelative("spatialBlend").floatValue;
                 _dopplerLevel = soundProperty.FindPropertyRelative("dopplerLevel").floatValue;
                 _minDist = soundProperty.FindPropertyRelative("minDist").floatValue;
@@ -138,7 +210,7 @@ namespace Abb2kTools.AudioSystem.Editor
                 _apply3D = false;
             }
 
-            LoadClips(soundBase, volMult, pitchMult);
+            LoadClips(soundBase, volMult, pitchMult, bindingPreviewContext);
 
             if (_pendingClips.Count == 0) { StopPreview(); return; }
 
@@ -264,6 +336,7 @@ namespace Abb2kTools.AudioSystem.Editor
             {
                 _apply3D = true;
                 _previewGO.transform.position = sourceTransform.position;
+                _followTransform = sourceTransform;
                 _spatialBlend = soundProperty.FindPropertyRelative("spatialBlend").floatValue;
                 _dopplerLevel = soundProperty.FindPropertyRelative("dopplerLevel").floatValue;
                 _minDist = soundProperty.FindPropertyRelative("minDist").floatValue;
@@ -393,7 +466,11 @@ namespace Abb2kTools.AudioSystem.Editor
             }
         }
 
-        private static void LoadClips(SoundModificationBase soundBase, float volMult, float pitchMult)
+        private static void LoadClips(
+            SoundModificationBase soundBase,
+            float volMult,
+            float pitchMult,
+            BindingPreviewContext bindingPreviewContext)
         {
             _pendingClips.Clear();
             List<PlayableClipData> clips = new();
@@ -406,9 +483,63 @@ namespace Abb2kTools.AudioSystem.Editor
                     float activeDur = clip.Clip.length - clip.StartOffset - clip.EndOffset;
                     if (activeDur > 0.001f)
                     {
-                        _pendingClips.Add(new PreviewClip { Data = clip, Played = false, VolMult = volMult, PitchMult = pitchMult });
+                        Dictionary<SoundParameterTarget, float> boundValues = null;
+                        float clipVolumeMultiplier = volMult;
+                        float clipPitchMultiplier = pitchMult;
+
+                        if (bindingPreviewContext != null)
+                        {
+                            boundValues = new Dictionary<SoundParameterTarget, float>();
+                            AddPreviewBindingValues(
+                                bindingPreviewContext.SoundBaseBindings,
+                                bindingPreviewContext,
+                                boundValues);
+                            AddPreviewBindingValues(
+                                clip.ParameterBindings,
+                                bindingPreviewContext,
+                                boundValues);
+
+                            if (boundValues.TryGetValue(SoundParameterTarget.VolumeMultiplier, out float boundVolume))
+                                clipVolumeMultiplier *= boundVolume;
+                            if (boundValues.TryGetValue(SoundParameterTarget.PitchMultiplier, out float boundPitch))
+                                clipPitchMultiplier *= boundPitch;
+                        }
+
+                        _pendingClips.Add(new PreviewClip
+                        {
+                            Data = clip,
+                            BoundValues = boundValues,
+                            Played = false,
+                            VolMult = clipVolumeMultiplier,
+                            PitchMult = clipPitchMultiplier
+                        });
                     }
                 }
+            }
+        }
+
+        private static void AddPreviewBindingValues(
+            IEnumerable<SoundParameterBinding> bindings,
+            BindingPreviewContext context,
+            Dictionary<SoundParameterTarget, float> targetValues)
+        {
+            if (bindings == null)
+                return;
+
+            foreach (SoundParameterBinding binding in bindings)
+            {
+                if (binding == null || binding.parameter == null)
+                    continue;
+
+                float input = context.PreviewInputs != null &&
+                              context.PreviewInputs.TryGetValue(binding, out float previewInput)
+                    ? previewInput
+                    : binding.parameter.CurrentValue;
+                float mappedValue = binding.Evaluate(input);
+                if (targetValues.TryGetValue(binding.target, out float currentValue))
+                    targetValues[binding.target] = currentValue * mappedValue;
+                else
+                    targetValues[binding.target] = mappedValue;
             }
         }
 
@@ -489,7 +620,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     if (pClip.Source == null)
                     {
                         GameObject clipGO = new GameObject("PreviewClip");
-                        clipGO.transform.parent = _previewGO.transform;
+                        clipGO.transform.SetParent(_previewGO.transform, false);
                         pClip.Source = clipGO.AddComponent<AudioSource>();
 
                         Apply3DSettings(pClip.Source);
@@ -545,7 +676,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     if (pClip.Source == null)
                     {
                         GameObject clipGO = new GameObject("PreviewClip");
-                        clipGO.transform.parent = _previewGO.transform;
+                        clipGO.transform.SetParent(_previewGO.transform, false);
                         pClip.Source = clipGO.AddComponent<AudioSource>();
 
                         Apply3DSettings(pClip.Source);
@@ -585,6 +716,8 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorApplication.update -= EditorUpdate;
             IsPaused = false;
             _apply3D = false;
+            _bindingPreviewContext = null;
+            _followTransform = null;
             _currentLoopingPreviewKey = null;
             
             if (_previewGO != null) 
@@ -599,7 +732,14 @@ namespace Abb2kTools.AudioSystem.Editor
 
         private static void EditorUpdate()
         {
-            if (_previewGO == null || IsPaused) return;
+            if (_previewGO == null) return;
+
+            if (_followTransform != null)
+                _previewGO.transform.position = _followTransform.position;
+            else
+                _followTransform = null;
+
+            if (IsPaused) return;
 
             double elapsed = EditorApplication.timeSinceStartup - _startTime;
             bool isAnythingStillPlaying = false;
@@ -620,11 +760,13 @@ namespace Abb2kTools.AudioSystem.Editor
                     if (elapsed >= pClip.Data.Delay)
                     {
                         GameObject clipGO = new GameObject("PreviewClip");
-                        clipGO.transform.parent = _previewGO.transform;
+                        clipGO.transform.SetParent(_previewGO.transform, false);
                         
                         pClip.Source = clipGO.AddComponent<AudioSource>();
 
                         Apply3DSettings(pClip.Source);
+                        if (_bindingPreviewContext != null)
+                            ApplyBoundSettings(pClip.Source, pClip.BoundValues, _bindingPreviewContext.BaseSettings);
 
                         pClip.Source.clip = pClip.Data.Clip;
                         AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *

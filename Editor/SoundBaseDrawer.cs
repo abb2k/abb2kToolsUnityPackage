@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using System.Collections;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
@@ -60,6 +62,7 @@ namespace Abb2kTools.AudioSystem.Editor
             public SerializedObject SerializedObject;
             public SerializedProperty Property;
             public string SourceName;
+            public SoundParameterBinding Binding;
         }
 
         private readonly HashSet<string> _3dProperties = new() 
@@ -178,7 +181,10 @@ namespace Abb2kTools.AudioSystem.Editor
 
                     if (iterator.name == Sound)
                     {
-                        height += (EditorGUIUtility.singleLineHeight * 1.5f) + EditorGUIUtility.standardVerticalSpacing;
+                        bool hasBoundProperties = HasBoundSoundProperties(property);
+                        int previewButtonCount = hasBoundProperties ? 2 : 1;
+                        height += (EditorGUIUtility.singleLineHeight * previewButtonCount) +
+                                  (EditorGUIUtility.standardVerticalSpacing * previewButtonCount);
                         if (IsLoopingSound(property))
                             height += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
                     }
@@ -400,22 +406,50 @@ namespace Abb2kTools.AudioSystem.Editor
                             currentY += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
                         }
 
-                        Rect buttonRectFull = new(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight * 1.5f);
+                        float buttonSpacing = EditorGUIUtility.standardVerticalSpacing;
+                        float buttonLineHeight = EditorGUIUtility.singleLineHeight;
+                        bool hasBoundProperties = HasBoundSoundProperties(property);
+                        int previewButtonCount = hasBoundProperties ? 2 : 1;
+                        Rect buttonRectFull = new(
+                            position.x,
+                            currentY,
+                            position.width,
+                            buttonLineHeight * previewButtonCount +
+                            (hasBoundProperties ? buttonSpacing : 0f));
                         buttonRectFull = EditorGUI.IndentedRect(buttonRectFull);
 
                         if (soundProp != null && soundProp.objectReferenceValue != null)
                         {
-                            Rect playBtnRect = new Rect(buttonRectFull.x, buttonRectFull.y, buttonRectFull.width - 80f, buttonRectFull.height);
+                            float playButtonWidth = buttonRectFull.width - 80f;
+                            Rect playBtnRect = new Rect(
+                                buttonRectFull.x,
+                                buttonRectFull.y,
+                                playButtonWidth,
+                                buttonLineHeight);
                             Rect stopBtnRect = new Rect(buttonRectFull.xMax - 75f, buttonRectFull.y, 75f, buttonRectFull.height);
                             
                             GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
 
                             bool isShiftClick = Event.current.shift;
-                            GUIContent playBtnContent = new GUIContent("▶ Preview Audio Settings", "Click to preview\nShift-Click to preview with 3D settings in Scene");
+                            GUIContent playBtnContent = new GUIContent("▶ Preview", "Preview as before\nShift-Click to preview with 3D settings in Scene");
 
                             if (GUI.Button(playBtnRect, playBtnContent))
                             {
                                 TriggerPreview(property, isShiftClick);
+                            }
+
+                            if (hasBoundProperties)
+                            {
+                                Rect boundPlayBtnRect = new Rect(
+                                    buttonRectFull.x,
+                                    buttonRectFull.y + buttonLineHeight + buttonSpacing,
+                                    playButtonWidth,
+                                    buttonLineHeight);
+                                GUIContent boundPlayBtnContent = new GUIContent(
+                                    "▶ Bound Preview",
+                                    "Preview using the Preview Input values of bound sound properties");
+                                if (GUI.Button(boundPlayBtnRect, boundPlayBtnContent))
+                                    TriggerPreview(property, isShiftClick, true);
                             }
                                                         
                             GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
@@ -1156,7 +1190,7 @@ namespace Abb2kTools.AudioSystem.Editor
             currentY += height + spacing;
         }
 
-        private void TriggerPreview(SerializedProperty property, bool use3DSettings = false)
+        private void TriggerPreview(SerializedProperty property, bool use3DSettings = false, bool useSoundPropertyBindings = false)
         {
             if (IsLoopingSound(property))
             {
@@ -1186,7 +1220,122 @@ namespace Abb2kTools.AudioSystem.Editor
                 }
             }
 
+            if (useSoundPropertyBindings)
+            {
+                SoundBase soundBase = GetPropertyValue(property) as SoundBase;
+                Dictionary<SoundParameterBinding, float> previewInputs = CollectPreviewBindingInputs(property, soundBase);
+                EditorAudioPreviewer.PlayPreviewWithBindings(
+                    mod,
+                    baseVol,
+                    basePitch,
+                    targetTransform,
+                    use3DSettings ? property : null,
+                    GetPreviewPlaybackSettings(property, baseVol, basePitch),
+                    soundBase != null ? soundBase.parameterBindings : null,
+                    previewInputs);
+                return;
+            }
+
             EditorAudioPreviewer.PlayPreview(mod, baseVol, basePitch, targetTransform, use3DSettings ? property : null);
+        }
+
+        private static SoundBasePlaybackSettings GetPreviewPlaybackSettings(
+            SerializedProperty property,
+            float volume,
+            float pitch)
+        {
+            return new SoundBasePlaybackSettings
+            {
+                volume = volume,
+                pitch = pitch,
+                panStereo = property.FindPropertyRelative("panStereo")?.floatValue ?? 0f,
+                spatialBlend = property.FindPropertyRelative("spatialBlend")?.floatValue ?? 0f,
+                reverbZoneMix = property.FindPropertyRelative("reverbZoneMix")?.floatValue ?? 1f,
+                prio = property.FindPropertyRelative(Prio)?.intValue ?? 128,
+                dopplerLevel = property.FindPropertyRelative("dopplerLevel")?.floatValue ?? 1f,
+                spread = property.FindPropertyRelative("spread")?.floatValue ?? 0f,
+                minDist = property.FindPropertyRelative("minDist")?.floatValue ?? 1f,
+                maxDist = property.FindPropertyRelative("maxDist")?.floatValue ?? 500f
+            };
+        }
+
+        private static Dictionary<SoundParameterBinding, float> CollectPreviewBindingInputs(
+            SerializedProperty soundBaseProperty,
+            SoundBase soundBase)
+        {
+            Dictionary<SoundParameterBinding, float> inputs = new();
+            if (soundBase == null)
+                return inputs;
+
+            SerializedProperty parameterBindings = soundBaseProperty.FindPropertyRelative(ParameterBindings);
+            for (int i = 0; soundBase.parameterBindings != null && i < soundBase.parameterBindings.Count; i++)
+            {
+                if (parameterBindings == null || i >= parameterBindings.arraySize)
+                    break;
+
+                SoundParameterBinding binding = soundBase.parameterBindings[i];
+                if (binding != null)
+                    inputs[binding] = SoundParameterBindingDrawer.GetPreviewInputForBinding(
+                        parameterBindings.GetArrayElementAtIndex(i));
+            }
+
+            foreach (InheritedBindingProperty inherited in CollectInheritedBindings(soundBaseProperty))
+            {
+                if (inherited.Binding != null)
+                    inputs[inherited.Binding] = SoundParameterBindingDrawer.GetPreviewInputForBinding(inherited.Property);
+            }
+
+            return inputs;
+        }
+
+        private static object GetPropertyValue(SerializedProperty property)
+        {
+            object value = property.serializedObject.targetObject;
+            string path = property.propertyPath.Replace(".Array.data[", "[");
+
+            foreach (string element in path.Split('.'))
+            {
+                int indexStart = element.IndexOf('[');
+                string memberName = indexStart >= 0 ? element.Substring(0, indexStart) : element;
+                if (!string.IsNullOrEmpty(memberName))
+                    value = GetFieldValue(value, memberName);
+
+                while (indexStart >= 0)
+                {
+                    int indexEnd = element.IndexOf(']', indexStart);
+                    if (indexEnd < 0 || !(value is IList list))
+                        return null;
+
+                    if (!int.TryParse(element.Substring(indexStart + 1, indexEnd - indexStart - 1), out int index) ||
+                        index < 0 || index >= list.Count)
+                        return null;
+
+                    value = list[index];
+                    indexStart = element.IndexOf('[', indexEnd);
+                }
+
+                if (value == null)
+                    return null;
+            }
+
+            return value;
+        }
+
+        private static object GetFieldValue(object source, string fieldName)
+        {
+            if (source == null)
+                return null;
+
+            for (System.Type type = source.GetType(); type != null; type = type.BaseType)
+            {
+                FieldInfo field = type.GetField(
+                    fieldName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (field != null)
+                    return field.GetValue(source);
+            }
+
+            return null;
         }
 
         private void TriggerLoopingPreview(SerializedProperty property, bool use3DSettings, float duration)
@@ -1439,6 +1588,31 @@ namespace Abb2kTools.AudioSystem.Editor
             return contentHeight + 8f;
         }
 
+        private static bool HasBoundSoundProperties(SerializedProperty soundBaseProperty)
+        {
+            SerializedProperty parameterBindings = soundBaseProperty.FindPropertyRelative(ParameterBindings);
+            if (parameterBindings != null && parameterBindings.isArray)
+            {
+                for (int i = 0; i < parameterBindings.arraySize; i++)
+                {
+                    SerializedProperty parameter = parameterBindings
+                        .GetArrayElementAtIndex(i)
+                        .FindPropertyRelative("parameter");
+                    if (parameter != null && parameter.objectReferenceValue != null)
+                        return true;
+                }
+            }
+
+            foreach (InheritedBindingProperty inherited in CollectInheritedBindings(soundBaseProperty))
+            {
+                SerializedProperty parameter = inherited.Property.FindPropertyRelative("parameter");
+                if (parameter != null && parameter.objectReferenceValue != null)
+                    return true;
+            }
+
+            return false;
+        }
+
         private static void DrawParameterBindingsBox(
             Rect position,
             ref float currentY,
@@ -1526,7 +1700,10 @@ namespace Abb2kTools.AudioSystem.Editor
                     {
                         SerializedObject = serializedSound,
                         Property = parameterBindings.GetArrayElementAtIndex(i).Copy(),
-                        SourceName = sound.name
+                        SourceName = sound.name,
+                        Binding = sound.parameterBindings != null && i < sound.parameterBindings.Count
+                            ? sound.parameterBindings[i]
+                            : null
                     });
                 }
             }
@@ -1945,6 +2122,34 @@ namespace Abb2kTools.AudioSystem.Editor
                 ? $"{mappedValue:0.###}x"
                 : mappedValue.ToString("0.###");
             EditorGUI.LabelField(outputRect, $"{targetName}: {output}", EditorStyles.miniLabel);
+        }
+
+        internal static float GetPreviewInputForBinding(SerializedProperty binding)
+        {
+            SerializedProperty parameter = binding.FindPropertyRelative("parameter");
+            SerializedProperty mapping = binding.FindPropertyRelative("mapping");
+            AnimationCurve curve = mapping != null ? mapping.animationCurveValue : null;
+
+            float minValue = 0f;
+            float maxValue = 1f;
+            if (curve != null && curve.length > 0)
+            {
+                Keyframe[] keys = curve.keys;
+                minValue = keys[0].time;
+                maxValue = keys[keys.Length - 1].time;
+                if (maxValue <= minValue)
+                    maxValue = minValue + 1f;
+            }
+
+            string key = parameter != null
+                ? $"{parameter.serializedObject.targetObject.GetInstanceID()}:{parameter.propertyPath}"
+                : string.Empty;
+            float initialValue = parameter != null && parameter.objectReferenceValue is SoundParameter soundParameter
+                ? soundParameter.CurrentValue
+                : minValue;
+            if (!_previewInputs.TryGetValue(key, out float previewInput))
+                previewInput = initialValue;
+            return Mathf.Clamp(previewInput, minValue, maxValue);
         }
     }
 
