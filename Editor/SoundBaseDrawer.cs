@@ -683,6 +683,13 @@ namespace Abb2kTools.AudioSystem.Editor
             float spacing = EditorGUIUtility.standardVerticalSpacing;
             float height = EditorGUIUtility.singleLineHeight + spacing;
             height += GetSoundBaseFieldHeight(properties.LoopSound) + spacing;
+            height += EditorGUIUtility.singleLineHeight + spacing;
+            int previewButtonCount = HasBoundSoundProperties(property) ? 2 : 1;
+            height += EditorGUIUtility.singleLineHeight * previewButtonCount +
+                      spacing * (previewButtonCount - 1) + spacing;
+            float waveformHeight = GetWaveformPreviewHeight(property);
+            if (waveformHeight > 0f)
+                height += waveformHeight + spacing;
             height += GetLoopingPropertyGroupHeight(properties.Transitions, property) + spacing;
             height += GetLoopModulationGroupHeight(
                 property,
@@ -707,11 +714,6 @@ namespace Abb2kTools.AudioSystem.Editor
             if (parameterBindingsHeight > 0f)
                 height += parameterBindingsHeight + spacing;
             height += GetLoopingThreeDSettingsGroupHeight(properties, property) + spacing;
-            height += EditorGUIUtility.singleLineHeight + spacing;
-            height += EditorGUIUtility.singleLineHeight * 1.5f + spacing;
-            float waveformHeight = GetWaveformPreviewHeight(property);
-            if (waveformHeight > 0f)
-                height += waveformHeight + spacing;
             height += GetSoundBaseFieldHeight(properties.StartSound) + spacing;
             height += GetSoundBaseFieldHeight(properties.EndSound) + spacing;
             return height + spacing;
@@ -788,6 +790,58 @@ namespace Abb2kTools.AudioSystem.Editor
                 EditorGUI.PropertyField(rect, properties.LoopSound, new GUIContent("Loop Sound"), true);
                 currentY += height + spacing;
             }
+
+            Rect durationRect = new(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight);
+            EditorGUI.BeginChangeCheck();
+            float duration = EditorGUI.FloatField(
+                durationRect,
+                "Preview Duration (seconds)",
+                GetLoopingPreviewDuration(property));
+            if (EditorGUI.EndChangeCheck())
+                SetLoopingPreviewDuration(property, Mathf.Max(0f, duration));
+            currentY += EditorGUIUtility.singleLineHeight + spacing;
+
+            int previewButtonCount = HasBoundSoundProperties(property) ? 2 : 1;
+            float controlsHeight = EditorGUIUtility.singleLineHeight * previewButtonCount +
+                                   spacing * (previewButtonCount - 1);
+            Rect controlsRect = EditorGUI.IndentedRect(new Rect(position.x, currentY, position.width, controlsHeight));
+            if (properties.LoopSound != null && properties.LoopSound.objectReferenceValue != null)
+            {
+                Rect playRect = new(controlsRect.x, controlsRect.y, controlsRect.width - 80f, EditorGUIUtility.singleLineHeight);
+                Rect stopRect = new(controlsRect.xMax - 75f, controlsRect.y, 75f, controlsRect.height);
+
+                GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
+                if (GUI.Button(playRect, new GUIContent("▶ Preview Audio Settings")))
+                    TriggerPreview(property, Event.current.shift);
+
+                if (previewButtonCount > 1)
+                {
+                    Rect boundPlayRect = new(
+                        controlsRect.x,
+                        controlsRect.y + EditorGUIUtility.singleLineHeight + spacing,
+                        controlsRect.width - 80f,
+                        EditorGUIUtility.singleLineHeight);
+                    if (GUI.Button(boundPlayRect, new GUIContent(
+                            "▶ Bound Preview",
+                            "Preview using the Preview Input values of bound sound properties")))
+                    {
+                        TriggerPreview(property, Event.current.shift, true);
+                    }
+                }
+
+                GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
+                if (GUI.Button(stopRect, "■ Stop"))
+                    EditorAudioPreviewer.StopPreview();
+                GUI.backgroundColor = Color.white;
+            }
+            else
+            {
+                EditorGUI.BeginDisabledGroup(true);
+                GUI.Button(controlsRect, "Assign a Sound to Preview");
+                EditorGUI.EndDisabledGroup();
+            }
+            currentY += controlsHeight + spacing;
+            DrawPreviewWaveform(position, ref currentY, property);
 
             float transitionHeight = GetLoopingPropertyGroupHeight(properties.Transitions, property);
             Rect transitionRect = new(position.x, currentY, position.width, transitionHeight);
@@ -897,41 +951,6 @@ namespace Abb2kTools.AudioSystem.Editor
             }
             currentY += threeDHeight + spacing;
 
-            Rect durationRect = new(position.x, currentY, position.width, EditorGUIUtility.singleLineHeight);
-            EditorGUI.BeginChangeCheck();
-            float duration = EditorGUI.FloatField(
-                durationRect,
-                "Preview Duration (seconds)",
-                GetLoopingPreviewDuration(property));
-            if (EditorGUI.EndChangeCheck())
-                SetLoopingPreviewDuration(property, Mathf.Max(0f, duration));
-            currentY += EditorGUIUtility.singleLineHeight + spacing;
-
-            float controlsHeight = EditorGUIUtility.singleLineHeight * 1.5f;
-            Rect controlsRect = EditorGUI.IndentedRect(new Rect(position.x, currentY, position.width, controlsHeight));
-            if (properties.LoopSound != null && properties.LoopSound.objectReferenceValue != null)
-            {
-                Rect playRect = new(controlsRect.x, controlsRect.y, controlsRect.width - 80f, controlsRect.height);
-                Rect stopRect = new(controlsRect.xMax - 75f, controlsRect.y, 75f, controlsRect.height);
-
-                GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
-                if (GUI.Button(playRect, new GUIContent("▶ Preview Audio Settings")))
-                    TriggerPreview(property, Event.current.shift);
-
-                GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
-                if (GUI.Button(stopRect, "■ Stop"))
-                    EditorAudioPreviewer.StopPreview();
-                GUI.backgroundColor = Color.white;
-            }
-            else
-            {
-                EditorGUI.BeginDisabledGroup(true);
-                GUI.Button(controlsRect, "Assign a Sound to Preview");
-                EditorGUI.EndDisabledGroup();
-            }
-            currentY += controlsHeight + spacing;
-
-            DrawPreviewWaveform(position, ref currentY, property);
             DrawLoopingEffectField(position, ref currentY, properties.StartSound, "Start Sound", spacing);
             DrawLoopingEffectField(position, ref currentY, properties.EndSound, "End Sound", spacing);
             EditorGUI.indentLevel--;
@@ -1205,7 +1224,11 @@ namespace Abb2kTools.AudioSystem.Editor
         {
             if (IsLoopingSound(property))
             {
-                TriggerLoopingPreview(property, use3DSettings, GetLoopingPreviewDuration(property));
+                TriggerLoopingPreview(
+                    property,
+                    use3DSettings,
+                    GetLoopingPreviewDuration(property),
+                    useSoundPropertyBindings);
                 return;
             }
 
@@ -1270,7 +1293,7 @@ namespace Abb2kTools.AudioSystem.Editor
             };
         }
 
-        private static Dictionary<SoundParameterBinding, float> CollectPreviewBindingInputs(
+        internal static Dictionary<SoundParameterBinding, float> CollectPreviewBindingInputs(
             SerializedProperty soundBaseProperty,
             SoundBase soundBase)
         {
@@ -1297,6 +1320,44 @@ namespace Abb2kTools.AudioSystem.Editor
             }
 
             return inputs;
+        }
+
+        internal static Dictionary<SoundParameterBinding, float> CollectPreviewBindingInputs(
+            SoundModificationBase sound)
+        {
+            Dictionary<SoundParameterBinding, float> inputs = new();
+            List<InheritedBindingProperty> bindings = new();
+            CollectInheritedBindings(sound, bindings, new HashSet<int>());
+            foreach (InheritedBindingProperty inherited in bindings)
+            {
+                if (inherited.Binding != null)
+                    inputs[inherited.Binding] = SoundParameterBindingDrawer.GetPreviewInputForBinding(inherited.Property);
+            }
+
+            return inputs;
+        }
+
+        private static Dictionary<SoundParameterBinding, float> CollectLoopingPreviewBindingInputs(
+            SerializedProperty property,
+            SoundBase soundBase)
+        {
+            Dictionary<SoundParameterBinding, float> inputs =
+                CollectPreviewBindingInputs(property, soundBase);
+            AddPreviewBindingInputs(inputs, property.FindPropertyRelative(StartSound));
+            AddPreviewBindingInputs(inputs, property.FindPropertyRelative(EndSound));
+            return inputs;
+        }
+
+        private static void AddPreviewBindingInputs(
+            Dictionary<SoundParameterBinding, float> inputs,
+            SerializedProperty soundBaseProperty)
+        {
+            SoundBase soundBase = GetPropertyValue(soundBaseProperty) as SoundBase;
+            foreach (KeyValuePair<SoundParameterBinding, float> input in
+                     CollectPreviewBindingInputs(soundBaseProperty, soundBase))
+            {
+                inputs[input.Key] = input.Value;
+            }
         }
 
         internal static object GetPropertyValue(SerializedProperty property)
@@ -1349,7 +1410,11 @@ namespace Abb2kTools.AudioSystem.Editor
             return null;
         }
 
-        private void TriggerLoopingPreview(SerializedProperty property, bool use3DSettings, float duration)
+        private void TriggerLoopingPreview(
+            SerializedProperty property,
+            bool use3DSettings,
+            float duration,
+            bool useSoundPropertyBindings)
         {
             GetPreviewSettings(property.FindPropertyRelative("startSound"), out var startSound, out float startVolume, out float startPitch);
             GetPreviewSettings(property, out var loopingSound, out float loopingVolume, out float loopingPitch);
@@ -1376,6 +1441,9 @@ namespace Abb2kTools.AudioSystem.Editor
             Transform targetTransform = null;
             if (use3DSettings && property.serializedObject.targetObject is Component targetComponent)
                 targetTransform = targetComponent.transform;
+            SoundBase soundBase = GetPropertyValue(property) as SoundBase;
+            SoundBase startSoundBase = GetPropertyValue(property.FindPropertyRelative(StartSound)) as SoundBase;
+            SoundBase endSoundBase = GetPropertyValue(property.FindPropertyRelative(EndSound)) as SoundBase;
 
             EditorAudioPreviewer.PlayLoopingPreview(
                 property.serializedObject.targetObject,
@@ -1401,7 +1469,17 @@ namespace Abb2kTools.AudioSystem.Editor
                 loopPitchSineCycleDuration,
                 targetTransform,
                 use3DSettings ? property : null,
-                GetLoopingPreviewDurationKey(property));
+                GetLoopingPreviewDurationKey(property),
+                useSoundPropertyBindings
+                    ? GetPreviewPlaybackSettings(
+                        property,
+                        property.FindPropertyRelative(Volume)?.floatValue ?? 1f,
+                        property.FindPropertyRelative(Pitch)?.floatValue ?? 1f)
+                    : null,
+                useSoundPropertyBindings && soundBase != null ? soundBase.parameterBindings : null,
+                useSoundPropertyBindings ? CollectLoopingPreviewBindingInputs(property, soundBase) : null,
+                useSoundPropertyBindings ? startSoundBase?.parameterBindings : null,
+                useSoundPropertyBindings ? endSoundBase?.parameterBindings : null);
         }
 
         private static void GetPreviewSettings(SerializedProperty soundBaseProperty, out SoundModificationBase sound, out float volume, out float pitch)

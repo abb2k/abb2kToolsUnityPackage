@@ -136,6 +136,35 @@ namespace Abb2kTools.AudioSystem.Editor
                 EditorAudioPreviewer.PlayPreview(soundBase);
             }
 
+            GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
+            if (GUILayout.Button("▶ Bound Preview", GUILayout.Height(22), GUILayout.Width(105)))
+            {
+                EditorAudioPreviewer.PlayPreviewWithBindings(
+                    soundBase,
+                    1f,
+                    1f,
+                    null,
+                    null,
+                    new SoundBasePlaybackSettings
+                    {
+                        volume = 1f,
+                        pitch = 1f,
+                        panStereo = 0f,
+                        spatialBlend = 0f,
+                        reverbZoneMix = 1f,
+                        prio = 128,
+                        dopplerLevel = 1f,
+                        spread = 0f,
+                        minDist = 1f,
+                        maxDist = 500f
+                    },
+                    soundBase.parameterBindings,
+                    SoundBaseDrawer.CollectPreviewBindingInputs(soundBase));
+            }
+
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+
             GUI.backgroundColor = new Color(1f, 0.8f, 0.4f);
             if (GUILayout.Button(EditorAudioPreviewer.IsPaused ? "Resume" : "Pause", GUILayout.Height(22), GUILayout.Width(65)))
             {

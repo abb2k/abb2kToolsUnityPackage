@@ -112,9 +112,12 @@ namespace Abb2kTools.AudioSystem.Editor
         {
             public PlayableClipData Data;
             public Dictionary<SoundParameterTarget, float> BoundValues;
+            public IReadOnlyList<SoundParameterBinding> AdditionalBindings;
             public bool Played;
             public float VolMult;
             public float PitchMult;
+            public float BaseVolMult;
+            public float BasePitchMult;
             public AudioSource Source;
             public double StartPlayTime;
             public double Duration;
@@ -202,23 +205,7 @@ namespace Abb2kTools.AudioSystem.Editor
 
             foreach (PreviewClip clip in _pendingClips)
             {
-                clip.BoundValues = new Dictionary<SoundParameterTarget, float>();
-                AddPreviewBindingValues(
-                    _bindingPreviewContext.SoundBaseBindings,
-                    _bindingPreviewContext,
-                    clip.BoundValues);
-                AddPreviewBindingValues(
-                    clip.Data.ParameterBindings,
-                    _bindingPreviewContext,
-                    clip.BoundValues);
-
-                clip.VolMult = _bindingPreviewContext.BaseVolumeMultiplier;
-                if (clip.BoundValues.TryGetValue(SoundParameterTarget.VolumeMultiplier, out float boundVolume))
-                    clip.VolMult *= boundVolume;
-
-                clip.PitchMult = _bindingPreviewContext.BasePitchMultiplier;
-                if (clip.BoundValues.TryGetValue(SoundParameterTarget.PitchMultiplier, out float boundPitch))
-                    clip.PitchMult *= boundPitch;
+                ApplyPreviewBindings(clip);
 
                 if (clip.Source == null)
                     continue;
@@ -309,7 +296,8 @@ namespace Abb2kTools.AudioSystem.Editor
             float maxPitchMultiplier,
             SoundLoopModulationMode pitchMode,
             float pitchGrowthRate,
-            float pitchSineCycleDuration)
+            float pitchSineCycleDuration,
+            IReadOnlyList<SoundParameterBinding> soundBaseBindings)
         {
             if (sound == null || endTime <= 0f) return;
 
@@ -322,12 +310,14 @@ namespace Abb2kTools.AudioSystem.Editor
                 clips[0].StartOffset <= 0f &&
                 clips[0].EndOffset <= 0f)
             {
-                _pendingClips.Add(new PreviewClip
+                PreviewClip previewClip = new()
                 {
                     Data = clips[0],
                     Played = false,
                     VolMult = volumeMultiplier,
                     PitchMult = pitchMultiplier,
+                    BaseVolMult = volumeMultiplier,
+                    BasePitchMult = pitchMultiplier,
                     Looping = true,
                     StopTime = endTime,
                     FadeInDuration = fadeInDuration,
@@ -347,8 +337,11 @@ namespace Abb2kTools.AudioSystem.Editor
                     MaxPitchMultiplier = maxPitchMultiplier,
                     PitchMode = pitchMode,
                     PitchGrowthRate = pitchGrowthRate,
-                    PitchSineCycleDuration = pitchSineCycleDuration
-                });
+                    PitchSineCycleDuration = pitchSineCycleDuration,
+                    AdditionalBindings = soundBaseBindings
+                };
+                ApplyPreviewBindings(previewClip);
+                _pendingClips.Add(previewClip);
                 return;
             }
 
@@ -357,7 +350,17 @@ namespace Abb2kTools.AudioSystem.Editor
 
             int firstClipIndex = _pendingClips.Count;
             for (float loopStart = 0f; loopStart < endTime; loopStart += loopingDuration)
-                AppendPhase(sound, volumeMultiplier, pitchMultiplier, loopStart, endTime, 0f, endTime, fadeInDuration, fadeOutDuration);
+                AppendPhase(
+                    sound,
+                    volumeMultiplier,
+                    pitchMultiplier,
+                    loopStart,
+                    endTime,
+                    0f,
+                    endTime,
+                    fadeInDuration,
+                    fadeOutDuration,
+                    soundBaseBindings);
 
             for (int i = firstClipIndex; i < _pendingClips.Count; i++)
             {
@@ -393,7 +396,12 @@ namespace Abb2kTools.AudioSystem.Editor
             float minLoopPitchMultiplier, float startLoopPitchMultiplier, float maxLoopPitchMultiplier,
             SoundLoopModulationMode loopPitchMode,
             float loopPitchGrowthRate, float loopPitchSineCycleDuration,
-            Transform sourceTransform = null, SerializedProperty soundProperty = null, string previewKey = null)
+            Transform sourceTransform = null, SerializedProperty soundProperty = null, string previewKey = null,
+            SoundBasePlaybackSettings? bindingBaseSettings = null,
+            IReadOnlyList<SoundParameterBinding> soundBaseBindings = null,
+            IReadOnlyDictionary<SoundParameterBinding, float> previewInputs = null,
+            IReadOnlyList<SoundParameterBinding> startSoundBindings = null,
+            IReadOnlyList<SoundParameterBinding> endSoundBindings = null)
         {
             StopPreview();
 
@@ -401,6 +409,24 @@ namespace Abb2kTools.AudioSystem.Editor
 
             _currentTarget = null;
             _currentLoopingPreviewKey = previewKey;
+            if (bindingBaseSettings.HasValue)
+            {
+                Dictionary<SoundParameterBinding, float> copiedPreviewInputs = new();
+                if (previewInputs != null)
+                {
+                    foreach (KeyValuePair<SoundParameterBinding, float> previewInput in previewInputs)
+                        copiedPreviewInputs.Add(previewInput.Key, previewInput.Value);
+                }
+
+                _bindingPreviewContext = new BindingPreviewContext
+                {
+                    BaseSettings = bindingBaseSettings.Value,
+                    SoundBaseBindings = soundBaseBindings,
+                    PreviewInputs = copiedPreviewInputs,
+                    BaseVolumeMultiplier = 1f,
+                    BasePitchMultiplier = 1f
+                };
+            }
             _previewGO = EditorUtility.CreateGameObjectWithHideFlags("AudioPreview_Hidden", HideFlags.HideAndDontSave);
 
             if (sourceTransform != null && soundProperty != null)
@@ -420,7 +446,7 @@ namespace Abb2kTools.AudioSystem.Editor
             }
 
             float endTime = Mathf.Max(0f, loopDuration);
-            AppendPhase(startSound, startVolume, startPitch, 0f, endTime);
+            AppendPhase(startSound, startVolume, startPitch, 0f, endTime, soundBaseBindings: startSoundBindings);
             AppendLoopingPhase(
                 loopingSound,
                 loopingVolume,
@@ -441,8 +467,15 @@ namespace Abb2kTools.AudioSystem.Editor
                 maxLoopPitchMultiplier,
                 loopPitchMode,
                 loopPitchGrowthRate,
-                loopPitchSineCycleDuration);
-            AppendPhase(endSound, endVolume, endPitch, endTime, float.PositiveInfinity);
+                loopPitchSineCycleDuration,
+                soundBaseBindings);
+            AppendPhase(
+                endSound,
+                endVolume,
+                endPitch,
+                endTime,
+                float.PositiveInfinity,
+                soundBaseBindings: endSoundBindings);
 
             if (_pendingClips.Count == 0)
             {
@@ -483,7 +516,8 @@ namespace Abb2kTools.AudioSystem.Editor
             float phaseStartTime = 0f,
             float phaseEndTime = 0f,
             float fadeInDuration = 0f,
-            float fadeOutDuration = 0f)
+            float fadeOutDuration = 0f,
+            IReadOnlyList<SoundParameterBinding> soundBaseBindings = null)
         {
             if (sound == null) return;
 
@@ -527,6 +561,9 @@ namespace Abb2kTools.AudioSystem.Editor
                     Played = false,
                     VolMult = volumeMultiplier,
                     PitchMult = pitchMultiplier,
+                    BaseVolMult = volumeMultiplier,
+                    BasePitchMult = pitchMultiplier,
+                    AdditionalBindings = soundBaseBindings,
                     FadeInDuration = fadeInDuration,
                     FadeOutDuration = fadeOutDuration,
                     PhaseStartTime = phaseStartTime,
@@ -565,39 +602,49 @@ namespace Abb2kTools.AudioSystem.Editor
                     float activeDur = clip.Clip.length - clip.StartOffset - clip.EndOffset;
                     if (activeDur > 0.001f)
                     {
-                        Dictionary<SoundParameterTarget, float> boundValues = null;
-                        float clipVolumeMultiplier = volMult;
-                        float clipPitchMultiplier = pitchMult;
-
-                        if (bindingPreviewContext != null)
-                        {
-                            boundValues = new Dictionary<SoundParameterTarget, float>();
-                            AddPreviewBindingValues(
-                                bindingPreviewContext.SoundBaseBindings,
-                                bindingPreviewContext,
-                                boundValues);
-                            AddPreviewBindingValues(
-                                clip.ParameterBindings,
-                                bindingPreviewContext,
-                                boundValues);
-
-                            if (boundValues.TryGetValue(SoundParameterTarget.VolumeMultiplier, out float boundVolume))
-                                clipVolumeMultiplier *= boundVolume;
-                            if (boundValues.TryGetValue(SoundParameterTarget.PitchMultiplier, out float boundPitch))
-                                clipPitchMultiplier *= boundPitch;
-                        }
-
-                        _pendingClips.Add(new PreviewClip
+                        PreviewClip previewClip = new()
                         {
                             Data = clip,
-                            BoundValues = boundValues,
                             Played = false,
-                            VolMult = clipVolumeMultiplier,
-                            PitchMult = clipPitchMultiplier
-                        });
+                            VolMult = volMult,
+                            PitchMult = pitchMult,
+                            BaseVolMult = volMult,
+                            BasePitchMult = pitchMult
+                        };
+                        if (bindingPreviewContext != null)
+                            ApplyPreviewBindings(previewClip);
+                        _pendingClips.Add(previewClip);
                     }
                 }
             }
+        }
+
+        private static void ApplyPreviewBindings(PreviewClip clip)
+        {
+            if (_bindingPreviewContext == null)
+                return;
+
+            clip.BoundValues = new Dictionary<SoundParameterTarget, float>();
+            AddPreviewBindingValues(
+                _bindingPreviewContext.SoundBaseBindings,
+                _bindingPreviewContext,
+                clip.BoundValues);
+            AddPreviewBindingValues(
+                clip.AdditionalBindings,
+                _bindingPreviewContext,
+                clip.BoundValues);
+            AddPreviewBindingValues(
+                clip.Data.ParameterBindings,
+                _bindingPreviewContext,
+                clip.BoundValues);
+
+            clip.VolMult = clip.BaseVolMult;
+            if (clip.BoundValues.TryGetValue(SoundParameterTarget.VolumeMultiplier, out float boundVolume))
+                clip.VolMult *= boundVolume;
+
+            clip.PitchMult = clip.BasePitchMult;
+            if (clip.BoundValues.TryGetValue(SoundParameterTarget.PitchMultiplier, out float boundPitch))
+                clip.PitchMult *= boundPitch;
         }
 
         private static void AddPreviewBindingValues(
