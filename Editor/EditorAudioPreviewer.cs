@@ -149,7 +149,12 @@ namespace Abb2kTools.AudioSystem.Editor
             public float BasePitchMultiplier;
         }
 
-        public static void PlayPreview(SoundModificationBase soundBase, float volMult = 1f, float pitchMult = 1f, Transform sourceTransform = null, SerializedProperty soundProperty = null)
+        public static void PlayPreview(
+            SoundModificationBase soundBase,
+            float volMult = 1f,
+            float pitchMult = 1f,
+            Transform sourceTransform = null,
+            SerializedProperty soundProperty = null)
         {
             PlayPreviewInternal(soundBase, volMult, pitchMult, sourceTransform, soundProperty, null);
         }
@@ -224,7 +229,8 @@ namespace Abb2kTools.AudioSystem.Editor
                     clip.Data.Volume *
                     clip.VolMult *
                     GetPhaseVolumeMultiplier(clip, currentTime) *
-                    GetLoopVolumeMultiplier(clip, currentTime));
+                    GetLoopVolumeMultiplier(clip, currentTime) *
+                    GetFadeMultiplier(clip.Data, currentTime));
                 clip.Source.pitch = clip.Data.Pitch *
                     clip.PitchMult *
                     GetLoopPitchMultiplier(clip, currentTime);
@@ -490,6 +496,17 @@ namespace Abb2kTools.AudioSystem.Editor
 
                 PlayableClipData scheduledClip = clipData;
                 scheduledClip.Delay += startTime;
+                if (scheduledClip.FadeEnvelopes != null)
+                {
+                    scheduledClip.FadeEnvelopes = new List<SoundFadeEnvelope>(scheduledClip.FadeEnvelopes);
+                    for (int i = 0; i < scheduledClip.FadeEnvelopes.Count; i++)
+                    {
+                        SoundFadeEnvelope envelope = scheduledClip.FadeEnvelopes[i];
+                        envelope.StartTime += startTime;
+                        envelope.EndTime += startTime;
+                        scheduledClip.FadeEnvelopes[i] = envelope;
+                    }
+                }
                 if (scheduledClip.Delay >= endTime) continue;
 
                 if (!float.IsPositiveInfinity(endTime))
@@ -630,7 +647,8 @@ namespace Abb2kTools.AudioSystem.Editor
                     AudioSourceGain.SetVolume(pClip.Source, newClipData.Volume *
                         pClip.VolMult *
                         GetPhaseVolumeMultiplier(pClip, currentTime) *
-                        GetLoopVolumeMultiplier(pClip, currentTime));
+                        GetLoopVolumeMultiplier(pClip, currentTime) *
+                        GetFadeMultiplier(newClipData, (float)currentTime));
                     pClip.Source.pitch = newClipData.Pitch *
                         pClip.PitchMult *
                         GetLoopPitchMultiplier(pClip, currentTime);
@@ -695,7 +713,8 @@ namespace Abb2kTools.AudioSystem.Editor
                         AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, currentTime) *
-                            GetLoopVolumeMultiplier(pClip, currentTime));
+                            GetLoopVolumeMultiplier(pClip, currentTime) *
+                            GetFadeMultiplier(pClip.Data, (float)currentTime));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, currentTime);
@@ -751,7 +770,8 @@ namespace Abb2kTools.AudioSystem.Editor
                         AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, targetTime) *
-                            GetLoopVolumeMultiplier(pClip, targetTime));
+                            GetLoopVolumeMultiplier(pClip, targetTime) *
+                            GetFadeMultiplier(pClip.Data, targetTime));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, targetTime);
@@ -837,7 +857,8 @@ namespace Abb2kTools.AudioSystem.Editor
                         AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, elapsed) *
-                            GetLoopVolumeMultiplier(pClip, elapsed));
+                            GetLoopVolumeMultiplier(pClip, elapsed) *
+                            GetFadeMultiplier(pClip.Data, (float)elapsed));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, elapsed);
@@ -866,7 +887,8 @@ namespace Abb2kTools.AudioSystem.Editor
                         AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
                             pClip.VolMult *
                             GetPhaseVolumeMultiplier(pClip, elapsed) *
-                            GetLoopVolumeMultiplier(pClip, elapsed));
+                            GetLoopVolumeMultiplier(pClip, elapsed) *
+                            GetFadeMultiplier(pClip.Data, (float)elapsed));
                         pClip.Source.pitch = pClip.Data.Pitch *
                             pClip.PitchMult *
                             GetLoopPitchMultiplier(pClip, elapsed);
@@ -922,6 +944,17 @@ namespace Abb2kTools.AudioSystem.Editor
                     clip.PitchGrowthRate,
                     clip.PitchSineCycleDuration)
                 : 1f;
+        }
+
+        private static float GetFadeMultiplier(PlayableClipData clipData, float elapsed)
+        {
+            if (clipData.FadeEnvelopes == null)
+                return 1f;
+
+            float multiplier = 1f;
+            foreach (SoundFadeEnvelope envelope in clipData.FadeEnvelopes)
+                multiplier *= envelope.Evaluate(elapsed);
+            return multiplier;
         }
 
         private static float GetLoopModulationValue(

@@ -42,9 +42,12 @@ namespace Abb2kTools.AudioSystem.Editor
         private const string LoopPitchGrowthRate = "loopPitchGrowthRate";
         private const string LoopPitchSineCycleDuration = "loopPitchSineCycleDuration";
         private const float LoopModulationGraphHeight = 58f;
+        private const float WaveformHeaderHeight = 20f;
+        private const float WaveformTrackHeight = 88f;
         
         private static readonly Dictionary<string, float> _loopingPreviewDurations = new();
         private static readonly Dictionary<string, bool> _loopModulationFoldouts = new();
+        private static readonly Dictionary<string, bool> _waveformFoldouts = new();
 
         private sealed class LoopingInspectorProperties
         {
@@ -187,6 +190,9 @@ namespace Abb2kTools.AudioSystem.Editor
                                   (EditorGUIUtility.standardVerticalSpacing * previewButtonCount);
                         if (IsLoopingSound(property))
                             height += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+                        float waveformHeight = GetWaveformPreviewHeight(property);
+                        if (waveformHeight > 0f)
+                            height += waveformHeight + EditorGUIUtility.standardVerticalSpacing;
                     }
                 }
 
@@ -468,6 +474,7 @@ namespace Abb2kTools.AudioSystem.Editor
                         }
 
                         currentY += buttonRectFull.height + EditorGUIUtility.standardVerticalSpacing;
+                        DrawPreviewWaveform(position, ref currentY, property);
                     }
                 }
 
@@ -702,6 +709,9 @@ namespace Abb2kTools.AudioSystem.Editor
             height += GetLoopingThreeDSettingsGroupHeight(properties, property) + spacing;
             height += EditorGUIUtility.singleLineHeight + spacing;
             height += EditorGUIUtility.singleLineHeight * 1.5f + spacing;
+            float waveformHeight = GetWaveformPreviewHeight(property);
+            if (waveformHeight > 0f)
+                height += waveformHeight + spacing;
             height += GetSoundBaseFieldHeight(properties.StartSound) + spacing;
             height += GetSoundBaseFieldHeight(properties.EndSound) + spacing;
             return height + spacing;
@@ -921,6 +931,7 @@ namespace Abb2kTools.AudioSystem.Editor
             }
             currentY += controlsHeight + spacing;
 
+            DrawPreviewWaveform(position, ref currentY, property);
             DrawLoopingEffectField(position, ref currentY, properties.StartSound, "Start Sound", spacing);
             DrawLoopingEffectField(position, ref currentY, properties.EndSound, "End Sound", spacing);
             EditorGUI.indentLevel--;
@@ -1421,6 +1432,585 @@ namespace Abb2kTools.AudioSystem.Editor
             return Random.Range(
                 randomization.FindPropertyRelative(Min).floatValue,
                 randomization.FindPropertyRelative(Max).floatValue);
+        }
+
+        private static string GetWaveformFoldoutKey(SerializedProperty property)
+        {
+            return $"{property.serializedObject.targetObject.GetInstanceID()}:{property.propertyPath}";
+        }
+
+        private static bool HasWaveformSound(SerializedProperty property)
+        {
+            if (IsLoopingSound(property))
+            {
+                return property.FindPropertyRelative(Sound)?.objectReferenceValue != null ||
+                       property.FindPropertyRelative(StartSound)?.FindPropertyRelative(Sound)?.objectReferenceValue != null ||
+                       property.FindPropertyRelative(EndSound)?.FindPropertyRelative(Sound)?.objectReferenceValue != null;
+            }
+
+            return property.FindPropertyRelative(Sound)?.objectReferenceValue != null;
+        }
+
+        private float GetWaveformPreviewHeight(SerializedProperty property)
+        {
+            if (!HasWaveformSound(property))
+                return 0f;
+
+            float height = WaveformHeaderHeight + 8f;
+            if (!_waveformFoldouts.TryGetValue(GetWaveformFoldoutKey(property), out bool expanded) || !expanded)
+                return height;
+
+            List<PlayableClipData> clips = CollectWaveformPreviewClips(property);
+            if (clips.Count == 0)
+                return height + EditorGUIUtility.singleLineHeight + 4f;
+
+            AssignWaveformTracks(clips, out int trackCount);
+            return height + 18f + (trackCount * WaveformTrackHeight) + 4f;
+        }
+
+        private void DrawPreviewWaveform(Rect position, ref float currentY, SerializedProperty property)
+        {
+            float previewHeight = GetWaveformPreviewHeight(property);
+            if (previewHeight <= 0f)
+                return;
+
+            Rect boxRect = EditorGUI.IndentedRect(new Rect(position.x, currentY, position.width, previewHeight));
+            GUI.Box(boxRect, GUIContent.none, EditorStyles.helpBox);
+
+            string foldoutKey = GetWaveformFoldoutKey(property);
+            if (!_waveformFoldouts.TryGetValue(foldoutKey, out bool expanded))
+                expanded = false;
+
+            Rect headerRect = new(
+                boxRect.x + 5f,
+                boxRect.y + 2f,
+                boxRect.width - 10f,
+                WaveformHeaderHeight);
+            bool newExpanded = EditorGUI.Foldout(
+                headerRect,
+                expanded,
+                "Preview Waveform",
+                true,
+                EditorStyles.foldout);
+            if (newExpanded != expanded)
+                _waveformFoldouts[foldoutKey] = newExpanded;
+
+            if (newExpanded)
+            {
+                List<PlayableClipData> clips = CollectWaveformPreviewClips(property);
+                if (clips.Count == 0)
+                {
+                    EditorGUI.LabelField(
+                        new Rect(boxRect.x + 8f, headerRect.yMax, boxRect.width - 16f, EditorGUIUtility.singleLineHeight),
+                        "No playable clips.",
+                        EditorStyles.miniLabel);
+                }
+                else
+                {
+                    List<int> tracks = AssignWaveformTracks(clips, out int trackCount);
+                    Rect rulerRect = new(
+                        boxRect.x + 6f,
+                        headerRect.yMax + 1f,
+                        boxRect.width - 12f,
+                        16f);
+                    Rect waveformRect = new(
+                        rulerRect.x,
+                        rulerRect.yMax,
+                        rulerRect.width,
+                        trackCount * WaveformTrackHeight);
+
+                    float timelineStart = 0f;
+                    float timelineEnd = 0.05f;
+                    foreach (PlayableClipData clip in clips)
+                    {
+                        if (clip.Clip == null)
+                            continue;
+
+                        float pitch = Mathf.Max(0.001f, clip.Pitch);
+                        float fullStart = clip.Delay - clip.StartOffset / pitch;
+                        float fullDuration = clip.Clip.length / pitch;
+                        timelineStart = Mathf.Min(timelineStart, fullStart);
+                        timelineEnd = Mathf.Max(timelineEnd, fullStart + fullDuration);
+                    }
+
+                    DrawWaveformRuler(rulerRect, timelineStart, timelineEnd);
+                    EditorGUI.DrawRect(waveformRect, new Color(0.12f, 0.12f, 0.12f, 1f));
+
+                    float timelineDuration = Mathf.Max(0.05f, timelineEnd - timelineStart);
+                    float pixelsPerSecond = waveformRect.width / timelineDuration;
+                    GUI.BeginGroup(waveformRect);
+                    for (int i = 0; i < clips.Count; i++)
+                    {
+                        DrawWaveformClip(
+                            clips[i],
+                            tracks[i],
+                            waveformRect.width,
+                            pixelsPerSecond,
+                            timelineStart);
+                    }
+                    GUI.EndGroup();
+                }
+            }
+
+            currentY += previewHeight + EditorGUIUtility.standardVerticalSpacing;
+        }
+
+        private static void DrawWaveformRuler(Rect rulerRect, float timelineStart, float timelineEnd)
+        {
+            EditorGUI.DrawRect(rulerRect, new Color(0.18f, 0.18f, 0.18f, 1f));
+            float duration = Mathf.Max(0.05f, timelineEnd - timelineStart);
+            float pixelsPerSecond = rulerRect.width / duration;
+            float interval = Mathf.Max(1f, SoundModificationEditor.GetNiceRulerInterval(38f / Mathf.Max(0.001f, pixelsPerSecond)));
+            float firstTick = Mathf.Ceil(timelineStart / interval) * interval;
+
+            GUIStyle labelStyle = new(EditorStyles.miniLabel)
+            {
+                fontSize = 9,
+                normal = { textColor = new Color(0.7f, 0.7f, 0.7f) }
+            };
+
+            for (float time = firstTick; time <= timelineEnd; time += interval)
+            {
+                float x = rulerRect.x + ((time - timelineStart) / duration * rulerRect.width);
+                EditorGUI.DrawRect(
+                    new Rect(x, rulerRect.yMax - 5f, 1f, 5f),
+                    new Color(0.6f, 0.6f, 0.6f, 1f));
+                string label = $"{Mathf.RoundToInt(time)}s";
+                Vector2 labelSize = labelStyle.CalcSize(new GUIContent(label));
+                GUI.Label(
+                    new Rect(Mathf.Clamp(x - labelSize.x * 0.5f, rulerRect.x, rulerRect.xMax - labelSize.x),
+                        rulerRect.y,
+                        labelSize.x,
+                        labelSize.y),
+                    label,
+                    labelStyle);
+            }
+        }
+
+        private static void DrawWaveformClip(
+            PlayableClipData clipData,
+            int track,
+            float timelineWidth,
+            float pixelsPerSecond,
+            float timelineStart)
+        {
+            if (clipData.Clip == null)
+                return;
+
+            float pitch = Mathf.Max(0.001f, clipData.Pitch);
+            float fullDuration = clipData.Clip.length / pitch;
+            float trueStart = clipData.Delay - clipData.StartOffset / pitch;
+            float blockX = (trueStart - timelineStart) * pixelsPerSecond;
+            float blockWidth = fullDuration * pixelsPerSecond;
+            float trackY = track * WaveformTrackHeight;
+            Rect fullRect = new(blockX, trackY, blockWidth, WaveformTrackHeight - 2f);
+            float gain = Mathf.Max(0f, clipData.Volume);
+            if (clipData.Filters != null && clipData.Filters.enableDistortion)
+                gain += clipData.Filters.distortionLevel;
+
+            int textureWidth = Mathf.Clamp(Mathf.CeilToInt(fullRect.width), 64, 2048);
+            int textureHeight = 128;
+            Color waveformColor = new(0.4f, 0.8f, 1f, 0.8f);
+            Texture2D texture = SoundModificationEditor.GetWaveformTexture(
+                clipData.Clip,
+                textureWidth,
+                textureHeight,
+                waveformColor,
+                new Color(0f, 0f, 0f, 0f),
+                gain);
+            if (texture != null && gain > 0f)
+                GUI.DrawTexture(fullRect, texture, ScaleMode.StretchToFill);
+
+            if (clipData.Filters != null && clipData.Filters.enableEcho && texture != null)
+            {
+                float echoDelay = clipData.Filters.echoDelay / 1000f;
+                int bounces = Mathf.Clamp(Mathf.RoundToInt(clipData.Filters.echoDecayRatio * 5f), 1, 5);
+                for (int echo = 1; echo <= bounces; echo++)
+                {
+                    float echoX = blockX + echoDelay * echo * pixelsPerSecond;
+                    Rect echoRect = new(echoX, trackY, blockWidth, WaveformTrackHeight - 2f);
+                    GUI.color = new Color(1f, 1f, 1f, 0.4f * Mathf.Pow(clipData.Filters.echoDecayRatio, echo));
+                    GUI.DrawTexture(echoRect, texture, ScaleMode.StretchToFill);
+                }
+                GUI.color = Color.white;
+            }
+
+            float activeStart = (clipData.Delay - timelineStart) * pixelsPerSecond;
+            float activeDuration = (clipData.Clip.length - clipData.StartOffset - clipData.EndOffset) / pitch;
+            float activeEnd = activeStart + activeDuration * pixelsPerSecond;
+            EditorGUI.DrawRect(
+                new Rect(blockX, trackY, Mathf.Max(0f, activeStart - blockX), WaveformTrackHeight - 2f),
+                new Color(0f, 0f, 0f, 0.6f));
+            EditorGUI.DrawRect(
+                new Rect(activeEnd, trackY, Mathf.Max(0f, blockX + blockWidth - activeEnd), WaveformTrackHeight - 2f),
+                new Color(0f, 0f, 0f, 0.6f));
+
+            SoundModificationEditor.DrawPreviewFadeEnvelope(
+                fullRect,
+                trueStart,
+                fullDuration,
+                clipData.FadeEnvelopes);
+
+            if (fullRect.width > 48f)
+                GUI.Label(new Rect(fullRect.x + 3f, fullRect.y + 1f, fullRect.width - 6f, 16f), clipData.Clip.name, EditorStyles.miniBoldLabel);
+        }
+
+        private static List<int> AssignWaveformTracks(List<PlayableClipData> clips, out int trackCount)
+        {
+            List<int> tracks = new();
+            List<float> trackEndTimes = new();
+            foreach (PlayableClipData clip in clips)
+            {
+                float pitch = Mathf.Max(0.001f, clip.Pitch);
+                float start = clip.Delay - clip.StartOffset / pitch;
+                float end = start + clip.Clip.length / pitch;
+                int track = -1;
+                for (int i = 0; i < trackEndTimes.Count; i++)
+                {
+                    if (start >= trackEndTimes[i])
+                    {
+                        track = i;
+                        trackEndTimes[i] = end;
+                        break;
+                    }
+                }
+
+                if (track < 0)
+                {
+                    track = trackEndTimes.Count;
+                    trackEndTimes.Add(end);
+                }
+                tracks.Add(track);
+            }
+
+            trackCount = Mathf.Max(1, trackEndTimes.Count);
+            return tracks;
+        }
+
+        private static List<PlayableClipData> CollectWaveformPreviewClips(SerializedProperty property)
+        {
+            List<PlayableClipData> clips = new();
+            SoundBase rootSoundBase = GetPropertyValue(property) as SoundBase;
+            if (rootSoundBase == null)
+                return clips;
+
+            if (rootSoundBase is SoundEffectLooping)
+            {
+                float loopEndTime = GetLoopingPreviewDuration(property);
+                SerializedProperty startProperty = property.FindPropertyRelative(StartSound);
+                SerializedProperty loopProperty = property;
+                SerializedProperty endProperty = property.FindPropertyRelative(EndSound);
+
+                AppendWaveformPhase(clips, startProperty, property, rootSoundBase, 0f, loopEndTime);
+
+                List<PlayableClipData> loopTemplate = CollectWaveformPhase(loopProperty, property, rootSoundBase);
+                float loopSequenceDuration = GetWaveformSequenceDuration(loopTemplate);
+                if (loopSequenceDuration > 0f)
+                {
+                    int iterations = 0;
+                    for (float loopStart = 0f; loopStart < loopEndTime && iterations < 256; loopStart += loopSequenceDuration, iterations++)
+                    {
+                        float volumeModulation = GetLoopModulationMultiplier(
+                            property,
+                            ModulateLoopVolume,
+                            MinLoopVolumeMultiplier,
+                            StartLoopVolumeMultiplier,
+                            MaxLoopVolumeMultiplier,
+                            LoopVolumeModulationMode,
+                            LoopVolumeGrowthRate,
+                            LoopVolumeSineCycleDuration,
+                            loopStart);
+                        float pitchModulation = GetLoopModulationMultiplier(
+                            property,
+                            ModulateLoopPitch,
+                            MinLoopPitchMultiplier,
+                            StartLoopPitchMultiplier,
+                            MaxLoopPitchMultiplier,
+                            LoopPitchModulationMode,
+                            LoopPitchGrowthRate,
+                            LoopPitchSineCycleDuration,
+                            loopStart);
+
+                        foreach (PlayableClipData template in loopTemplate)
+                        {
+                            PlayableClipData repeatedClip = template;
+                            repeatedClip.Volume *= volumeModulation;
+                            repeatedClip.Pitch *= pitchModulation;
+                            int previousClipCount = clips.Count;
+                            AddScheduledWaveformClip(clips, repeatedClip, loopStart, loopEndTime);
+                            if (clips.Count > previousClipCount)
+                            {
+                                PlayableClipData scheduledClip = clips[clips.Count - 1];
+                                scheduledClip.FadeEnvelopes ??= new List<SoundFadeEnvelope>();
+                                AddLoopTransitionEnvelopes(
+                                    scheduledClip.FadeEnvelopes,
+                                    loopEndTime,
+                                    property.FindPropertyRelative(EnterTransitionDuration).floatValue,
+                                    property.FindPropertyRelative(ExitTransitionDuration).floatValue);
+                                clips[clips.Count - 1] = scheduledClip;
+                            }
+                        }
+                    }
+                }
+
+                AppendWaveformPhase(clips, endProperty, property, rootSoundBase, loopEndTime, float.PositiveInfinity);
+                return clips;
+            }
+
+            if (rootSoundBase is SoundEffect soundEffect && soundEffect.loop)
+            {
+                List<PlayableClipData> loopTemplate = CollectWaveformPhase(property, property, rootSoundBase);
+                float loopDuration = GetWaveformSequenceDuration(loopTemplate);
+                float previewDuration = GetLoopingPreviewDuration(property);
+                if (loopDuration > 0f)
+                {
+                    int iterations = 0;
+                    for (float loopStart = 0f; loopStart < previewDuration && iterations < 256; loopStart += loopDuration, iterations++)
+                    {
+                        foreach (PlayableClipData template in loopTemplate)
+                            AddScheduledWaveformClip(clips, template, loopStart, previewDuration);
+                    }
+                }
+                return clips;
+            }
+
+            AppendWaveformPhase(
+                clips,
+                property,
+                property,
+                rootSoundBase,
+                0f,
+                float.PositiveInfinity);
+            return clips;
+        }
+
+        private static void AppendWaveformPhase(
+            List<PlayableClipData> destination,
+            SerializedProperty phaseProperty,
+            SerializedProperty rootProperty,
+            SoundBase rootSoundBase,
+            float phaseStart,
+            float phaseEnd)
+        {
+            List<PlayableClipData> phaseClips = CollectWaveformPhase(phaseProperty, rootProperty, rootSoundBase);
+            foreach (PlayableClipData clip in phaseClips)
+                AddScheduledWaveformClip(destination, clip, phaseStart, phaseEnd);
+        }
+
+        private static List<PlayableClipData> CollectWaveformPhase(
+            SerializedProperty phaseProperty,
+            SerializedProperty rootProperty,
+            SoundBase rootSoundBase)
+        {
+            List<PlayableClipData> clips = new();
+            if (phaseProperty == null)
+                return clips;
+
+            GetWaveformPreviewSettings(phaseProperty, out SoundModificationBase sound, out float volume, out float pitch);
+            if (sound == null)
+                return clips;
+
+            sound.CollectPlayableClips(clips, volume, pitch, 0f);
+            SoundBase phaseSoundBase = GetPropertyValue(phaseProperty) as SoundBase;
+            Dictionary<SoundParameterBinding, float> previewInputs = CollectPreviewBindingInputs(rootProperty, rootSoundBase);
+            if (phaseSoundBase != null && phaseSoundBase != rootSoundBase)
+            {
+                foreach (KeyValuePair<SoundParameterBinding, float> input in CollectPreviewBindingInputs(phaseProperty, phaseSoundBase))
+                    previewInputs[input.Key] = input.Value;
+            }
+
+            for (int i = 0; i < clips.Count; i++)
+            {
+                PlayableClipData clip = clips[i];
+                float volumeMultiplier = 1f;
+                float pitchMultiplier = 1f;
+                AccumulateWaveformBindings(rootSoundBase.parameterBindings, previewInputs, ref volumeMultiplier, ref pitchMultiplier);
+                if (phaseSoundBase != null && phaseSoundBase != rootSoundBase)
+                    AccumulateWaveformBindings(phaseSoundBase.parameterBindings, previewInputs, ref volumeMultiplier, ref pitchMultiplier);
+                AccumulateWaveformBindings(clip.ParameterBindings, previewInputs, ref volumeMultiplier, ref pitchMultiplier);
+                clip.Volume *= volumeMultiplier;
+                clip.Pitch *= pitchMultiplier;
+                clips[i] = clip;
+            }
+
+            return clips;
+        }
+
+        private static void GetWaveformPreviewSettings(
+            SerializedProperty property,
+            out SoundModificationBase sound,
+            out float volume,
+            out float pitch)
+        {
+            sound = property.FindPropertyRelative(Sound)?.objectReferenceValue as SoundModificationBase;
+            volume = GetWaveformPreviewParameter(property, Volume);
+            pitch = GetWaveformPreviewParameter(property, Pitch);
+        }
+
+        private static float GetWaveformPreviewParameter(SerializedProperty property, string parameterName)
+        {
+            float value = property.FindPropertyRelative(parameterName)?.floatValue ?? 1f;
+            SerializedProperty randomization = property.FindPropertyRelative($"{parameterName}Randomization");
+            SerializedProperty mode = randomization?.FindPropertyRelative("mode");
+            if (mode == null || mode.enumValueIndex != (int)SoundParameterMode.RandomBetween)
+                return value;
+
+            SerializedProperty min = randomization.FindPropertyRelative(Min);
+            SerializedProperty max = randomization.FindPropertyRelative(Max);
+            return (min.floatValue + max.floatValue) * 0.5f;
+        }
+
+        private static void AccumulateWaveformBindings(
+            IEnumerable<SoundParameterBinding> bindings,
+            IReadOnlyDictionary<SoundParameterBinding, float> previewInputs,
+            ref float volumeMultiplier,
+            ref float pitchMultiplier)
+        {
+            if (bindings == null)
+                return;
+
+            foreach (SoundParameterBinding binding in bindings)
+            {
+                if (binding == null || binding.parameter == null)
+                    continue;
+
+                float input = previewInputs != null && previewInputs.TryGetValue(binding, out float previewInput)
+                    ? previewInput
+                    : binding.parameter.CurrentValue;
+                float value = binding.Evaluate(input);
+                if (binding.target == SoundParameterTarget.VolumeMultiplier)
+                    volumeMultiplier *= value;
+                else if (binding.target == SoundParameterTarget.PitchMultiplier)
+                    pitchMultiplier *= value;
+            }
+        }
+
+        private static void AddScheduledWaveformClip(
+            List<PlayableClipData> destination,
+            PlayableClipData clip,
+            float startTime,
+            float endTime)
+        {
+            if (clip.Clip == null)
+                return;
+
+            clip.Delay += startTime;
+            if (clip.Delay >= endTime)
+                return;
+
+            if (clip.FadeEnvelopes != null)
+            {
+                clip.FadeEnvelopes = new List<SoundFadeEnvelope>(clip.FadeEnvelopes);
+                ShiftFadeEnvelopes(clip.FadeEnvelopes, startTime);
+            }
+
+            float pitch = Mathf.Max(0.001f, clip.Pitch);
+            float currentDuration = (clip.Clip.length - clip.StartOffset - clip.EndOffset) / pitch;
+            float remainingDuration = endTime - clip.Delay;
+            if (!float.IsPositiveInfinity(endTime) && currentDuration > remainingDuration)
+                clip.EndOffset = Mathf.Min(
+                    clip.Clip.length - clip.StartOffset,
+                    clip.EndOffset + (currentDuration - remainingDuration) * pitch);
+
+            destination.Add(clip);
+        }
+
+        private static void ShiftFadeEnvelopes(List<SoundFadeEnvelope> envelopes, float timeOffset)
+        {
+            for (int i = 0; i < envelopes.Count; i++)
+            {
+                SoundFadeEnvelope envelope = envelopes[i];
+                envelope.StartTime += timeOffset;
+                envelope.EndTime += timeOffset;
+                envelopes[i] = envelope;
+            }
+        }
+
+        private static float GetWaveformSequenceDuration(List<PlayableClipData> clips)
+        {
+            float duration = 0f;
+            foreach (PlayableClipData clip in clips)
+            {
+                if (clip.Clip == null)
+                    continue;
+
+                float clipDuration = (clip.Clip.length - clip.StartOffset - clip.EndOffset) /
+                                     Mathf.Max(0.001f, clip.Pitch);
+                duration = Mathf.Max(duration, clip.Delay + clipDuration);
+            }
+            return duration;
+        }
+
+        private static float GetLoopModulationMultiplier(
+            SerializedProperty property,
+            string enabledField,
+            string minField,
+            string startField,
+            string maxField,
+            string modeField,
+            string growthField,
+            string sineDurationField,
+            float elapsed)
+        {
+            if (!property.FindPropertyRelative(enabledField).boolValue)
+                return 1f;
+
+            float minValue = property.FindPropertyRelative(minField).floatValue;
+            float startValue = property.FindPropertyRelative(startField).floatValue;
+            float maxValue = property.FindPropertyRelative(maxField).floatValue;
+            SoundLoopModulationMode mode = (SoundLoopModulationMode)property.FindPropertyRelative(modeField).enumValueIndex;
+            float lower = Mathf.Min(minValue, maxValue);
+            float upper = Mathf.Max(minValue, maxValue);
+            float initial = Mathf.Clamp(startValue, lower, upper);
+
+            if (mode == SoundLoopModulationMode.SineWave)
+            {
+                if (upper <= lower)
+                    return lower;
+
+                float progress = (initial - lower) / (upper - lower);
+                float phase = Mathf.Asin(progress * 2f - 1f) +
+                              Mathf.PI * 2f * elapsed /
+                              Mathf.Max(0.01f, property.FindPropertyRelative(sineDurationField).floatValue);
+                return Mathf.Lerp(lower, upper, 0.5f + 0.5f * Mathf.Sin(phase));
+            }
+
+            return Mathf.Min(
+                upper,
+                initial + elapsed * Mathf.Max(0f, property.FindPropertyRelative(growthField).floatValue));
+        }
+
+        private static void AddLoopTransitionEnvelopes(
+            List<SoundFadeEnvelope> envelopes,
+            float loopEndTime,
+            float fadeInDuration,
+            float fadeOutDuration)
+        {
+            if (loopEndTime <= 0f || (fadeInDuration <= 0f && fadeOutDuration <= 0f))
+                return;
+
+            const int sampleCount = 16;
+            Keyframe[] keys = new Keyframe[sampleCount + 1];
+            for (int i = 0; i <= sampleCount; i++)
+            {
+                float progress = i / (float)sampleCount;
+                float time = progress * loopEndTime;
+                float fadeIn = fadeInDuration > 0f ? Mathf.Clamp01(time / fadeInDuration) : 1f;
+                float fadeOut = fadeOutDuration > 0f ? Mathf.Clamp01((loopEndTime - time) / fadeOutDuration) : 1f;
+                keys[i] = new Keyframe(progress, Mathf.Min(fadeIn, fadeOut));
+            }
+
+            envelopes.Add(new SoundFadeEnvelope
+            {
+                StartTime = 0f,
+                EndTime = loopEndTime,
+                FadeIn = new SoundFadeSettings
+                {
+                    enabled = true,
+                    duration = loopEndTime,
+                    curve = new AnimationCurve(keys)
+                }
+            });
         }
 
         private static void DrawSoundBaseField(Rect rect, SerializedProperty soundBaseProperty, SerializedProperty field)

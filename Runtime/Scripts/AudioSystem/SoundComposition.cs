@@ -21,7 +21,7 @@ namespace Abb2kTools.AudioSystem
             [Min(0)] public float endOffset = 0f;
         }
 
-        [SerializeField] private CompositionElement[] composition;
+        [SerializeField] private CompositionElement[] composition = System.Array.Empty<CompositionElement>();
 
         [Header("Mixer Override")]
         [Tooltip("If set, overrides the mixer groups of all child clips in this composition.")]
@@ -159,6 +159,8 @@ namespace Abb2kTools.AudioSystem
                 
                 result[i] = clip;
             }
+
+            AppendFadeEnvelope(result, startIndex, currentDelay);
         }
     }
 }

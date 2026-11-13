@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace Abb2kTools.AudioSystem.Editor
@@ -8,22 +9,66 @@ namespace Abb2kTools.AudioSystem.Editor
     [CustomEditor(typeof(SoundModificationBase), true)]
     public class SoundModificationEditor : UnityEditor.Editor
     {
-        private static readonly Dictionary<AudioClip, Dictionary<float, Texture2D>> _waveformCache = new();
+        private readonly struct WaveformTextureKey : System.IEquatable<WaveformTextureKey>
+        {
+            public readonly int Width;
+            public readonly int Height;
+            public readonly float Gain;
+
+            public WaveformTextureKey(int width, int height, float gain)
+            {
+                Width = width;
+                Height = height;
+                Gain = gain;
+            }
+
+            public bool Equals(WaveformTextureKey other)
+            {
+                return Width == other.Width && Height == other.Height && Gain.Equals(other.Gain);
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is WaveformTextureKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = Width;
+                    hash = (hash * 397) ^ Height;
+                    hash = (hash * 397) ^ Gain.GetHashCode();
+                    return hash;
+                }
+            }
+        }
+
+        private static readonly Dictionary<AudioClip, Dictionary<WaveformTextureKey, Texture2D>> _waveformCache = new();
+        private static readonly Dictionary<AudioClip, float[]> _waveformPeakCache = new();
+        private static readonly Dictionary<int, bool> _previewFadeFoldouts = new();
+        private ReorderableList _compositionList;
         private bool _isDraggingPlayhead;
         private int _draggingClipIndex = -1;
         private int _draggingEdge = 0; 
         private float _dragStartMouseX;
         private float _dragStartValue;
 
+        private const float MaxZoomX = 50f;
         private static float _zoomX = 1f;
         private static float _zoomY = 3f;
         private Vector2 _scrollPos;
+        private float _displayedZoomX = 1f;
+        private float _displayedZoomY = 3f;
 
         private const float PRE_PAD_SECONDS = 2f;
         private const float POST_PAD_SECONDS = 2f;
 
         private void OnEnable()
         {
+            _displayedZoomX = _zoomX;
+            _displayedZoomY = _zoomY;
+            InitializeCompositionList();
             EditorApplication.update += RepaintOnPreview;
         }
 
@@ -44,7 +89,17 @@ namespace Abb2kTools.AudioSystem.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            DrawPropertiesExcluding(serializedObject, "m_Script", "parameterBindings");
+            if (target is SoundComposition)
+            {
+                if (_compositionList == null)
+                    InitializeCompositionList();
+                _compositionList?.DoLayoutList();
+                DrawPropertiesExcluding(serializedObject, "m_Script", "parameterBindings", "fadeIn", "fadeOut", "composition");
+            }
+            else
+            {
+                DrawPropertiesExcluding(serializedObject, "m_Script", "parameterBindings", "fadeIn", "fadeOut");
+            }
 
             SerializedProperty parameterBindings = serializedObject.FindProperty("parameterBindings");
             if (parameterBindings != null)
@@ -66,6 +121,8 @@ namespace Abb2kTools.AudioSystem.Editor
                 e.Use();
                 Repaint();
             }
+
+            bool fadeSettingsChanged = DrawPreviewFadeOptions(soundBase);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             
@@ -94,28 +151,270 @@ namespace Abb2kTools.AudioSystem.Editor
 
             GUI.backgroundColor = Color.white;
 
-            GUILayout.FlexibleSpace();
-
-            GUILayout.Label("Zoom X:", GUILayout.Width(50));
-            _zoomX = GUILayout.HorizontalSlider(_zoomX, 1f, 10f, GUILayout.Width(100));
-            GUILayout.Label("Zoom Y:", GUILayout.Width(50));
-            _zoomY = GUILayout.HorizontalSlider(_zoomY, 1f, 10f, GUILayout.Width(100));
-
             GUILayout.EndHorizontal();
             GUILayout.Space(5);
 
+            DrawTimelineZoomControls();
             DrawTimelineGUI(soundBase, clips);
 
             EditorGUILayout.EndVertical();
             serializedObject.ApplyModifiedProperties();
+            if (fadeSettingsChanged &&
+                EditorAudioPreviewer.IsPlaying &&
+                EditorAudioPreviewer.CurrentTarget == soundBase)
+            {
+                EditorAudioPreviewer.RefreshLiveClips(soundBase);
+            }
+        }
+
+        private void InitializeCompositionList()
+        {
+            if (!(target is SoundComposition))
+            {
+                _compositionList = null;
+                return;
+            }
+
+            SerializedProperty composition = serializedObject.FindProperty("composition");
+            if (composition == null)
+                return;
+
+            _compositionList = new ReorderableList(serializedObject, composition, true, true, true, true);
+            _compositionList.drawHeaderCallback = rect =>
+                EditorGUI.LabelField(rect, "Composition Clips", EditorStyles.boldLabel);
+            _compositionList.elementHeightCallback = index =>
+            {
+                SerializedProperty element = composition.GetArrayElementAtIndex(index);
+                return GetCompositionElementHeight(element);
+            };
+            _compositionList.drawElementCallback = (rect, index, isActive, isFocused) =>
+                DrawCompositionElement(
+                    rect,
+                    composition.GetArrayElementAtIndex(index),
+                    index);
+            _compositionList.onAddCallback = list =>
+            {
+                int index = list.serializedProperty.arraySize;
+                list.serializedProperty.InsertArrayElementAtIndex(index);
+                InitializeCompositionElement(list.serializedProperty.GetArrayElementAtIndex(index));
+                list.serializedProperty.GetArrayElementAtIndex(index).isExpanded = true;
+                list.index = index;
+            };
+            _compositionList.onRemoveCallback = list =>
+            {
+                if (list.index < 0 || list.index >= list.serializedProperty.arraySize)
+                    return;
+
+                list.serializedProperty.DeleteArrayElementAtIndex(list.index);
+                list.index = Mathf.Min(list.index, list.serializedProperty.arraySize - 1);
+            };
+        }
+
+        private static void InitializeCompositionElement(SerializedProperty element)
+        {
+            element.FindPropertyRelative("sound").objectReferenceValue = null;
+            element.FindPropertyRelative("volume").floatValue = 1f;
+            element.FindPropertyRelative("pitch").floatValue = 1f;
+            element.FindPropertyRelative("playDelay").floatValue = 0f;
+            element.FindPropertyRelative("startOffset").floatValue = 0f;
+            element.FindPropertyRelative("endOffset").floatValue = 0f;
+        }
+
+        private static void DrawCompositionElement(Rect rect, SerializedProperty element, int index)
+        {
+            GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
+
+            SerializedProperty sound = element.FindPropertyRelative("sound");
+            string soundName = sound.objectReferenceValue != null
+                ? sound.objectReferenceValue.name
+                : "No sound assigned";
+            float padding = 5f;
+            Rect headerRect = new(
+                rect.x + padding + 12f,
+                rect.y + padding,
+                rect.width - (padding + 12f) - padding,
+                EditorGUIUtility.singleLineHeight);
+            element.isExpanded = EditorGUI.Foldout(
+                headerRect,
+                element.isExpanded,
+                $"Clip {index + 1}: {soundName}",
+                true);
+            if (!element.isExpanded)
+                return;
+
+            float y = headerRect.yMax + EditorGUIUtility.standardVerticalSpacing;
+            float fieldX = rect.x + padding + 4f;
+            float fieldWidth = rect.width - (padding + 4f) * 2f;
+            DrawCompositionElementField(
+                new Rect(fieldX, y, fieldWidth, 0f),
+                sound,
+                "Sound",
+                ref y);
+            DrawCompositionElementField(
+                new Rect(fieldX, y, fieldWidth, 0f),
+                element.FindPropertyRelative("volume"),
+                "Volume",
+                ref y);
+            DrawCompositionElementField(
+                new Rect(fieldX, y, fieldWidth, 0f),
+                element.FindPropertyRelative("pitch"),
+                "Pitch",
+                ref y);
+            DrawCompositionElementField(
+                new Rect(fieldX, y, fieldWidth, 0f),
+                element.FindPropertyRelative("playDelay"),
+                "Play Delay",
+                ref y);
+            DrawCompositionElementField(
+                new Rect(fieldX, y, fieldWidth, 0f),
+                element.FindPropertyRelative("startOffset"),
+                "Start Offset",
+                ref y);
+            DrawCompositionElementField(
+                new Rect(fieldX, y, fieldWidth, 0f),
+                element.FindPropertyRelative("endOffset"),
+                "End Offset",
+                ref y);
+        }
+
+        private static float GetCompositionElementHeight(SerializedProperty element)
+        {
+            float height = 5f + EditorGUIUtility.singleLineHeight + 5f;
+            if (!element.isExpanded)
+                return height;
+
+            height += EditorGUIUtility.standardVerticalSpacing;
+            height += GetCompositionElementFieldHeight(element.FindPropertyRelative("sound"), "Sound");
+            height += GetCompositionElementFieldHeight(element.FindPropertyRelative("volume"), "Volume");
+            height += GetCompositionElementFieldHeight(element.FindPropertyRelative("pitch"), "Pitch");
+            height += GetCompositionElementFieldHeight(element.FindPropertyRelative("playDelay"), "Play Delay");
+            height += GetCompositionElementFieldHeight(element.FindPropertyRelative("startOffset"), "Start Offset");
+            height += GetCompositionElementFieldHeight(element.FindPropertyRelative("endOffset"), "End Offset");
+            return height + 5f;
+        }
+
+        private static float GetCompositionElementFieldHeight(SerializedProperty property, string label)
+        {
+            float fieldHeight = EditorGUI.GetPropertyHeight(property, new GUIContent(label), true);
+            return fieldHeight + EditorGUIUtility.standardVerticalSpacing;
+        }
+
+        private static void DrawCompositionElementField(
+            Rect fieldRect,
+            SerializedProperty property,
+            string label,
+            ref float y)
+        {
+            float fieldHeight = EditorGUI.GetPropertyHeight(property, new GUIContent(label), true);
+            fieldRect.y = y;
+            fieldRect.height = fieldHeight;
+            EditorGUI.PropertyField(
+                fieldRect,
+                property,
+                new GUIContent(label),
+                true);
+            y += fieldHeight + EditorGUIUtility.standardVerticalSpacing;
         }
 
         private void TogglePlayPause(SoundModificationBase soundBase)
         {
             bool isPlayingHere = EditorAudioPreviewer.IsPlaying && EditorAudioPreviewer.CurrentTarget == soundBase;
-            if (!isPlayingHere) EditorAudioPreviewer.PlayPreview(soundBase);
+            if (!isPlayingHere)
+                EditorAudioPreviewer.PlayPreview(soundBase);
             else if (EditorAudioPreviewer.IsPaused) EditorAudioPreviewer.ResumePreview();
             else EditorAudioPreviewer.PausePreview();
+        }
+
+        private bool DrawPreviewFadeOptions(SoundModificationBase soundBase)
+        {
+            int instanceId = soundBase.GetInstanceID();
+            if (!_previewFadeFoldouts.TryGetValue(instanceId, out bool expanded))
+                expanded = false;
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            int previousIndentLevel = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+            Rect foldoutRect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+            foldoutRect.xMin += 10f;
+            foldoutRect.xMax -= 6f;
+            expanded = EditorGUI.Foldout(
+                foldoutRect,
+                expanded,
+                "Fade In / Fade Out",
+                true);
+            EditorGUI.indentLevel = previousIndentLevel;
+            _previewFadeFoldouts[instanceId] = expanded;
+
+            bool changed = false;
+            if (expanded)
+            {
+                EditorGUI.BeginChangeCheck();
+                DrawPreviewFadeGroup(serializedObject.FindProperty("fadeIn"), "Fade In", Color.green);
+                DrawPreviewFadeGroup(
+                    serializedObject.FindProperty("fadeOut"),
+                    "Fade Out",
+                    new Color(1f, 0.65f, 0.2f));
+                changed = EditorGUI.EndChangeCheck();
+            }
+            EditorGUILayout.EndVertical();
+            return changed;
+        }
+
+        private static void DrawPreviewFadeGroup(SerializedProperty fadeSettings, string label, Color curveColor)
+        {
+            if (fadeSettings == null)
+                return;
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(8f);
+            EditorGUILayout.PropertyField(
+                fadeSettings.FindPropertyRelative("enabled"),
+                new GUIContent(label));
+            EditorGUILayout.EndHorizontal();
+
+            if (fadeSettings.FindPropertyRelative("enabled").boolValue)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(fadeSettings.FindPropertyRelative("duration"), new GUIContent("Duration"));
+                SerializedProperty curve = fadeSettings.FindPropertyRelative("curve");
+                curve.animationCurveValue = EditorGUILayout.CurveField(
+                    "Curve",
+                    curve.animationCurveValue,
+                    curveColor,
+                    new Rect(0f, 0f, 1f, 1f));
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawTimelineZoomControls()
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(6f);
+            EditorGUILayout.LabelField("Timeline Zoom", EditorStyles.boldLabel);
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(6f);
+            EditorGUILayout.LabelField("Zoom X", GUILayout.Width(50f));
+            EditorGUI.BeginChangeCheck();
+            float zoomX = EditorGUILayout.Slider(_zoomX, 1f, MaxZoomX);
+            if (EditorGUI.EndChangeCheck())
+                _zoomX = zoomX;
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(6f);
+            EditorGUILayout.LabelField("Zoom Y", GUILayout.Width(50f));
+            EditorGUI.BeginChangeCheck();
+            float zoomY = EditorGUILayout.Slider(_zoomY, 1f, 10f);
+            if (EditorGUI.EndChangeCheck())
+                _zoomY = zoomY;
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
         }
 
         private void DrawTimelineGUI(SoundModificationBase soundBase, List<PlayableClipData> clips)
@@ -148,10 +447,29 @@ namespace Abb2kTools.AudioSystem.Editor
             float innerTimelineHeight = headerHeight + (maxTracks * trackHeight) + 10f;
 
             float viewHeight = Mathf.Min(innerTimelineHeight + 20f, 400f);
+            float baseWidth = Mathf.Max(300f, EditorGUIUtility.currentViewWidth - 40f);
+            if (!Mathf.Approximately(_displayedZoomX, _zoomX) ||
+                !Mathf.Approximately(_displayedZoomY, _zoomY))
+            {
+                float previousContentWidth = baseWidth * _displayedZoomX;
+                float nextContentWidth = baseWidth * _zoomX;
+                _scrollPos.x = PreserveScrollFraction(
+                    _scrollPos.x,
+                    previousContentWidth - baseWidth,
+                    nextContentWidth - baseWidth);
+
+                float previousTimelineHeight = headerHeight + maxTracks * 36f * _displayedZoomY + 10f;
+                float previousViewHeight = Mathf.Min(previousTimelineHeight + 20f, 400f);
+                _scrollPos.y = PreserveScrollFraction(
+                    _scrollPos.y,
+                    previousTimelineHeight - previousViewHeight,
+                    innerTimelineHeight - viewHeight);
+                _displayedZoomX = _zoomX;
+                _displayedZoomY = _zoomY;
+            }
+
             _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos, GUILayout.Height(viewHeight));
 
-            float baseWidth = EditorGUIUtility.currentViewWidth - 40f;
-            if (baseWidth < 300f) baseWidth = 300f;
             float expandedWidth = baseWidth * _zoomX;
 
             Rect timelineRect = GUILayoutUtility.GetRect(expandedWidth, innerTimelineHeight, GUILayout.ExpandWidth(false));
@@ -165,12 +483,106 @@ namespace Abb2kTools.AudioSystem.Editor
 
             for (int i = 0; i < clips.Count; i++)
             {
-                DrawClipBlock(clips[i], trackAreaRect, trackIndices[i], timelineStartTime, timelineDuration, trackHeight, i, soundBase);
+                DrawClipBlock(
+                    clips[i],
+                    trackAreaRect,
+                    trackIndices[i],
+                    timelineStartTime,
+                    timelineDuration,
+                    trackHeight,
+                    i,
+                    soundBase);
             }
 
             DrawPlayheadAndHandleEvents(timelineRect, trackAreaRect, soundBase, timelineStartTime, timelineDuration, maxEnd);
+            HandleTimelineScroll(
+                timelineRect,
+                baseWidth,
+                expandedWidth,
+                viewHeight,
+                innerTimelineHeight);
             
             EditorGUILayout.EndScrollView();
+        }
+
+        private void HandleTimelineScroll(
+            Rect timelineRect,
+            float viewportWidth,
+            float contentWidth,
+            float viewportHeight,
+            float contentHeight)
+        {
+            Event currentEvent = Event.current;
+
+            int panControlId = GUIUtility.GetControlID(FocusType.Passive);
+            if (currentEvent.type == EventType.MouseDown &&
+                currentEvent.button == 2 &&
+                timelineRect.Contains(currentEvent.mousePosition))
+            {
+                GUIUtility.hotControl = panControlId;
+                currentEvent.Use();
+                return;
+            }
+
+            if (GUIUtility.hotControl == panControlId)
+            {
+                if (currentEvent.type == EventType.MouseDrag)
+                {
+                    _scrollPos.x = Mathf.Clamp(
+                        _scrollPos.x - currentEvent.delta.x,
+                        0f,
+                        Mathf.Max(0f, contentWidth - viewportWidth));
+                    _scrollPos.y = Mathf.Clamp(
+                        _scrollPos.y - currentEvent.delta.y,
+                        0f,
+                        Mathf.Max(0f, contentHeight - viewportHeight));
+                    currentEvent.Use();
+                    Repaint();
+                }
+                else if (currentEvent.type == EventType.MouseUp)
+                {
+                    GUIUtility.hotControl = 0;
+                    currentEvent.Use();
+                }
+                return;
+            }
+
+            if (currentEvent.type != EventType.ScrollWheel || !timelineRect.Contains(currentEvent.mousePosition))
+                return;
+
+            if (currentEvent.control)
+            {
+                _zoomX = Mathf.Clamp(
+                    _zoomX * Mathf.Pow(1.1f, -currentEvent.delta.y),
+                    1f,
+                    MaxZoomX);
+            }
+            else if (currentEvent.shift)
+            {
+                _scrollPos.y = Mathf.Clamp(
+                    _scrollPos.y + currentEvent.delta.y * 20f,
+                    0f,
+                    Mathf.Max(0f, contentHeight - viewportHeight));
+            }
+            else
+            {
+                _scrollPos.x = Mathf.Clamp(
+                    _scrollPos.x + currentEvent.delta.y * 20f,
+                    0f,
+                    Mathf.Max(0f, contentWidth - viewportWidth));
+            }
+
+            currentEvent.Use();
+            Repaint();
+        }
+
+        private static float PreserveScrollFraction(float scrollOffset, float previousRange, float nextRange)
+        {
+            if (previousRange <= 0f || nextRange <= 0f)
+                return 0f;
+
+            float scrollFraction = Mathf.Clamp01(scrollOffset / previousRange);
+            return scrollFraction * nextRange;
         }
 
         private void DrawZeroSecondLine(Rect trackAreaRect, float timelineStartTime, float timelineDuration)
@@ -229,25 +641,58 @@ namespace Abb2kTools.AudioSystem.Editor
         private void DrawTimelineRuler(Rect rulerRect, float timelineStartTime, float timelineEndTime, float timelineDuration)
         {
             EditorGUI.DrawRect(rulerRect, new Color(0.18f, 0.18f, 0.18f, 1f));
-            
-            int startSec = Mathf.CeilToInt(timelineStartTime);
-            int endSec = Mathf.FloorToInt(timelineEndTime);
 
-            for (int sec = startSec; sec <= endSec; sec++)
+            GUIStyle style = new GUIStyle(EditorStyles.miniLabel)
+            {
+                fontSize = 9,
+                normal = { textColor = new Color(0.7f, 0.7f, 0.7f) }
+            };
+            string startLabel = $"{Mathf.FloorToInt(timelineStartTime)}s";
+            string endLabel = $"{Mathf.CeilToInt(timelineEndTime)}s";
+            float labelSpacing = Mathf.Max(
+                40f,
+                Mathf.Max(
+                    style.CalcSize(new GUIContent(startLabel)).x,
+                    style.CalcSize(new GUIContent(endLabel)).x) + 8f);
+            float pixelsPerSecond = rulerRect.width / Mathf.Max(0.001f, timelineDuration);
+            float interval = Mathf.Max(1f, GetNiceRulerInterval(labelSpacing / Mathf.Max(0.001f, pixelsPerSecond)));
+            float firstTick = Mathf.Ceil(timelineStartTime / interval) * interval;
+
+            for (float sec = firstTick; sec <= timelineEndTime; sec += interval)
             {
                 float normX = (sec - timelineStartTime) / timelineDuration;
                 float xPos = rulerRect.x + (normX * rulerRect.width);
 
                 EditorGUI.DrawRect(new Rect(xPos, rulerRect.y + rulerRect.height - 6f, 1f, 6f), new Color(0.6f, 0.6f, 0.6f, 1f));
 
-                string label = $"{sec}s";
-                GUIStyle style = new GUIStyle(EditorStyles.miniLabel) { fontSize = 9, normal = { textColor = new Color(0.7f, 0.7f, 0.7f) } };
+                string label = $"{Mathf.RoundToInt(sec)}s";
                 Vector2 labelSize = style.CalcSize(new GUIContent(label));
                 GUI.Label(new Rect(Mathf.Clamp(xPos - (labelSize.x / 2f), rulerRect.x, rulerRect.xMax - labelSize.x), rulerRect.y, labelSize.x, labelSize.y), label, style);
             }
         }
 
-        private void DrawClipBlock(PlayableClipData clipData, Rect trackAreaRect, int trackIndex, float timelineStartTime, float timelineDuration, float trackHeight, int clipIndex, SoundModificationBase targetBase)
+        internal static float GetNiceRulerInterval(float minimumInterval)
+        {
+            if (minimumInterval <= 1f)
+                return 1f;
+
+            float magnitude = Mathf.Pow(10f, Mathf.Floor(Mathf.Log10(minimumInterval)));
+            float normalizedInterval = minimumInterval / magnitude;
+            float niceInterval = normalizedInterval <= 1f ? 1f :
+                normalizedInterval <= 2f ? 2f :
+                normalizedInterval <= 5f ? 5f : 10f;
+            return niceInterval * magnitude;
+        }
+
+        private void DrawClipBlock(
+            PlayableClipData clipData,
+            Rect trackAreaRect,
+            int trackIndex,
+            float timelineStartTime,
+            float timelineDuration,
+            float trackHeight,
+            int clipIndex,
+            SoundModificationBase targetBase)
         {
             float pitch = Mathf.Max(0.001f, clipData.Pitch);
             float fullDuration = clipData.Clip.length / pitch;
@@ -277,12 +722,28 @@ namespace Abb2kTools.AudioSystem.Editor
             if (clipData.Filters != null && clipData.Filters.enableDistortion)
                 waveformGain += clipData.Filters.distortionLevel;
 
-            Texture2D waveformTex = GetWaveformTexture(clipData.Clip, 256, 64, baseColor, new Color(0f, 0f, 0f, 0f), waveformGain);
+            int waveformWidth = Mathf.Clamp(
+                Mathf.CeilToInt(fullBlockRect.width * EditorGUIUtility.pixelsPerPoint),
+                64,
+                4096);
+            int waveformHeight = Mathf.Clamp(
+                Mathf.CeilToInt(fullBlockRect.height * EditorGUIUtility.pixelsPerPoint),
+                64,
+                512);
+            Texture2D waveformTex = GetWaveformTexture(
+                clipData.Clip,
+                waveformWidth,
+                waveformHeight,
+                baseColor,
+                new Color(0f, 0f, 0f, 0f),
+                waveformGain);
             if (waveformTex != null)
             {
                 Rect waveRect = fullBlockRect;
                 if (waveformGain > 0f)
                     GUI.DrawTexture(waveRect, waveformTex, ScaleMode.StretchToFill);
+
+                DrawPreviewFadeEnvelope(waveRect, trueStart, fullDuration, clipData.FadeEnvelopes);
 
                 // 2. Draw Ghosted Echo Waveforms
                 if (waveformGain > 0f && clipData.Filters != null && clipData.Filters.enableEcho)
@@ -336,6 +797,43 @@ namespace Abb2kTools.AudioSystem.Editor
             }
 
             HandleInteractiveDragging(targetBase, clipIndex, leftTrimRect, rightTrimRect, activeRect, trackAreaRect.width, timelineDuration, pitch);
+        }
+
+        internal static void DrawPreviewFadeEnvelope(
+            Rect waveformRect,
+            float clipStartTime,
+            float clipDuration,
+            List<SoundFadeEnvelope> fadeEnvelopes)
+        {
+            if (fadeEnvelopes == null || fadeEnvelopes.Count == 0)
+                return;
+
+            int pointCount = Mathf.Clamp(Mathf.CeilToInt(waveformRect.width / 4f), 2, 256);
+            Vector3[] upperPoints = new Vector3[pointCount];
+            Vector3[] lowerPoints = new Vector3[pointCount];
+            float centerY = waveformRect.center.y;
+            float halfHeight = waveformRect.height * 0.48f;
+
+            for (int i = 0; i < pointCount; i++)
+            {
+                float fraction = i / (float)(pointCount - 1);
+                float time = clipStartTime + clipDuration * fraction;
+                float amplitude = 1f;
+                foreach (SoundFadeEnvelope envelope in fadeEnvelopes)
+                    amplitude *= envelope.Evaluate(time);
+                float x = Mathf.Lerp(waveformRect.xMin, waveformRect.xMax, fraction);
+                float yOffset = halfHeight * amplitude;
+                upperPoints[i] = new Vector3(x, centerY - yOffset);
+                lowerPoints[i] = new Vector3(x, centerY + yOffset);
+            }
+
+            Handles.BeginGUI();
+            Color previousColor = Handles.color;
+            Handles.color = new Color(1f, 0.85f, 0.3f, 0.95f);
+            Handles.DrawAAPolyLine(2f, upperPoints);
+            Handles.DrawAAPolyLine(2f, lowerPoints);
+            Handles.color = previousColor;
+            Handles.EndGUI();
         }
 
         private void HandleInteractiveDragging(SoundModificationBase targetBase, int clipIndex, Rect leftTrim, Rect rightTrim, Rect activeBody, float trackWidth, float timelineDuration, float pitch)
@@ -511,11 +1009,14 @@ namespace Abb2kTools.AudioSystem.Editor
             EditorAudioPreviewer.Seek(seekTime);
         }
 
-        private static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor, float gain)
+        internal static Texture2D GetWaveformTexture(AudioClip clip, int width, int height, Color waveformColor, Color bgColor, float gain)
         {
             if (clip == null) return null;
+            width = Mathf.Min(4096, Mathf.NextPowerOfTwo(Mathf.Max(64, width)));
+            height = Mathf.Min(512, Mathf.NextPowerOfTwo(Mathf.Max(64, height)));
+            WaveformTextureKey key = new(width, height, gain);
             if (_waveformCache.TryGetValue(clip, out var clipCache) &&
-                clipCache.TryGetValue(gain, out var cachedTex) &&
+                clipCache.TryGetValue(key, out var cachedTex) &&
                 cachedTex != null)
             {
                 return cachedTex;
@@ -525,17 +1026,20 @@ namespace Abb2kTools.AudioSystem.Editor
             Color[] pixels = new Color[width * height];
             for (int i = 0; i < pixels.Length; i++) pixels[i] = bgColor;
 
-            float[] sampleData = new float[clip.samples * clip.channels];
-            if (clip.GetData(sampleData, 0))
+            float[] waveformPeaks = GetWaveformPeaks(clip);
+            if (waveformPeaks != null && waveformPeaks.Length > 0)
             {
-                int step = Mathf.Max(1, (clip.samples * clip.channels) / width);
                 int halfHeight = height / 2;
 
                 for (int x = 0; x < width; x++)
                 {
                     float maxSample = 0f;
-                    for (int s = 0; s < step && (x * step + s) < sampleData.Length; s++)
-                        if (Mathf.Abs(sampleData[x * step + s]) > maxSample) maxSample = Mathf.Abs(sampleData[x * step + s]);
+                    int peakStart = (int)((long)x * waveformPeaks.Length / width);
+                    int peakEnd = (int)((long)(x + 1) * waveformPeaks.Length / width);
+                    if (peakEnd <= peakStart)
+                        peakEnd = Mathf.Min(waveformPeaks.Length, peakStart + 1);
+                    for (int peakIndex = peakStart; peakIndex < peakEnd; peakIndex++)
+                        maxSample = Mathf.Max(maxSample, waveformPeaks[peakIndex]);
 
                     int lineHeight = Mathf.Clamp(Mathf.RoundToInt(maxSample * gain * halfHeight), 1, halfHeight);
                     for (int y = halfHeight - lineHeight; y <= halfHeight + lineHeight; y++)
@@ -545,11 +1049,39 @@ namespace Abb2kTools.AudioSystem.Editor
             tex.SetPixels(pixels); tex.Apply();
             if (clipCache == null)
             {
-                clipCache = new Dictionary<float, Texture2D>();
+                clipCache = new Dictionary<WaveformTextureKey, Texture2D>();
                 _waveformCache[clip] = clipCache;
             }
-            clipCache[gain] = tex;
+            clipCache[key] = tex;
             return tex;
+        }
+
+        private static float[] GetWaveformPeaks(AudioClip clip)
+        {
+            if (_waveformPeakCache.TryGetValue(clip, out float[] cachedPeaks))
+                return cachedPeaks;
+
+            float[] sampleData = new float[clip.samples * clip.channels];
+            if (!clip.GetData(sampleData, 0))
+            {
+                _waveformPeakCache.Add(clip, null);
+                return null;
+            }
+
+            int peakCount = Mathf.Min(8192, sampleData.Length);
+            float[] peaks = new float[peakCount];
+            for (int i = 0; i < peakCount; i++)
+            {
+                int sampleStart = (int)((long)i * sampleData.Length / peakCount);
+                int sampleEnd = (int)((long)(i + 1) * sampleData.Length / peakCount);
+                float maxSample = 0f;
+                for (int sampleIndex = sampleStart; sampleIndex < sampleEnd; sampleIndex++)
+                    maxSample = Mathf.Max(maxSample, Mathf.Abs(sampleData[sampleIndex]));
+                peaks[i] = maxSample;
+            }
+
+            _waveformPeakCache.Add(clip, peaks);
+            return peaks;
         }
     }
 }

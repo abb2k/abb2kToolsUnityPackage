@@ -6,6 +6,7 @@ namespace Abb2kTools.AudioSystem
     public sealed class AudioSourceGain : MonoBehaviour
     {
         private volatile float gain = 1f;
+        private volatile float fadeMultiplier = 1f;
 
         public static void SetVolume(AudioSource source, float volume)
         {
@@ -25,9 +26,26 @@ namespace Abb2kTools.AudioSystem
             }
         }
 
+        public static void SetFadeMultiplier(AudioSource source, float multiplier)
+        {
+            if (source == null) return;
+
+            AudioSourceGain gainFilter = source.GetComponent<AudioSourceGain>();
+            float clampedMultiplier = Mathf.Clamp01(multiplier);
+            if (gainFilter == null)
+            {
+                if (Mathf.Approximately(clampedMultiplier, 1f))
+                    return;
+
+                gainFilter = source.gameObject.AddComponent<AudioSourceGain>();
+            }
+
+            gainFilter.fadeMultiplier = clampedMultiplier;
+        }
+
         private void OnAudioFilterRead(float[] data, int channels)
         {
-            float currentGain = gain;
+            float currentGain = gain * fadeMultiplier;
             if (currentGain == 1f) return;
 
             for (int i = 0; i < data.Length; i++)

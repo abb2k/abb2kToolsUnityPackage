@@ -108,6 +108,8 @@ namespace Abb2kTools.AudioSystem
                 }
                 result[i] = clip;
             }
+
+            AppendFadeEnvelope(result, startIndex, currentDelay);
         }
 
         public SoundCodingSection GetSection(string id) => sections.Find(s => s.id == id);

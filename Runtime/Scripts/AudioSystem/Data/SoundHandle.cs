@@ -70,6 +70,7 @@ namespace Abb2kTools.AudioSystem
         private bool _hasPreviousParameterSourcePosition;
         private float _parameterSourceSpeed;
         private float _parameterPlaybackTime;
+        private float _soundElapsedTime;
 
 #if DOTWEEN
         private readonly List<Tween> _activeTweens = new();
@@ -203,6 +204,18 @@ namespace Abb2kTools.AudioSystem
             _parameterOverrides[parameter] = value;
             RefreshParameterValues(true);
         }
+
+#if DOTWEEN
+        public Tween DOParameterValue(SoundParameter parameter, float endValue, float duration, Ease ease = Ease.Linear)
+        {
+            if (parameter == null)
+                throw new ArgumentNullException(nameof(parameter));
+            if (parameter.Source != SoundParameterSource.Manual)
+                throw new InvalidOperationException($"Sound Parameter '{parameter.name}' is driven by {parameter.Source} and cannot be tweened manually.");
+
+            return DOTween.To(() => _parameterOverrides.ContainsKey(parameter) ? _parameterOverrides[parameter] : 0f, value => SetParameterValue(parameter, value), endValue, duration).SetEase(ease);
+        }
+#endif
 
         /// <summary>
         /// Removes this handle's override and resumes using the parameter's shared value.
@@ -351,6 +364,7 @@ namespace Abb2kTools.AudioSystem
                 _currentVolumeMultiplier *
                 GetParameterValue(source, SoundParameterTarget.VolumeMultiplier, 1f));
             source.Source.pitch = GetPlaybackPitch(source);
+            AudioSourceGain.SetFadeMultiplier(source.Source, GetFadeMultiplier(source.ClipData, _soundElapsedTime));
             source.Source.panStereo = GetParameterValue(source, SoundParameterTarget.PanStereo, source.BaseSettings.panStereo);
             source.Source.spatialBlend = GetParameterValue(source, SoundParameterTarget.SpatialBlend, source.BaseSettings.spatialBlend);
             source.Source.reverbZoneMix = GetParameterValue(source, SoundParameterTarget.ReverbZoneMix, source.BaseSettings.reverbZoneMix);
@@ -358,6 +372,35 @@ namespace Abb2kTools.AudioSystem
             source.Source.spread = GetParameterValue(source, SoundParameterTarget.Spread, source.BaseSettings.spread);
             source.Source.minDistance = GetParameterValue(source, SoundParameterTarget.MinDistance, source.BaseSettings.minDist);
             source.Source.maxDistance = GetParameterValue(source, SoundParameterTarget.MaxDistance, source.BaseSettings.maxDist);
+        }
+
+        private static float GetFadeMultiplier(PlayableClipData clipData, float elapsedTime)
+        {
+            if (clipData.FadeEnvelopes == null)
+                return 1f;
+
+            float multiplier = 1f;
+            foreach (SoundFadeEnvelope envelope in clipData.FadeEnvelopes)
+                multiplier *= envelope.Evaluate(elapsedTime);
+            return multiplier;
+        }
+
+        private void UpdatePlaybackFades()
+        {
+            foreach (SourceData source in _sources)
+            {
+                if (source.Source != null)
+                    AudioSourceGain.SetFadeMultiplier(
+                        source.Source,
+                        GetFadeMultiplier(source.ClipData, _soundElapsedTime));
+            }
+
+            if (_secondaryCodingSource != null && _sources.Count > 0)
+            {
+                AudioSourceGain.SetFadeMultiplier(
+                    _secondaryCodingSource,
+                    GetFadeMultiplier(_sources[0].ClipData, _soundElapsedTime));
+            }
         }
 
         private float GetParameterInputValue(SoundParameter parameter)
@@ -832,6 +875,7 @@ namespace Abb2kTools.AudioSystem
 
         private IEnumerator PlaybackRoutine()
         {
+            _soundElapsedTime = 0f;
             foreach (var s in _sources)
             {
                 s.DelayTimer    = 0f;
@@ -980,6 +1024,9 @@ namespace Abb2kTools.AudioSystem
                             else break;
                         }
                     }
+
+                    _soundElapsedTime += Time.deltaTime;
+                    UpdatePlaybackFades();
                 }
                 yield return null;
             }

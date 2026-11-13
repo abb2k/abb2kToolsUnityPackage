@@ -46,8 +46,11 @@ namespace Abb2kTools.AudioSystem
                 Filters = filters,
                 ParameterBindings = parameterBindings != null
                     ? new List<SoundParameterBinding>(parameterBindings)
-                    : new List<SoundParameterBinding>()
+                    : new List<SoundParameterBinding>(),
+                FadeEnvelopes = new List<SoundFadeEnvelope>()
             });
+
+            AppendFadeEnvelope(result, result.Count - 1, currentDelay);
         }
     }
 }
