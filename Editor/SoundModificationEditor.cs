@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Abb2kTools.AudioSystem.Editor
 {
@@ -137,7 +138,8 @@ namespace Abb2kTools.AudioSystem.Editor
             }
 
             GUI.backgroundColor = new Color(0.7f, 1f, 0.7f);
-            if (GUILayout.Button("▶ Bound Preview", GUILayout.Height(22), GUILayout.Width(105)))
+            if (HasBoundSoundProperties(soundBase, clips) &&
+                GUILayout.Button("▶ Bound Preview", GUILayout.Height(22), GUILayout.Width(105)))
             {
                 EditorAudioPreviewer.PlayPreviewWithBindings(
                     soundBase,
@@ -194,6 +196,41 @@ namespace Abb2kTools.AudioSystem.Editor
             {
                 EditorAudioPreviewer.RefreshLiveClips(soundBase);
             }
+        }
+
+        public override VisualElement CreateInspectorGUI()
+        {
+            return new IMGUIContainer(OnInspectorGUI);
+        }
+
+        private static bool HasBoundSoundProperties(
+            SoundModificationBase soundBase,
+            List<PlayableClipData> clips)
+        {
+            if (HasBoundSoundProperties(soundBase.parameterBindings))
+                return true;
+
+            foreach (PlayableClipData clip in clips)
+            {
+                if (HasBoundSoundProperties(clip.ParameterBindings))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasBoundSoundProperties(List<SoundParameterBinding> bindings)
+        {
+            if (bindings == null)
+                return false;
+
+            foreach (SoundParameterBinding binding in bindings)
+            {
+                if (binding?.parameter != null)
+                    return true;
+            }
+
+            return false;
         }
 
         private void InitializeCompositionList()

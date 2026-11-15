@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using Unity.VisualScripting;
+using UnityEngine.UIElements;
 
 namespace Abb2kTools.AudioSystem.Editor
 {
@@ -41,9 +42,13 @@ namespace Abb2kTools.AudioSystem.Editor
         private const string LoopPitchModulationMode = "loopPitchModulationMode";
         private const string LoopPitchGrowthRate = "loopPitchGrowthRate";
         private const string LoopPitchSineCycleDuration = "loopPitchSineCycleDuration";
+        private const float FoldoutArrowWidth = 14f;
+        private const float SoundTypeIconSize = 16f;
+        private const float HeaderIconGap = 2f;
         private const float LoopModulationGraphHeight = 58f;
         private const float WaveformHeaderHeight = 20f;
         private const float WaveformTrackHeight = 88f;
+        private const float ExpandedInspectorBoxPadding = 6f;
         
         private static readonly Dictionary<string, float> _loopingPreviewDurations = new();
         private static readonly Dictionary<string, bool> _loopModulationFoldouts = new();
@@ -130,8 +135,9 @@ namespace Abb2kTools.AudioSystem.Editor
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
+            float expandedBoxPadding = property.isExpanded ? ExpandedInspectorBoxPadding * 2f : 0f;
             if (property.isExpanded && IsLoopingSound(property))
-                return GetLoopingInspectorHeight(property);
+                return GetLoopingInspectorHeight(property) + expandedBoxPadding;
 
             float height = EditorGUIUtility.singleLineHeight;
 
@@ -236,12 +242,38 @@ namespace Abb2kTools.AudioSystem.Editor
                 }
             }
 
-            return height + EditorGUIUtility.standardVerticalSpacing;
+            return height + EditorGUIUtility.standardVerticalSpacing + expandedBoxPadding;
+        }
+
+        public override VisualElement CreatePropertyGUI(SerializedProperty property)
+        {
+            GUIContent label = new(property.displayName);
+            float height = GetPropertyHeight(property, label);
+            IMGUIContainer container = null;
+            container = new IMGUIContainer(() =>
+            {
+                height = GetPropertyHeight(property, label);
+                container.style.height = height;
+                Rect position = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true));
+                OnGUI(position, property, label);
+            });
+            container.style.height = height;
+            container.style.flexShrink = 0f;
+            return container;
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
             EditorGUI.BeginProperty(position, label, property);
+
+            if (property.isExpanded)
+            {
+                GUI.Box(position, GUIContent.none, EditorStyles.helpBox);
+                position.x += ExpandedInspectorBoxPadding;
+                position.y += ExpandedInspectorBoxPadding;
+                position.width -= ExpandedInspectorBoxPadding * 2f;
+                position.height -= ExpandedInspectorBoxPadding * 2f;
+            }
 
             GUIContent displayLabel = new(label);
             string typeName = property.type.Replace("managedReference<", "").Replace(">", "");
@@ -260,18 +292,26 @@ namespace Abb2kTools.AudioSystem.Editor
             }
 
             SerializedProperty soundProp = property.FindPropertyRelative(Sound);
+            bool isAdvancedAudioSource = property.serializedObject.targetObject is AdvancedAudioSource;
 
             float labelWidth = EditorStyles.foldout.CalcSize(displayLabel).x + 15f; 
             
             float rightElementsWidth = 0f;
-            if (!property.isExpanded && soundProp != null && soundProp.objectReferenceValue != null)
+            if (!property.isExpanded && !isAdvancedAudioSource &&
+                soundProp != null && soundProp.objectReferenceValue != null)
             {
                 rightElementsWidth = 35f;
             }
 
             float labelSpacingOffset = -45f; 
+            float headerContentOffset = (isAdvancedAudioSource ? 0f : FoldoutArrowWidth) +
+                                        SoundTypeIconSize + HeaderIconGap;
+            if (position.width - rightElementsWidth < headerContentOffset)
+                rightElementsWidth = 0f;
 
-            float leftOffset = position.x + labelWidth + labelSpacingOffset;
+            float leftOffset = position.x + Mathf.Max(
+                labelWidth + labelSpacingOffset,
+                headerContentOffset + HeaderIconGap);
             float rightBound = position.x + position.width - rightElementsWidth - 5f;
             float availableWidth = rightBound - leftOffset;
 
@@ -282,15 +322,61 @@ namespace Abb2kTools.AudioSystem.Editor
                 EditorGUIUtility.singleLineHeight
             );
 
-            if (property.serializedObject.targetObject is AdvancedAudioSource)
+            Rect iconRect = new(
+                position.x + headerContentOffset - SoundTypeIconSize - HeaderIconGap,
+                position.y + (EditorGUIUtility.singleLineHeight - SoundTypeIconSize) * 0.5f,
+                SoundTypeIconSize,
+                SoundTypeIconSize);
+            float labelTextX = position.x + headerContentOffset;
+            if (isAdvancedAudioSource)
             {
                 property.isExpanded = true;
-                EditorGUI.LabelField(foldoutRect, displayLabel, EditorStyles.boldLabel);
+                GUI.Label(
+                    new Rect(
+                        labelTextX,
+                        position.y,
+                        Mathf.Max(0f, foldoutRect.xMax - labelTextX),
+                        foldoutRect.height),
+                    displayLabel.text,
+                    EditorStyles.boldLabel);
             }
             else
             {
-                property.isExpanded = EditorGUI.Foldout(foldoutRect, property.isExpanded, displayLabel, true);
+                Rect foldoutArrowRect = new(
+                    position.x,
+                    position.y,
+                    FoldoutArrowWidth,
+                    EditorGUIUtility.singleLineHeight);
+                property.isExpanded = EditorGUI.Foldout(
+                    foldoutArrowRect,
+                    property.isExpanded,
+                    GUIContent.none,
+                    false);
+
+                Event currentEvent = Event.current;
+                if (currentEvent.type == EventType.MouseDown &&
+                    currentEvent.button == 0 &&
+                    foldoutRect.Contains(currentEvent.mousePosition) &&
+                    !foldoutArrowRect.Contains(currentEvent.mousePosition))
+                {
+                    property.isExpanded = !property.isExpanded;
+                    GUI.changed = true;
+                    currentEvent.Use();
+                }
+
+                GUIStyle foldoutTextStyle = EditorStyles.foldout;
+                float textStylePadding = foldoutTextStyle.padding.left;
+                GUI.Label(
+                    new Rect(
+                        labelTextX - textStylePadding,
+                        position.y,
+                        Mathf.Max(0f, foldoutRect.xMax - labelTextX + textStylePadding),
+                        foldoutRect.height),
+                    displayLabel.text,
+                    foldoutTextStyle);
             }
+
+            GUI.DrawTexture(iconRect, displayLabel.image, ScaleMode.ScaleToFit, true);
 
             if (!property.isExpanded)
             {
@@ -305,7 +391,7 @@ namespace Abb2kTools.AudioSystem.Editor
 
                     EditorGUI.PropertyField(soundFieldRect, soundProp, GUIContent.none);
 
-                    if (soundProp.objectReferenceValue != null)
+                    if (rightElementsWidth > 0f && soundProp.objectReferenceValue != null)
                     {
                         Rect tinyButtonRect = new(
                             position.x + position.width - 30,
