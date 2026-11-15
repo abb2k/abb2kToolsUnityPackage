@@ -310,9 +310,11 @@ namespace Abb2kTools.AudioSystem.Editor
                 clips[0].StartOffset <= 0f &&
                 clips[0].EndOffset <= 0f)
             {
+                PlayableClipData loopingClip = clips[0];
+                loopingClip.FadeEnvelopes = null;
                 PreviewClip previewClip = new()
                 {
-                    Data = clips[0],
+                    Data = loopingClip,
                     Played = false,
                     VolMult = volumeMultiplier,
                     PitchMult = pitchMultiplier,
@@ -360,7 +362,8 @@ namespace Abb2kTools.AudioSystem.Editor
                     endTime,
                     fadeInDuration,
                     fadeOutDuration,
-                    soundBaseBindings);
+                    soundBaseBindings,
+                    ignoreFadeEnvelopes: true);
 
             for (int i = firstClipIndex; i < _pendingClips.Count; i++)
             {
@@ -517,7 +520,8 @@ namespace Abb2kTools.AudioSystem.Editor
             float phaseEndTime = 0f,
             float fadeInDuration = 0f,
             float fadeOutDuration = 0f,
-            IReadOnlyList<SoundParameterBinding> soundBaseBindings = null)
+            IReadOnlyList<SoundParameterBinding> soundBaseBindings = null,
+            bool ignoreFadeEnvelopes = false)
         {
             if (sound == null) return;
 
@@ -530,6 +534,8 @@ namespace Abb2kTools.AudioSystem.Editor
 
                 PlayableClipData scheduledClip = clipData;
                 scheduledClip.Delay += startTime;
+                if (ignoreFadeEnvelopes)
+                    scheduledClip.FadeEnvelopes = null;
                 if (scheduledClip.FadeEnvelopes != null)
                 {
                     scheduledClip.FadeEnvelopes = new List<SoundFadeEnvelope>(scheduledClip.FadeEnvelopes);
@@ -734,8 +740,7 @@ namespace Abb2kTools.AudioSystem.Editor
             foreach (var pClip in _pendingClips)
             {
                 float clipStartTime = pClip.Data.Delay;
-                float clipDuration = (pClip.Data.Clip.length - pClip.Data.StartOffset - pClip.Data.EndOffset) / Mathf.Max(0.001f, pClip.Data.Pitch);
-                float clipEndTime = clipStartTime + clipDuration;
+                GetClipTiming(pClip, currentTime, out float clipDuration, out float clipEndTime, out float clipTime, out float clipPitch);
 
                 if (currentTime < clipStartTime)
                 {
@@ -744,9 +749,6 @@ namespace Abb2kTools.AudioSystem.Editor
                 }
                 else if (currentTime >= clipStartTime && currentTime < clipEndTime)
                 {
-                    float progressInClip = (float)(currentTime - clipStartTime) * pClip.Data.Pitch;
-                    float clipTime = pClip.Data.StartOffset + progressInClip;
-
                     if (pClip.Source == null)
                     {
                         GameObject clipGO = new GameObject("PreviewClip");
@@ -754,27 +756,28 @@ namespace Abb2kTools.AudioSystem.Editor
                         pClip.Source = clipGO.AddComponent<AudioSource>();
 
                         Apply3DSettings(pClip.Source);
+                        if (_bindingPreviewContext != null)
+                            ApplyBoundSettings(pClip.Source, pClip.BoundValues, _bindingPreviewContext.BaseSettings);
 
                         pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
-                        AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
-                            pClip.VolMult *
-                            GetPhaseVolumeMultiplier(pClip, currentTime) *
-                            GetLoopVolumeMultiplier(pClip, currentTime) *
-                            GetFadeMultiplier(pClip.Data, (float)currentTime));
-                        pClip.Source.pitch = pClip.Data.Pitch *
-                            pClip.PitchMult *
-                            GetLoopPitchMultiplier(pClip, currentTime);
-                        pClip.Source.loop = pClip.Looping;
                         if (pClip.Data.PreferredMixerGroup != null) pClip.Source.outputAudioMixerGroup = pClip.Data.PreferredMixerGroup;
                     }
 
+                    AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
+                        pClip.VolMult *
+                        GetPhaseVolumeMultiplier(pClip, currentTime) *
+                        GetLoopVolumeMultiplier(pClip, currentTime) *
+                        GetFadeMultiplier(pClip.Data, (float)currentTime));
+                    pClip.Source.pitch = clipPitch;
+                    pClip.Source.loop = pClip.Looping;
                     pClip.Source.time = Mathf.Clamp(clipTime, 0f, pClip.Data.Clip.length - 0.001f);
                     pClip.Duration = clipDuration;
                     pClip.StartPlayTime = EditorApplication.timeSinceStartup - (currentTime - clipStartTime);
                     pClip.Played = true;
-                    
-                    if (!pClip.Source.isPlaying) pClip.Source.Play();
+                    pClip.Source.Play();
+                    pClip.Source.SetScheduledEndTime(
+                        AudioSettings.dspTime + Mathf.Max(0f, clipEndTime - (float)currentTime));
                 }
                 else
                 {
@@ -796,14 +799,10 @@ namespace Abb2kTools.AudioSystem.Editor
             foreach (var pClip in _pendingClips)
             {
                 float clipStartTime = pClip.Data.Delay;
-                float clipDuration = (pClip.Data.Clip.length - pClip.Data.StartOffset - pClip.Data.EndOffset) / Mathf.Max(0.001f, pClip.Data.Pitch);
-                float clipEndTime = clipStartTime + clipDuration;
+                GetClipTiming(pClip, targetTime, out float clipDuration, out float clipEndTime, out float clipTime, out float clipPitch);
 
                 if (targetTime >= clipStartTime && targetTime < clipEndTime)
                 {
-                    float progressInClip = (targetTime - clipStartTime) * pClip.Data.Pitch;
-                    float clipTime = pClip.Data.StartOffset + progressInClip;
-
                     if (pClip.Source == null)
                     {
                         GameObject clipGO = new GameObject("PreviewClip");
@@ -811,21 +810,21 @@ namespace Abb2kTools.AudioSystem.Editor
                         pClip.Source = clipGO.AddComponent<AudioSource>();
 
                         Apply3DSettings(pClip.Source);
+                        if (_bindingPreviewContext != null)
+                            ApplyBoundSettings(pClip.Source, pClip.BoundValues, _bindingPreviewContext.BaseSettings);
 
                         pClip.Data.Filters?.ApplyTo(pClip.Source);
                         pClip.Source.clip = pClip.Data.Clip;
-                        AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
-                            pClip.VolMult *
-                            GetPhaseVolumeMultiplier(pClip, targetTime) *
-                            GetLoopVolumeMultiplier(pClip, targetTime) *
-                            GetFadeMultiplier(pClip.Data, targetTime));
-                        pClip.Source.pitch = pClip.Data.Pitch *
-                            pClip.PitchMult *
-                            GetLoopPitchMultiplier(pClip, targetTime);
-                        pClip.Source.loop = pClip.Looping;
                         if (pClip.Data.PreferredMixerGroup != null) pClip.Source.outputAudioMixerGroup = pClip.Data.PreferredMixerGroup;
                     }
 
+                    AudioSourceGain.SetVolume(pClip.Source, pClip.Data.Volume *
+                        pClip.VolMult *
+                        GetPhaseVolumeMultiplier(pClip, targetTime) *
+                        GetLoopVolumeMultiplier(pClip, targetTime) *
+                        GetFadeMultiplier(pClip.Data, targetTime));
+                    pClip.Source.pitch = clipPitch;
+                    pClip.Source.loop = pClip.Looping;
                     pClip.Source.time = Mathf.Clamp(clipTime, 0f, pClip.Data.Clip.length - 0.001f);
                     
                     if (!IsPaused && !pClip.Source.isPlaying) pClip.Source.Play();
@@ -834,6 +833,11 @@ namespace Abb2kTools.AudioSystem.Editor
                     pClip.Duration = clipDuration;
                     pClip.StartPlayTime = EditorApplication.timeSinceStartup - (targetTime - clipStartTime);
                     pClip.Played = true;
+                    if (!IsPaused)
+                    {
+                        pClip.Source.SetScheduledEndTime(
+                            AudioSettings.dspTime + Mathf.Max(0f, clipEndTime - targetTime));
+                    }
                 }
                 else
                 {
@@ -841,6 +845,33 @@ namespace Abb2kTools.AudioSystem.Editor
                     pClip.Played = targetTime >= clipEndTime;
                 }
             }
+        }
+
+        private static void GetClipTiming(
+            PreviewClip clip,
+            double timelineTime,
+            out float clipDuration,
+            out float clipEndTime,
+            out float clipTime,
+            out float clipPitch)
+        {
+            float clipStartTime = clip.Data.Delay;
+            clipPitch = Mathf.Max(
+                0.001f,
+                clip.Data.Pitch * clip.PitchMult * GetLoopPitchMultiplier(clip, timelineTime));
+            float activeDuration = Mathf.Max(
+                0f,
+                clip.Data.Clip.length - clip.Data.StartOffset - clip.Data.EndOffset);
+
+            clipDuration = clip.Looping
+                ? Mathf.Max(0f, clip.StopTime - clipStartTime)
+                : activeDuration / clipPitch;
+            clipEndTime = clip.Looping ? clip.StopTime : clipStartTime + clipDuration;
+
+            float progressInClip = Mathf.Max(0f, (float)(timelineTime - clipStartTime)) * clipPitch;
+            if (clip.Looping && activeDuration > 0f)
+                progressInClip %= activeDuration;
+            clipTime = clip.Data.StartOffset + progressInClip;
         }
 
         public static void StopPreview()

@@ -66,8 +66,12 @@ namespace Abb2kTools.AudioSystem
             foreach (var clipData in clipsToPlay)
             {
                 AudioSource source = holder.AddAudioSource();
-                settings.ApplyBaseSettings(source, clipData, useNativeLoop, 1f, 1f, playbackSettings);
-                handle.AddSource(source, clipData, playbackSettings.volume, playbackSettings.pitch, settings.parameterBindings);
+                PlayableClipData scheduledClip = clipData;
+                if (settings is SoundEffectLooping)
+                    scheduledClip.FadeEnvelopes = null;
+
+                settings.ApplyBaseSettings(source, scheduledClip, useNativeLoop, 1f, 1f, playbackSettings);
+                handle.AddSource(source, scheduledClip, playbackSettings.volume, playbackSettings.pitch, settings.parameterBindings);
             }
 
             RegisterParameterizedHandle(handle);

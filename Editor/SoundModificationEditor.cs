@@ -47,6 +47,8 @@ namespace Abb2kTools.AudioSystem.Editor
 
         private static readonly Dictionary<AudioClip, Dictionary<WaveformTextureKey, Texture2D>> _waveformCache = new();
         private static readonly Dictionary<AudioClip, float[]> _waveformPeakCache = new();
+        private static readonly List<AudioClip> _pendingWaveformLoads = new();
+        private static bool _isWaveformLoadUpdateRegistered;
         private static readonly Dictionary<int, bool> _previewFadeFoldouts = new();
         private ReorderableList _compositionList;
         private bool _isDraggingPlayhead;
@@ -1089,30 +1091,30 @@ namespace Abb2kTools.AudioSystem.Editor
                 return cachedTex;
             }
 
+            float[] waveformPeaks = GetWaveformPeaks(clip);
+            if (waveformPeaks == null || waveformPeaks.Length == 0)
+                return null;
+
             Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave, filterMode = FilterMode.Bilinear };
             Color[] pixels = new Color[width * height];
             for (int i = 0; i < pixels.Length; i++) pixels[i] = bgColor;
 
-            float[] waveformPeaks = GetWaveformPeaks(clip);
-            if (waveformPeaks != null && waveformPeaks.Length > 0)
+            int halfHeight = height / 2;
+            for (int x = 0; x < width; x++)
             {
-                int halfHeight = height / 2;
+                float maxSample = 0f;
+                int peakStart = (int)((long)x * waveformPeaks.Length / width);
+                int peakEnd = (int)((long)(x + 1) * waveformPeaks.Length / width);
+                if (peakEnd <= peakStart)
+                    peakEnd = Mathf.Min(waveformPeaks.Length, peakStart + 1);
+                for (int peakIndex = peakStart; peakIndex < peakEnd; peakIndex++)
+                    maxSample = Mathf.Max(maxSample, waveformPeaks[peakIndex]);
 
-                for (int x = 0; x < width; x++)
-                {
-                    float maxSample = 0f;
-                    int peakStart = (int)((long)x * waveformPeaks.Length / width);
-                    int peakEnd = (int)((long)(x + 1) * waveformPeaks.Length / width);
-                    if (peakEnd <= peakStart)
-                        peakEnd = Mathf.Min(waveformPeaks.Length, peakStart + 1);
-                    for (int peakIndex = peakStart; peakIndex < peakEnd; peakIndex++)
-                        maxSample = Mathf.Max(maxSample, waveformPeaks[peakIndex]);
-
-                    int lineHeight = Mathf.Clamp(Mathf.RoundToInt(maxSample * gain * halfHeight), 1, halfHeight);
-                    for (int y = halfHeight - lineHeight; y <= halfHeight + lineHeight; y++)
-                        if (y >= 0 && y < height) pixels[y * width + x] = waveformColor;
-                }
+                int lineHeight = Mathf.Clamp(Mathf.RoundToInt(maxSample * gain * halfHeight), 1, halfHeight);
+                for (int y = halfHeight - lineHeight; y <= halfHeight + lineHeight; y++)
+                    if (y >= 0 && y < height) pixels[y * width + x] = waveformColor;
             }
+
             tex.SetPixels(pixels); tex.Apply();
             if (clipCache == null)
             {
@@ -1128,10 +1130,25 @@ namespace Abb2kTools.AudioSystem.Editor
             if (_waveformPeakCache.TryGetValue(clip, out float[] cachedPeaks))
                 return cachedPeaks;
 
+            if (clip.loadState == AudioDataLoadState.Unloaded && !clip.LoadAudioData())
+            {
+                _waveformPeakCache[clip] = null;
+                return null;
+            }
+
+            if (clip.loadState == AudioDataLoadState.Loading)
+            {
+                QueueWaveformLoadRepaint(clip);
+                return null;
+            }
+
             float[] sampleData = new float[clip.samples * clip.channels];
             if (!clip.GetData(sampleData, 0))
             {
-                _waveformPeakCache.Add(clip, null);
+                if (clip.loadState == AudioDataLoadState.Loading)
+                    QueueWaveformLoadRepaint(clip);
+                else
+                    _waveformPeakCache[clip] = null;
                 return null;
             }
 
@@ -1149,6 +1166,44 @@ namespace Abb2kTools.AudioSystem.Editor
 
             _waveformPeakCache.Add(clip, peaks);
             return peaks;
+        }
+
+        private static void QueueWaveformLoadRepaint(AudioClip clip)
+        {
+            if (!_pendingWaveformLoads.Contains(clip))
+                _pendingWaveformLoads.Add(clip);
+
+            if (_isWaveformLoadUpdateRegistered)
+                return;
+
+            EditorApplication.update += RepaintWhenWaveformLoadsComplete;
+            _isWaveformLoadUpdateRegistered = true;
+        }
+
+        private static void RepaintWhenWaveformLoadsComplete()
+        {
+            bool completedLoad = false;
+            for (int i = _pendingWaveformLoads.Count - 1; i >= 0; i--)
+            {
+                AudioClip clip = _pendingWaveformLoads[i];
+                if (clip == null ||
+                    clip.loadState == AudioDataLoadState.Loaded ||
+                    clip.loadState == AudioDataLoadState.Failed ||
+                    clip.loadState == AudioDataLoadState.Unloaded)
+                {
+                    _pendingWaveformLoads.RemoveAt(i);
+                    completedLoad = true;
+                }
+            }
+
+            if (completedLoad)
+                InternalEditorUtility.RepaintAllViews();
+
+            if (_pendingWaveformLoads.Count == 0)
+            {
+                EditorApplication.update -= RepaintWhenWaveformLoadsComplete;
+                _isWaveformLoadUpdateRegistered = false;
+            }
         }
     }
 }

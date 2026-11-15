@@ -110,14 +110,14 @@ namespace Abb2kTools.AudioSystem
                 }
             }
 
-            float maxEnd = 0f;
+            float maxEnd = currentDelay;
             for (int i = startIndex; i < result.Count; i++)
             {
                 float clipDur = (result[i].Clip.length - result[i].StartOffset - result[i].EndOffset) / result[i].Pitch;
                 if (result[i].Delay + clipDur > maxEnd) maxEnd = result[i].Delay + clipDur;
             }
 
-            float allowedEndTime = maxEnd - endOffset;
+            float allowedEndTime = Mathf.Max(currentDelay, maxEnd - startOffset - endOffset);
 
             for (int i = result.Count - 1; i >= startIndex; i--)
             {
@@ -137,11 +137,11 @@ namespace Abb2kTools.AudioSystem
                 if (startOffset > 0f || endOffset > 0f)
                 {
                     clip.Delay -= startOffset;
-                    if (clip.Delay < 0)
+                    if (clip.Delay < currentDelay)
                     {
-                        float overflow = -clip.Delay;
+                        float overflow = currentDelay - clip.Delay;
                         clip.StartOffset += overflow * clip.Pitch;
-                        clip.Delay = 0;
+                        clip.Delay = currentDelay;
                     }
 
                     float currentDur = (clip.Clip.length - clip.StartOffset - clip.EndOffset) / clip.Pitch;
@@ -151,6 +151,18 @@ namespace Abb2kTools.AudioSystem
                     {
                         float excess = clipEndTime - allowedEndTime;
                         clip.EndOffset += excess * clip.Pitch;
+                    }
+                }
+
+                if (startOffset > 0f && clip.FadeEnvelopes != null)
+                {
+                    clip.FadeEnvelopes = new List<SoundFadeEnvelope>(clip.FadeEnvelopes);
+                    for (int envelopeIndex = 0; envelopeIndex < clip.FadeEnvelopes.Count; envelopeIndex++)
+                    {
+                        SoundFadeEnvelope envelope = clip.FadeEnvelopes[envelopeIndex];
+                        envelope.StartTime -= startOffset;
+                        envelope.EndTime -= startOffset;
+                        clip.FadeEnvelopes[envelopeIndex] = envelope;
                     }
                 }
 

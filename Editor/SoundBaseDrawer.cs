@@ -42,7 +42,7 @@ namespace Abb2kTools.AudioSystem.Editor
         private const string LoopPitchModulationMode = "loopPitchModulationMode";
         private const string LoopPitchGrowthRate = "loopPitchGrowthRate";
         private const string LoopPitchSineCycleDuration = "loopPitchSineCycleDuration";
-        private const float FoldoutArrowWidth = 14f;
+        private const float FoldoutArrowWidth = 18f;
         private const float SoundTypeIconSize = 16f;
         private const float HeaderIconGap = 2f;
         private const float LoopModulationGraphHeight = 58f;
@@ -53,6 +53,11 @@ namespace Abb2kTools.AudioSystem.Editor
         private static readonly Dictionary<string, float> _loopingPreviewDurations = new();
         private static readonly Dictionary<string, bool> _loopModulationFoldouts = new();
         private static readonly Dictionary<string, bool> _waveformFoldouts = new();
+        private static string _draggingWaveformKey;
+        private static readonly AnimationCurve _loopTransitionFadeInCurve =
+            AnimationCurve.Linear(0f, 0f, 1f, 1f);
+        private static readonly AnimationCurve _loopTransitionFadeOutCurve =
+            AnimationCurve.Linear(0f, 1f, 1f, 0f);
 
         private sealed class LoopingInspectorProperties
         {
@@ -249,13 +254,21 @@ namespace Abb2kTools.AudioSystem.Editor
         {
             GUIContent label = new(property.displayName);
             float height = GetPropertyHeight(property, label);
+            SerializedObject serializedObject = property.serializedObject;
             IMGUIContainer container = null;
             container = new IMGUIContainer(() =>
             {
-                height = GetPropertyHeight(property, label);
-                container.style.height = height;
+                serializedObject.Update();
+                float currentHeight = GetPropertyHeight(property, label);
+                if (!Mathf.Approximately(height, currentHeight))
+                {
+                    height = currentHeight;
+                    container.style.height = height;
+                }
+
                 Rect position = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true));
                 OnGUI(position, property, label);
+                serializedObject.ApplyModifiedProperties();
             });
             container.style.height = height;
             container.style.flexShrink = 0f;
@@ -1650,8 +1663,34 @@ namespace Abb2kTools.AudioSystem.Editor
                 boxRect.y + 2f,
                 boxRect.width - 10f,
                 WaveformHeaderHeight);
+            bool isMatchingPreview = IsMatchingWaveformPreview(property);
+            Rect foldoutRect = headerRect;
+            if (isMatchingPreview)
+            {
+                const float previewControlWidth = 65f;
+                foldoutRect.width -= previewControlWidth + 4f;
+                Rect previewControlRect = new(
+                    headerRect.xMax - previewControlWidth,
+                    headerRect.y,
+                    previewControlWidth,
+                    headerRect.height);
+                Color previousBackgroundColor = GUI.backgroundColor;
+                GUI.backgroundColor = new Color(1f, 0.8f, 0.4f);
+                if (GUI.Button(
+                        previewControlRect,
+                        EditorAudioPreviewer.IsPaused ? "Resume" : "Pause",
+                        EditorStyles.miniButton))
+                {
+                    if (EditorAudioPreviewer.IsPaused)
+                        EditorAudioPreviewer.ResumePreview();
+                    else
+                        EditorAudioPreviewer.PausePreview();
+                }
+                GUI.backgroundColor = previousBackgroundColor;
+            }
+
             bool newExpanded = EditorGUI.Foldout(
-                headerRect,
+                foldoutRect,
                 expanded,
                 "Preview Waveform",
                 true,
@@ -1682,6 +1721,11 @@ namespace Abb2kTools.AudioSystem.Editor
                         rulerRect.yMax,
                         rulerRect.width,
                         trackCount * WaveformTrackHeight);
+                    Rect timelineRect = new(
+                        rulerRect.x,
+                        rulerRect.y,
+                        rulerRect.width,
+                        rulerRect.height + waveformRect.height);
 
                     float timelineStart = 0f;
                     float timelineEnd = 0.05f;
@@ -1713,10 +1757,119 @@ namespace Abb2kTools.AudioSystem.Editor
                             timelineStart);
                     }
                     GUI.EndGroup();
+
+                    DrawWaveformPlayhead(timelineRect, timelineStart, timelineEnd, property);
+                    HandleWaveformScrubbing(timelineRect, timelineStart, timelineEnd, property, foldoutKey);
                 }
             }
 
             currentY += previewHeight + EditorGUIUtility.standardVerticalSpacing;
+        }
+
+        private static void DrawWaveformPlayhead(
+            Rect timelineRect,
+            float timelineStart,
+            float timelineEnd,
+            SerializedProperty property)
+        {
+            if (!IsMatchingWaveformPreview(property))
+                return;
+
+            float duration = Mathf.Max(0.05f, timelineEnd - timelineStart);
+            float normalizedTime = (EditorAudioPreviewer.CurrentTime - timelineStart) / duration;
+            if (normalizedTime < 0f || normalizedTime > 1f)
+                return;
+
+            float playheadX = timelineRect.x + normalizedTime * timelineRect.width;
+            Color playheadColor = new(1f, 0.25f, 0.25f, 1f);
+            EditorGUI.DrawRect(
+                new Rect(playheadX - 1f, timelineRect.y, 2f, timelineRect.height),
+                playheadColor);
+            Handles.color = playheadColor;
+            Handles.DrawAAConvexPolygon(
+                new Vector3(playheadX - 5f, timelineRect.y),
+                new Vector3(playheadX + 5f, timelineRect.y),
+                new Vector3(playheadX, timelineRect.y + 8f));
+        }
+
+        private void HandleWaveformScrubbing(
+            Rect timelineRect,
+            float timelineStart,
+            float timelineEnd,
+            SerializedProperty property,
+            string waveformKey)
+        {
+            Event currentEvent = Event.current;
+            if (currentEvent.type == EventType.MouseDown &&
+                currentEvent.button == 0 &&
+                timelineRect.Contains(currentEvent.mousePosition))
+            {
+                _draggingWaveformKey = waveformKey;
+                SeekWaveformToMouse(
+                    currentEvent.mousePosition.x,
+                    timelineRect,
+                    timelineStart,
+                    timelineEnd,
+                    property);
+                currentEvent.Use();
+            }
+            else if (currentEvent.type == EventType.MouseDrag &&
+                     _draggingWaveformKey == waveformKey)
+            {
+                SeekWaveformToMouse(
+                    currentEvent.mousePosition.x,
+                    timelineRect,
+                    timelineStart,
+                    timelineEnd,
+                    property);
+                currentEvent.Use();
+            }
+            else if (currentEvent.type == EventType.MouseUp &&
+                     currentEvent.button == 0 &&
+                     _draggingWaveformKey == waveformKey)
+            {
+                _draggingWaveformKey = null;
+                currentEvent.Use();
+            }
+        }
+
+        private void SeekWaveformToMouse(
+            float mouseX,
+            Rect timelineRect,
+            float timelineStart,
+            float timelineEnd,
+            SerializedProperty property)
+        {
+            if (!IsMatchingWaveformPreview(property))
+            {
+                TriggerPreview(property);
+                if (!EditorAudioPreviewer.IsPlaying)
+                    return;
+                EditorAudioPreviewer.PausePreview();
+            }
+            else if (!EditorAudioPreviewer.IsPaused)
+            {
+                EditorAudioPreviewer.PausePreview();
+            }
+
+            float normalizedTime = Mathf.Clamp01((mouseX - timelineRect.x) / timelineRect.width);
+            float seekTime = Mathf.Lerp(timelineStart, timelineEnd, normalizedTime);
+            EditorAudioPreviewer.Seek(seekTime);
+        }
+
+        private static bool IsMatchingWaveformPreview(SerializedProperty property)
+        {
+            if (!EditorAudioPreviewer.IsPlaying)
+                return false;
+
+            if (IsLoopingSound(property))
+            {
+                return EditorAudioPreviewer.CurrentLoopingPreviewKey ==
+                       GetLoopingPreviewDurationKey(property);
+            }
+
+            SoundBase soundBase = GetPropertyValue(property) as SoundBase;
+            return soundBase != null && EditorAudioPreviewer.CurrentTarget == soundBase.sound;
         }
 
         private static void DrawWaveformRuler(Rect rulerRect, float timelineStart, float timelineEnd)
@@ -1822,11 +1975,27 @@ namespace Abb2kTools.AudioSystem.Editor
         private static List<int> AssignWaveformTracks(List<PlayableClipData> clips, out int trackCount)
         {
             List<int> tracks = new();
+            List<int> clipOrder = new();
             List<float> trackEndTimes = new();
-            foreach (PlayableClipData clip in clips)
+            for (int i = 0; i < clips.Count; i++)
             {
+                tracks.Add(0);
+                clipOrder.Add(i);
+            }
+
+            clipOrder.Sort((leftIndex, rightIndex) =>
+            {
+                float leftStart = GetWaveformClipStart(clips[leftIndex]);
+                float rightStart = GetWaveformClipStart(clips[rightIndex]);
+                int startOrder = leftStart.CompareTo(rightStart);
+                return startOrder != 0 ? startOrder : leftIndex.CompareTo(rightIndex);
+            });
+
+            foreach (int clipIndex in clipOrder)
+            {
+                PlayableClipData clip = clips[clipIndex];
                 float pitch = Mathf.Max(0.001f, clip.Pitch);
-                float start = clip.Delay - clip.StartOffset / pitch;
+                float start = GetWaveformClipStart(clip);
                 float end = start + clip.Clip.length / pitch;
                 int track = -1;
                 for (int i = 0; i < trackEndTimes.Count; i++)
@@ -1844,11 +2013,17 @@ namespace Abb2kTools.AudioSystem.Editor
                     track = trackEndTimes.Count;
                     trackEndTimes.Add(end);
                 }
-                tracks.Add(track);
+                tracks[clipIndex] = track;
             }
 
             trackCount = Mathf.Max(1, trackEndTimes.Count);
             return tracks;
+        }
+
+        private static float GetWaveformClipStart(PlayableClipData clip)
+        {
+            float pitch = Mathf.Max(0.001f, clip.Pitch);
+            return clip.Delay - clip.StartOffset / pitch;
         }
 
         private static List<PlayableClipData> CollectWaveformPreviewClips(SerializedProperty property)
@@ -1868,11 +2043,11 @@ namespace Abb2kTools.AudioSystem.Editor
                 AppendWaveformPhase(clips, startProperty, property, rootSoundBase, 0f, loopEndTime);
 
                 List<PlayableClipData> loopTemplate = CollectWaveformPhase(loopProperty, property, rootSoundBase);
-                float loopSequenceDuration = GetWaveformSequenceDuration(loopTemplate);
-                if (loopSequenceDuration > 0f)
+                if (GetWaveformSequenceDuration(loopTemplate) > 0f)
                 {
+                    float loopStart = 0f;
                     int iterations = 0;
-                    for (float loopStart = 0f; loopStart < loopEndTime && iterations < 256; loopStart += loopSequenceDuration, iterations++)
+                    while (loopStart < loopEndTime && iterations < 256)
                     {
                         float volumeModulation = GetLoopModulationMultiplier(
                             property,
@@ -1894,12 +2069,17 @@ namespace Abb2kTools.AudioSystem.Editor
                             LoopPitchGrowthRate,
                             LoopPitchSineCycleDuration,
                             loopStart);
+                        float loopSequenceDuration =
+                            GetWaveformSequenceDuration(loopTemplate, pitchModulation);
+                        if (loopSequenceDuration <= 0f)
+                            break;
 
                         foreach (PlayableClipData template in loopTemplate)
                         {
                             PlayableClipData repeatedClip = template;
                             repeatedClip.Volume *= volumeModulation;
                             repeatedClip.Pitch *= pitchModulation;
+                            repeatedClip.FadeEnvelopes = null;
                             int previousClipCount = clips.Count;
                             AddScheduledWaveformClip(clips, repeatedClip, loopStart, loopEndTime);
                             if (clips.Count > previousClipCount)
@@ -1914,6 +2094,9 @@ namespace Abb2kTools.AudioSystem.Editor
                                 clips[clips.Count - 1] = scheduledClip;
                             }
                         }
+
+                        loopStart += loopSequenceDuration;
+                        iterations++;
                     }
                 }
 
@@ -2090,7 +2273,9 @@ namespace Abb2kTools.AudioSystem.Editor
             }
         }
 
-        private static float GetWaveformSequenceDuration(List<PlayableClipData> clips)
+        private static float GetWaveformSequenceDuration(
+            List<PlayableClipData> clips,
+            float pitchMultiplier = 1f)
         {
             float duration = 0f;
             foreach (PlayableClipData clip in clips)
@@ -2099,7 +2284,7 @@ namespace Abb2kTools.AudioSystem.Editor
                     continue;
 
                 float clipDuration = (clip.Clip.length - clip.StartOffset - clip.EndOffset) /
-                                     Mathf.Max(0.001f, clip.Pitch);
+                                     Mathf.Max(0.001f, clip.Pitch * pitchMultiplier);
                 duration = Mathf.Max(duration, clip.Delay + clipDuration);
             }
             return duration;
@@ -2153,26 +2338,21 @@ namespace Abb2kTools.AudioSystem.Editor
             if (loopEndTime <= 0f || (fadeInDuration <= 0f && fadeOutDuration <= 0f))
                 return;
 
-            const int sampleCount = 16;
-            Keyframe[] keys = new Keyframe[sampleCount + 1];
-            for (int i = 0; i <= sampleCount; i++)
-            {
-                float progress = i / (float)sampleCount;
-                float time = progress * loopEndTime;
-                float fadeIn = fadeInDuration > 0f ? Mathf.Clamp01(time / fadeInDuration) : 1f;
-                float fadeOut = fadeOutDuration > 0f ? Mathf.Clamp01((loopEndTime - time) / fadeOutDuration) : 1f;
-                keys[i] = new Keyframe(progress, Mathf.Min(fadeIn, fadeOut));
-            }
-
             envelopes.Add(new SoundFadeEnvelope
             {
                 StartTime = 0f,
                 EndTime = loopEndTime,
                 FadeIn = new SoundFadeSettings
                 {
-                    enabled = true,
-                    duration = loopEndTime,
-                    curve = new AnimationCurve(keys)
+                    enabled = fadeInDuration > 0f,
+                    duration = fadeInDuration,
+                    curve = _loopTransitionFadeInCurve
+                },
+                FadeOut = new SoundFadeSettings
+                {
+                    enabled = fadeOutDuration > 0f,
+                    duration = fadeOutDuration,
+                    curve = _loopTransitionFadeOutCurve
                 }
             });
         }
